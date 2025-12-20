@@ -6,5 +6,22 @@
     },
     "include": [
         "src/**/*"
+    ],
+    "references": [
+        {
+            "path": "../../packages/lease-core"
+        },
+        {
+            "path": "../../packages/playback-core"
+        },
+        {
+            "path": "../../packages/room-core"
+        },
+        {
+            "path": "../../packages/protocol"
+        },
+        {
+            "path": "../../packages/sync-core"
+        }
     ]
 }
