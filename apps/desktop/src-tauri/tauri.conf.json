@@ -6,10 +6,11 @@
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3001",
-    "beforeDevCommand": "lsof -Pi :3001 -sTCP:LISTEN -t >/dev/null || npm run dev",
+    "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Cueplay",

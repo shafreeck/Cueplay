@@ -43,7 +43,9 @@ export default function RoomDetail() {
     const [resetConfirm, setResetConfirm] = useState(false);
 
     const socketRef = useRef<WebSocket | null>(null);
+
     const videoRef = useRef<HTMLVideoElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const isRemoteUpdate = useRef(false);
     const isLoadingSource = useRef(false);
     const cookieRef = useRef(cookie);
@@ -82,6 +84,10 @@ export default function RoomDetail() {
     }, [rawUrl]);
 
 
+
+    useEffect(() => {
+        addLog(`Fullscreen Enabled: ${document.fullscreenEnabled}`);
+    }, []);
 
     // Subtitle Hijacking Logic
     useEffect(() => {
@@ -429,6 +435,8 @@ export default function RoomDetail() {
         };
     }, [videoSrc, sendState, canControl]);
 
+
+
     return (
         <div className="min-h-screen bg-background text-foreground">
             <header className="border-b bg-card/50 backdrop-blur-md sticky top-0 z-10">
@@ -515,7 +523,10 @@ export default function RoomDetail() {
             <main className="container mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Video Section */}
                 <div className="lg:col-span-3 space-y-4">
-                    <div className="relative aspect-video bg-black rounded-xl overflow-hidden shadow-2xl group border border-border/50">
+                    <div
+                        ref={containerRef}
+                        className="relative aspect-video bg-black rounded-xl overflow-hidden shadow-2xl group border border-border/50 transition-all duration-300"
+                    >
                         {videoSrc ? (
                             <video
                                 key={videoSrc}
@@ -644,7 +655,7 @@ export default function RoomDetail() {
                         </Tabs>
                     </Card>
                 </aside>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 }
