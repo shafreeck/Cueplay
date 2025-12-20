@@ -30,7 +30,8 @@ server.get('/ping', async (request, reply) => {
 const start = async () => {
     try {
         await ConfigStore.load();
-        await server.listen({ port: 3000, host: '0.0.0.0' });
+        const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+        await server.listen({ port, host: '0.0.0.0' });
     } catch (err) {
         server.log.error(err);
         process.exit(1);
