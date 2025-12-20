@@ -1,0 +1,36 @@
+import fastify from 'fastify';
+// @ts-ignore
+import websocket from '@fastify/websocket';
+import cors from '@fastify/cors';
+import { websocketRoutes } from './ws';
+import { roomRoutes } from './room/controller';
+import { leaseRoutes } from './lease/controller';
+import { playbackRoutes } from './playback/controller';
+// import { proxyRoutes } from './stream/proxy';
+
+const server = fastify({ logger: true });
+
+server.register(cors, {
+    origin: true // Allow all origins (for dev)
+});
+server.register(websocket);
+server.register(websocketRoutes);
+server.register(roomRoutes);
+server.register(leaseRoutes);
+server.register(playbackRoutes);
+// server.register(proxyRoutes);
+
+server.get('/ping', async (request, reply) => {
+    return { pong: 'it works' };
+});
+
+const start = async () => {
+    try {
+        await server.listen({ port: 3000, host: '0.0.0.0' });
+    } catch (err) {
+        server.log.error(err);
+        process.exit(1);
+    }
+};
+
+start();

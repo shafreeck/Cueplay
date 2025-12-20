@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Current media state could be JSON or separate fields
+  currentMedia String? // JSON string for simplicity initially
+  
+  members Member[]
+}
+
+model Member {
+  id        String   @id @default(uuid())
+  roomId    String
+  userId    String
+  joinedAt  DateTime @default(now())
+  
+  room      Room     @relation(fields: [roomId], references: [id])
+}
+
+model Lease {
+  id          String   @id @default(uuid())
+  deviceId    String
+  expiresAt   DateTime
+  permissions String   // JSON of permissions
+  createdAt   DateTime @default(now())
+}
