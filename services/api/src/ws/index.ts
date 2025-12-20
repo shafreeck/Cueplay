@@ -22,9 +22,9 @@ export async function websocketRoutes(fastify: FastifyInstance) {
             const clients = roomConnections.get(roomId);
             if (!room || !clients) return;
 
-            const members = room.members.map(m => ({
+            const members = room.members.map((m: any) => ({
                 ...m,
-                isOnline: clients.has(m.userId) && clients.get(m.userId).readyState === 1
+                isOnline: clients.has(m.userId) && clients.get(m.userId)!.readyState === 1
             }));
 
             const event = {
