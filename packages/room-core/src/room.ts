@@ -13,6 +13,8 @@ export interface RoomState {
         title?: string;
         provider: string;
     };
+    controllerId: string | null;
+    playlist?: any[];
 }
 
 export class Room {
@@ -23,6 +25,8 @@ export class Room {
             id,
             ownerId,
             members: [],
+            controllerId: ownerId, // Owner starts as controller
+            playlist: [], // Initialize empty playlist
         };
         // Add owner as first member
         this.addMember({ userId: ownerId, joinedAt: Date.now() });
@@ -32,6 +36,8 @@ export class Room {
     get ownerId() { return this.state.ownerId; }
     get members() { return [...this.state.members]; }
     get media() { return this.state.media; }
+    get controllerId() { return this.state.controllerId; }
+    get playlist() { return this.state.playlist || []; }
 
     addMember(member: Member) {
         if (!this.state.members.find(m => m.userId === member.userId)) {
@@ -45,6 +51,14 @@ export class Room {
 
     setMedia(media: RoomState['media']) {
         this.state.media = media;
+    }
+
+    setController(userId: string) {
+        this.state.controllerId = userId;
+    }
+
+    setPlaylist(playlist: any[]) {
+        this.state.playlist = playlist;
     }
 
     toJSON() {

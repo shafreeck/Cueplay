@@ -2,15 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ApiClient, Room } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useToast } from "@/components/ui/use-toast";
+
+import { ModeToggle } from '@/components/mode-toggle';
 
 export default function Home() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [userId, setUserId] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(false);
+  const [joinId, setJoinId] = useState('');
 
   useEffect(() => {
     // Generate or load user ID
@@ -35,22 +42,41 @@ export default function Home() {
   const createRoom = async () => {
     setLoading(true);
     try {
-      await ApiClient.createRoom(userId);
-      await loadRooms(userId);
-    } catch (e) {
+      const room = await ApiClient.createRoom(userId);
+      toast({ title: "Room Created", description: `Joined room ${room.id}` });
+      router.push(`/rooms/${room.id}`);
+    } catch (e: any) {
       console.error(e);
+      toast({ variant: "destructive", title: "Failed to create room", description: e.message });
     } finally {
       setLoading(false);
     }
   };
 
+  const joinRoom = () => {
+    if (!joinId) return;
+    router.push(`/rooms/${joinId}`);
+  };
+
   return (
     <main className="container mx-auto p-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">My Rooms</h1>
-        <Button onClick={createRoom} disabled={loading}>
-          {loading ? 'Creating...' : 'Create Room'}
-        </Button>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold">My Rooms</h1>
+          <ModeToggle />
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Enter Room ID"
+            value={joinId}
+            onChange={(e) => setJoinId(e.target.value)}
+            className="w-40"
+          />
+          <Button onClick={joinRoom} variant="outline" disabled={!joinId}>Join</Button>
+          <Button onClick={createRoom} disabled={loading}>
+            {loading ? 'Creating...' : 'Create Room'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

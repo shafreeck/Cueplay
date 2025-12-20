@@ -18,11 +18,12 @@ export class RoomManager {
         return room;
     }
 
-    static joinRoom(id: string, userId: string): Room | undefined {
-        const room = rooms.get(id);
+    static joinRoom(id: string, userId: string): Room {
+        let room = rooms.get(id);
         if (!room) {
-            console.log(`[RoomManager] Join failed: Room ${id} not found`);
-            return undefined;
+            console.log(`[RoomManager] Room ${id} not found, auto-creating for ${userId}`);
+            room = new Room(id, userId);
+            rooms.set(id, room);
         }
 
         room.addMember({ userId, joinedAt: Date.now() });
