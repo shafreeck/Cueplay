@@ -33,4 +33,22 @@ export async function roomRoutes(fastify: FastifyInstance) {
         }
         return { room: room.toJSON() };
     });
+
+    fastify.post('/rooms/:id/config/cookie', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const body = req.body as { userId: string, cookie: string };
+
+        const room = RoomManager.getRoom(id);
+        if (!room) {
+            return reply.code(404).send({ error: 'Room not found' });
+        }
+
+        if (room.ownerId !== body.userId) {
+            return reply.code(403).send({ error: 'Only the room owner can set the room cookie.' });
+        }
+
+        room.setQuarkCookie(body.cookie);
+        console.log(`[RoomManager] Updated cookie for room ${id}`);
+        return { success: true };
+    });
 }

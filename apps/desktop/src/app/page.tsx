@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { ModeToggle } from '@/components/mode-toggle';
 import { UserProfile } from '@/components/user-profile';
+import { Shield } from 'lucide-react';
 
 export default function Home() {
   const router = useRouter();
@@ -60,53 +61,62 @@ export default function Home() {
   };
 
   return (
-    <main className="container mx-auto p-8">
-      <div className="flex justify-between items-center mb-8">
-        <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-bold">My Rooms</h1>
-          <ModeToggle />
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Enter Room ID"
-            value={joinId}
-            onChange={(e) => setJoinId(e.target.value)}
-            className="w-40"
-          />
-          <Button onClick={joinRoom} variant="outline" disabled={!joinId}>Join</Button>
-          <Button onClick={createRoom} disabled={loading}>
-            {loading ? 'Creating...' : 'Create Room'}
-          </Button>
-          <div className="ml-2 pl-2 border-l border-border/50">
-            <UserProfile userId={userId} />
+    <div className="min-h-screen flex flex-col">
+      <main className="container mx-auto p-8 flex-1">
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold">My Rooms</h1>
+            <ModeToggle />
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Enter Room ID"
+              value={joinId}
+              onChange={(e) => setJoinId(e.target.value)}
+              className="w-40"
+            />
+            <Button onClick={joinRoom} variant="outline" disabled={!joinId}>Join</Button>
+            <Button onClick={createRoom} disabled={loading}>
+              {loading ? 'Creating...' : 'Create Room'}
+            </Button>
+            <div className="ml-2 pl-2 border-l border-border/50">
+              <UserProfile userId={userId} />
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {rooms.map((room) => (
-          <Card key={room.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle>Room {room.id}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Owner: {room.ownerId}</p>
-              <p className="text-sm text-muted-foreground">Members: {room.members.length}</p>
-              <div className="mt-4">
-                <Link href={`/rooms/${room.id}`}>
-                  <Button variant="outline" className="w-full">Join Room</Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {rooms.map((room) => (
+            <Card key={room.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <CardTitle>Room {room.id}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Owner: {room.ownerId}</p>
+                <p className="text-sm text-muted-foreground">Members: {room.members.length}</p>
+                <div className="mt-4">
+                  <Link href={`/rooms/${room.id}`}>
+                    <Button variant="outline" className="w-full">Join Room</Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
 
-        {rooms.length === 0 && (
-          <div className="col-span-full text-center py-12 text-muted-foreground">
-            No rooms found. Create one to get started!
-          </div>
-        )}
-      </div>
-    </main>
+          {rooms.length === 0 && (
+            <div className="col-span-full text-center py-12 text-muted-foreground">
+              No rooms found. Create one to get started!
+            </div>
+          )}
+        </div>
+      </main>
+
+      <footer className="py-8 border-t border-border/30 text-center text-sm text-muted-foreground flex items-center justify-center gap-4 bg-background">
+        <span>© 2025 CuePlay</span>
+        <Link href="/admin" className="opacity-20 hover:opacity-100 transition-opacity" title="System Admin">
+          <Shield className="w-4 h-4" />
+        </Link>
+      </footer>
+    </div>
   );
 }

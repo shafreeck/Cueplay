@@ -16,6 +16,7 @@ export interface RoomState {
     };
     controllerId: string | null;
     playlist?: any[];
+    quarkCookie?: string;
 }
 
 export class Room {
@@ -28,6 +29,7 @@ export class Room {
             members: [],
             controllerId: ownerId, // Owner starts as controller
             playlist: [], // Initialize empty playlist
+            quarkCookie: '', // Explicitly initialize
         };
         // Add owner as first member
         this.addMember({ userId: ownerId, joinedAt: Date.now() });
@@ -39,6 +41,7 @@ export class Room {
     get media() { return this.state.media; }
     get controllerId() { return this.state.controllerId; }
     get playlist() { return this.state.playlist || []; }
+    get quarkCookie() { return this.state.quarkCookie || ''; }
 
     addMember(member: Member) {
         const existingIndex = this.state.members.findIndex(m => m.userId === member.userId);
@@ -64,6 +67,10 @@ export class Room {
 
     setPlaylist(playlist: any[]) {
         this.state.playlist = playlist;
+    }
+
+    setQuarkCookie(cookie: string) {
+        this.state.quarkCookie = cookie;
     }
 
     toJSON() {

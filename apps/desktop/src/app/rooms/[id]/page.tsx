@@ -109,10 +109,10 @@ export default function RoomDetail() {
     const [duration, setDuration] = useState<number>(3600);
     const [fileId, setFileId] = useState('');
     const [inputValue, setInputValue] = useState('');
-    const [cookie, setCookie] = useState('');
     const [currentSubtitle, setCurrentSubtitle] = useState('');
     const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
+    const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [nickname, setNickname] = useState('');
     const [resetConfirm, setResetConfirm] = useState(false);
@@ -128,35 +128,30 @@ export default function RoomDetail() {
     const containerRef = useRef<HTMLDivElement>(null);
     const isRemoteUpdate = useRef(false);
     const isLoadingSource = useRef(false);
-    const cookieRef = useRef(cookie);
     const lastTimeRef = useRef(0);
 
     const addLog = (msg: string) => setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
-    // Update cookie ref for the proxy requests
+    // Load/Save Nickname
     useEffect(() => {
-        cookieRef.current = cookie;
-    }, [cookie]);
-
-    // Load/Save Cookie & Nickname
-    useEffect(() => {
-        const stored = localStorage.getItem('quark_cookie');
-        if (stored) {
-            setCookie(stored);
-            cookieRef.current = stored;
-        }
         const storedName = localStorage.getItem('cueplay_nickname');
         if (storedName) setNickname(storedName);
     }, []);
 
-    const saveCookie = (val: string) => {
-        setCookie(val);
-        localStorage.setItem('quark_cookie', val);
-    };
 
     const saveNickname = (val: string) => {
         setNickname(val);
         localStorage.setItem('cueplay_nickname', val);
+    };
+
+    const updateRoomCookie = (val: string) => {
+        setRoomCookie(val);
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify({
+                type: 'SET_ROOM_COOKIE',
+                payload: { cookie: val }
+            }));
+        }
     };
 
     // Chat Scrolling
@@ -183,16 +178,6 @@ export default function RoomDetail() {
         setChatInput('');
     };
 
-    // Construct and Load Source
-    useEffect(() => {
-        if (!rawUrl) return;
-        const proxyUrl = `http://localhost:3001/api/stream/proxy?url=${encodeURIComponent(rawUrl)}&cookie=${encodeURIComponent(cookieRef.current || '')}`;
-        isLoadingSource.current = true; // Block sync during load
-        setVideoSrc(proxyUrl);
-        // addLog(`Source updated: ${proxyUrl}`);
-        // Reset loading state after a safety delay or on 'canplay'
-        setTimeout(() => { isLoadingSource.current = false; }, 2000);
-    }, [rawUrl]);
 
 
 
@@ -227,12 +212,28 @@ export default function RoomDetail() {
         };
     }, []);
 
+    const resolveAndPlayWithoutSync = async (fid: string) => {
+        try {
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId);
+            setRawUrl(source.url);
+            if (source.meta?.duration) {
+                setDuration(source.meta.duration);
+            }
+
+            let finalUrl = source.url;
+            if (cookie && cookie.trim()) {
+                finalUrl = `/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+            }
+            setVideoSrc(finalUrl);
+        } catch (e) {
+            console.error("resolveAndPlayWithoutSync error:", e);
+        }
+    }
+
     const resolveAndPlay = async (targetFileId: string, itemId?: string) => {
         if (!targetFileId) return;
         let fid = targetFileId;
         const urlMatch = targetFileId.match(/video\/([a-zA-Z0-9]+)/);
-        if (urlMatch) fid = urlMatch[1];
-
         if (urlMatch) fid = urlMatch[1];
 
         setFileId(fid); // Sync internal state
@@ -240,8 +241,10 @@ export default function RoomDetail() {
 
         addLog(`Resolving video ${fid}...`);
         try {
-            const source = await ApiClient.resolveVideo(fid, cookieRef.current);
-            setRawUrl(source.url);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId);
+            console.log("Resolve result:", { hasSource: !!source, cookieLen: cookie?.length });
+
+            setRawUrl(source.url); // Use raw URL for sharing
             if (source.meta?.duration) {
                 setDuration(source.meta.duration);
             }
@@ -249,9 +252,23 @@ export default function RoomDetail() {
             if (socketRef.current?.readyState === WebSocket.OPEN) {
                 socketRef.current.send(JSON.stringify({
                     type: 'MEDIA_CHANGE',
-                    payload: { fileId: fid, url: source.url, provider: 'quark' }
+                    payload: {
+                        fileId: fid,
+                        url: source.url,
+                        provider: 'quark',
+                        meta: source.meta
+                    }
                 }));
             }
+            // Local playback
+            let finalUrl = source.url;
+            if (cookie && cookie.trim()) {
+                finalUrl = `/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+            } else {
+                console.warn("No cookie available, using raw URL.");
+                addLog("Warning: No cookie available for playback proxy.");
+            }
+            setVideoSrc(finalUrl);
         } catch (e: any) {
             console.error(e);
             toast({
@@ -276,7 +293,7 @@ export default function RoomDetail() {
 
         try {
             // Resolve first to validate
-            const source = await ApiClient.resolveVideo(fid, cookieRef.current);
+            const { source } = await ApiClient.resolveVideo(fid, roomId);
             const title = source.meta?.file_name || source.meta?.title || fid;
 
             const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title };
@@ -476,7 +493,21 @@ export default function RoomDetail() {
                 const { url, fileId: remoteFileId, provider } = data.payload;
                 setFileId(remoteFileId || '');
                 setRawUrl(url || '');
-                if (!remoteFileId) setVideoSrc('');
+
+                if (!remoteFileId) {
+                    setVideoSrc('');
+                } else if (url) {
+                    // Peers need to resolve to get the cookie if they don't have one?
+                    // Currently MEDIA_CHANGE sends the raw URL.
+                    // If raw URL needs cookie, peer needs to get it.
+                    // IMPORTANT: Peers must also call resolve to get the Global Cookie if they don't have one.
+                    // But here we just setVideoSrc.
+                    // If we don't resolve, we don't get the global cookie.
+                    // So we must resolve on every MEDIA_CHANGE if we want to use Global Cookie.
+
+                    // Trigger resolution for self
+                    resolveAndPlayWithoutSync(remoteFileId);
+                }
                 setCurrentSubtitle('');
 
                 // Sync playlist with room state if empty
@@ -489,7 +520,7 @@ export default function RoomDetail() {
 
                 // Fetch metadata for the synced item if we just added it
                 if (remoteFileId) {
-                    ApiClient.resolveVideo(remoteFileId, cookieRef.current).then(source => {
+                    ApiClient.resolveVideo(remoteFileId, roomId).then(({ source }) => {
                         setPlaylist(prev => prev.map(item =>
                             item.fileId === remoteFileId && item.title === 'Current Video'
                                 ? { ...item, title: source.meta?.file_name || source.meta?.title || remoteFileId }
@@ -499,11 +530,12 @@ export default function RoomDetail() {
                 }
 
             } else if (data.type === 'ROOM_UPDATE') {
-                const { members, ownerId, controllerId } = data.payload;
+                const { members, ownerId, controllerId, quarkCookie } = data.payload;
                 setMembers(members);
                 setOwnerId(ownerId);
                 setControllerId(controllerId);
                 controllerIdRef.current = controllerId;
+                if (quarkCookie !== undefined) setRoomCookie(quarkCookie);
             } else if (data.type === 'PLAYER_STATE') {
                 const video = videoRef.current;
                 if (!video) return;
@@ -540,6 +572,7 @@ export default function RoomDetail() {
     }, [roomId]);
 
     const canControl = !controllerId || controllerId === currentUserId;
+    const isOwner = currentUserId && ownerId && currentUserId === ownerId;
 
     // Bind Video Events (Only if authorized to control)
     useEffect(() => {
@@ -667,16 +700,6 @@ export default function RoomDetail() {
                                     </div>
                                     <div className="grid gap-2">
                                         <div className="grid grid-cols-3 items-center gap-4">
-                                            <Label htmlFor="cookie">Cookie</Label>
-                                            <Input
-                                                id="cookie"
-                                                value={cookie}
-                                                onChange={(e) => saveCookie(e.target.value)}
-                                                className="col-span-2 h-8"
-                                                type="password"
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-3 items-center gap-4">
                                             <Label htmlFor="nickname">Display Name</Label>
                                             <Input
                                                 id="nickname"
@@ -686,6 +709,25 @@ export default function RoomDetail() {
                                                 className="col-span-2 h-8"
                                             />
                                         </div>
+                                        {isOwner && (
+                                            <div className="pt-2 mt-2 border-t space-y-2">
+                                                <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">Room Setup (Owner)</Label>
+                                                <div className="grid grid-cols-3 items-center gap-4">
+                                                    <Label htmlFor="roomCookie" className="text-xs">Room Cookie</Label>
+                                                    <Input
+                                                        id="roomCookie"
+                                                        value={roomCookie}
+                                                        onChange={(e) => updateRoomCookie(e.target.value)}
+                                                        className="col-span-2 h-7 text-xs"
+                                                        placeholder="Share with room..."
+                                                        type="password"
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground leading-tight">
+                                                    This cookie is shared with all members in this room.
+                                                </p>
+                                            </div>
+                                        )}
                                         <Dialog>
                                             <DialogTrigger asChild>
                                                 <Button variant="outline" size="sm" className="w-full">View Debug Logs</Button>

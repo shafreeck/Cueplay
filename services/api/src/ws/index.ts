@@ -33,7 +33,8 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                     roomId,
                     members,
                     ownerId: room.ownerId,
-                    controllerId: room.controllerId
+                    controllerId: room.controllerId,
+                    quarkCookie: room.quarkCookie
                 }
             };
 
@@ -146,6 +147,19 @@ export async function websocketRoutes(fastify: FastifyInstance) {
 
                             // Broadcast efficiently? For now, using standard broadcast.
                             broadcastRoomUpdate(currentRoomId);
+                        }
+                    }
+                } else if (event.type === 'SET_ROOM_COOKIE') {
+                    if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
+                        const room = RoomManager.getRoom(currentRoomId);
+                        if (room) {
+                            if (room.ownerId !== pUserId) {
+                                socket.send(JSON.stringify({ type: 'error', payload: { msg: 'Only owner can set room cookie' } }));
+                            } else {
+                                room.setQuarkCookie(event.payload.cookie);
+                                fastify.log.info({ msg: 'Room cookie updated via WS', roomId: currentRoomId });
+                                broadcastRoomUpdate(currentRoomId);
+                            }
                         }
                     }
                 } else if (event.type === 'CHAT_MESSAGE') {

@@ -36,14 +36,14 @@ export class ApiClient {
         return data.lease;
     }
 
-    static async resolveVideo(fileId: string, cookie?: string): Promise<any> {
+    static async resolveVideo(fileId: string, roomId?: string): Promise<any> {
         const res = await fetch(`${API_BASE}/playback/resolve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileId, cookie }),
+            body: JSON.stringify({ fileId, roomId }),
         });
         if (!res.ok) throw new Error('Failed to resolve video');
         const data = await res.json();
-        return data.source;
+        return { source: data.source, cookie: data.cookie };
     }
 }
