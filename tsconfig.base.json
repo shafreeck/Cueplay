@@ -15,6 +15,24 @@
         "composite": true,
         "declaration": true,
         "declarationMap": true,
-        "sourceMap": true
+        "sourceMap": true,
+        "baseUrl": ".",
+        "paths": {
+            "@cueplay/lease-core": [
+                "packages/lease-core/dist"
+            ],
+            "@cueplay/playback-core": [
+                "packages/playback-core/dist"
+            ],
+            "@cueplay/room-core": [
+                "packages/room-core/dist"
+            ],
+            "@cueplay/protocol": [
+                "packages/protocol/dist"
+            ],
+            "@cueplay/sync-core": [
+                "packages/sync-core/dist"
+            ]
+        }
     }
 }
