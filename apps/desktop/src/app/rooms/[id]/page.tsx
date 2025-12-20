@@ -13,12 +13,21 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ApiClient } from '@/api/client';
 import { ModeToggle } from '@/components/mode-toggle';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send } from 'lucide-react';
 
 interface PlaylistItem {
     id: string;
     fileId: string;
     title?: string;
+}
+
+interface ChatMessage {
+    id: string;
+    senderId: string;
+    senderName?: string;
+    content: string;
+    timestamp: number;
+    isSystem?: boolean;
 }
 
 export default function RoomDetail() {
@@ -42,6 +51,11 @@ export default function RoomDetail() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [nickname, setNickname] = useState('');
     const [resetConfirm, setResetConfirm] = useState(false);
+
+    // Chat State
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [chatInput, setChatInput] = useState('');
+    const chatListRef = useRef<HTMLDivElement>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
 
@@ -78,6 +92,30 @@ export default function RoomDetail() {
     const saveNickname = (val: string) => {
         setNickname(val);
         localStorage.setItem('cueplay_nickname', val);
+    };
+
+    // Chat Scrolling
+    useEffect(() => {
+        if (chatListRef.current) {
+            chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+        }
+    }, [messages]);
+
+    const sendChatMessage = (e?: React.FormEvent) => {
+        e?.preventDefault();
+        if (!chatInput.trim() || !socketRef.current) return;
+
+        const payload = {
+            id: Math.random().toString(36).slice(2),
+            senderId: currentUserId!,
+            senderName: nickname || currentUserId?.slice(0, 8),
+            content: chatInput.trim(),
+            timestamp: Date.now()
+        };
+
+        socketRef.current.send(JSON.stringify({ type: 'CHAT_MESSAGE', payload }));
+        setMessages(prev => [...prev, payload]);
+        setChatInput('');
     };
 
     // Construct and Load Source
@@ -397,6 +435,7 @@ export default function RoomDetail() {
 
             } else if (data.type === 'ROOM_UPDATE') {
                 const { members, ownerId, controllerId } = data.payload;
+                console.log("ROOM_UPDATE Received:", members);
                 setMembers(members);
                 setOwnerId(ownerId);
                 setControllerId(controllerId);
@@ -422,6 +461,12 @@ export default function RoomDetail() {
                     setPlaylist(newPlaylist);
                     toast({ description: "Playlist updated" });
                 }
+            } else if (data.type === 'CHAT_MESSAGE') {
+                const message = data.payload;
+                setMessages(prev => {
+                    if (prev.some(m => m.id === message.id)) return prev;
+                    return [...prev, message];
+                });
             }
         };
 
@@ -633,8 +678,13 @@ export default function RoomDetail() {
                     <Card className="flex flex-col h-[500px] lg:h-[calc(100vh-12rem)] shadow-lg overflow-hidden border-border/50">
                         <Tabs defaultValue="playlist" className="flex flex-col h-full">
                             <CardHeader className="py-2 px-4 border-b bg-muted/30">
-                                <TabsList className="grid w-full grid-cols-2">
+                                <TabsList className="grid w-full grid-cols-3">
                                     <TabsTrigger value="playlist">Playlist</TabsTrigger>
+                                    <TabsTrigger value="chat">
+                                        <div className="flex items-center gap-1.5">
+                                            <span>Chat</span>
+                                        </div>
+                                    </TabsTrigger>
                                     <TabsTrigger value="members">Members</TabsTrigger>
                                 </TabsList>
                             </CardHeader>
@@ -682,15 +732,77 @@ export default function RoomDetail() {
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="members" className="h-full m-0 min-h-0 block">
+                                <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 m-0">
+                                    <div ref={chatListRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+                                        {messages.length === 0 && (
+                                            <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 gap-2">
+                                                <MessageSquare className="h-8 w-8" />
+                                                <p className="text-sm">No messages yet.</p>
+                                            </div>
+                                        )}
+                                        {messages.map((msg) => {
+                                            const isMe = msg.senderId === currentUserId;
+                                            const isSystem = msg.isSystem;
+
+                                            if (isSystem) {
+                                                return (
+                                                    <div key={msg.id} className="flex justify-center my-2">
+                                                        <span className="text-xs bg-muted/50 text-muted-foreground px-2 py-1 rounded-full">{msg.content}</span>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                                    <div className="flex items-end gap-2 max-w-[85%]">
+                                                        {!isMe && (
+                                                            <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] shrink-0 font-bold border border-white/10">
+                                                                {msg.senderName?.slice(0, 1).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div
+                                                            className={`px-3 py-2 rounded-2xl text-sm break-words shadow-sm ${isMe
+                                                                ? 'bg-primary text-primary-foreground rounded-br-none'
+                                                                : 'bg-muted text-foreground rounded-bl-none'
+                                                                }`}
+                                                        >
+                                                            {msg.content}
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-[10px] text-muted-foreground mt-1 px-1 opacity-70">
+                                                        {!isMe && <span className="mr-1">{msg.senderName}</span>}
+                                                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="p-3 border-t bg-muted/20">
+                                        <form onSubmit={sendChatMessage} className="flex gap-2">
+                                            <Input
+                                                value={chatInput}
+                                                onChange={(e) => setChatInput(e.target.value)}
+                                                placeholder="Type a message..."
+                                                className="flex-1 h-9 bg-background/50"
+                                            />
+                                            <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={!chatInput.trim()}>
+                                                <Send className="h-4 w-4" />
+                                            </Button>
+                                        </form>
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="members" className="flex-1 flex flex-col min-h-0 m-0">
                                     <div className="flex flex-col h-full">
-
-
                                         <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                            <div className="text-xs text-muted-foreground mb-2">
+                                                DEBUG: {members.length} members. ID: {currentUserId}
+                                            </div>
                                             {members.length === 0 && (
                                                 <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">No members info.</div>
                                             )}
                                             {members.map((m: any) => {
+                                                if (!m || !m.userId) return null;
                                                 // Generate consistent color from userId
                                                 const hash = m.userId.split('').reduce((acc: number, char: string) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
                                                 const colors = [
@@ -756,6 +868,7 @@ export default function RoomDetail() {
                                         </div>
                                     </div>
                                 </TabsContent>
+
                             </CardContent>
                         </Tabs>
                     </Card>

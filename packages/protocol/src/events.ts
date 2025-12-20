@@ -3,7 +3,7 @@ export interface BaseEvent {
     payload: any;
 }
 
-export type EventType = 'JOIN_ROOM' | 'LEAVE_ROOM' | 'SYNC_TIME' | 'PLAYER_STATE' | 'MEDIA_CHANGE' | 'ROOM_UPDATE' | 'TAKE_CONTROL' | 'VIDEO_PROGRESS' | 'PLAYLIST_UPDATE';
+export type EventType = 'JOIN_ROOM' | 'LEAVE_ROOM' | 'SYNC_TIME' | 'PLAYER_STATE' | 'MEDIA_CHANGE' | 'ROOM_UPDATE' | 'TAKE_CONTROL' | 'VIDEO_PROGRESS' | 'PLAYLIST_UPDATE' | 'CHAT_MESSAGE';
 
 export interface RoomUpdateEvent extends BaseEvent {
     type: 'ROOM_UPDATE';
@@ -49,3 +49,16 @@ export interface VideoProgressEvent extends BaseEvent {
         time: number;
     };
 }
+
+export interface ChatMessageEvent extends BaseEvent {
+    type: 'CHAT_MESSAGE';
+    payload: {
+        id: string;
+        senderId: string;
+        senderName?: string;
+        content: string;
+        timestamp: number;
+        isSystem?: boolean;
+    };
+}
+

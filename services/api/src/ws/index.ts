@@ -148,6 +148,18 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             broadcastRoomUpdate(currentRoomId);
                         }
                     }
+                } else if (event.type === 'CHAT_MESSAGE') {
+                    if (currentRoomId && roomConnections.has(currentRoomId)) {
+                        const payload = event.payload;
+                        const clients = roomConnections.get(currentRoomId)!;
+                        for (const client of clients.values()) {
+                            // Send to everyone including sender (for confirmation/echo if needed, though frontend does optimistic)
+                            // Ideally sender does optimistic, but broadcasting back confirms receipt.
+                            if (client.readyState === 1) {
+                                client.send(JSON.stringify({ type: 'CHAT_MESSAGE', payload }));
+                            }
+                        }
+                    }
                 }
             } catch (e) {
                 fastify.log.error(e);
