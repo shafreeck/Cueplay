@@ -8,24 +8,29 @@ datasource db {
 }
 
 model Room {
-  id        String   @id @default(uuid())
-  ownerId   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // Current media state could be JSON or separate fields
-  currentMedia String? // JSON string for simplicity initially
+  id           String   @id
+  ownerId      String
+  controllerId String?
+  media        String?  // JSON string
+  playlist     String?  // JSON string
+  quarkCookie  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   
   members Member[]
 }
 
 model Member {
-  id        String   @id @default(uuid())
-  roomId    String
-  userId    String
-  joinedAt  DateTime @default(now())
+  id              String   @id @default(uuid())
+  roomId          String
+  userId          String
+  name            String?
+  joinedAt        DateTime @default(now())
+  currentProgress Float?
   
-  room      Room     @relation(fields: [roomId], references: [id])
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
 }
 
 model Lease {
@@ -34,4 +39,9 @@ model Lease {
   expiresAt   DateTime
   permissions String   // JSON of permissions
   createdAt   DateTime @default(now())
+}
+
+model GlobalConfig {
+  key   String @id
+  value String
 }

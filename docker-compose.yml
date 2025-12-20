@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend-data:/prod/api/data
+    environment:
+      - DATABASE_URL=file:./data/dev.db
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+    restart: always

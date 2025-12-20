@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Room {
+  id           String   @id
+  ownerId      String
+  controllerId String?
+  media        String? // JSON string
+  playlist     String? // JSON string
+  quarkCookie  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  members Member[]
+}
+
+model Member {
+  id              String   @id @default(uuid())
+  roomId          String
+  userId          String
+  name            String?
+  joinedAt        DateTime @default(now())
+  currentProgress Float?
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+}
+
+model Lease {
+  id          String   @id @default(uuid())
+  deviceId    String
+  expiresAt   DateTime
+  permissions String // JSON of permissions
+  createdAt   DateTime @default(now())
+}
+
+model GlobalConfig {
+  key   String @id
+  value String
+}

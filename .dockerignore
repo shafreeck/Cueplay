@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+.next
+out
+target
+.turbo
+*.log
+.env
+.env.*
+backend-data
+data
+src-tauri/target

@@ -22,7 +22,7 @@ export interface RoomState {
 export class Room {
     private state: RoomState;
 
-    constructor(id: string, ownerId: string) {
+    constructor(id: string, ownerId: string, initialState?: Partial<RoomState>) {
         this.state = {
             id,
             ownerId,
@@ -30,9 +30,17 @@ export class Room {
             controllerId: ownerId, // Owner starts as controller
             playlist: [], // Initialize empty playlist
             quarkCookie: '', // Explicitly initialize
+            ...initialState
         };
-        // Add owner as first member
-        this.addMember({ userId: ownerId, joinedAt: Date.now() });
+        // Add owner as member only if members list is empty
+        if (this.state.members.length === 0) {
+            this.addMember({ userId: ownerId, joinedAt: Date.now() });
+        }
+    }
+
+    static fromJSON(json: string): Room {
+        const state = JSON.parse(json) as RoomState;
+        return new Room(state.id, state.ownerId, state);
     }
 
     get id() { return this.state.id; }

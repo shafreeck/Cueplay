@@ -20,7 +20,7 @@ export async function playbackRoutes(fastify: FastifyInstance) {
             let cookie = '';
 
             if (body.roomId) {
-                const room = RoomManager.getRoom(body.roomId);
+                const room = await RoomManager.getRoom(body.roomId);
                 if (room && room.quarkCookie) {
                     cookie = room.quarkCookie;
                 }

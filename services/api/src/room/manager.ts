@@ -1,37 +1,140 @@
 import { Room } from '@cueplay/room-core';
+import prisma from '../prisma';
 
-// In-memory store for now
-const rooms: Map<string, Room> = new Map();
+// In-memory cache for active rooms
+const cache: Map<string, Room> = new Map();
 
 export class RoomManager {
-    static createRoom(ownerId: string): Room {
-        const id = Math.random().toString(36).substring(7); // Simple ID
+    static async createRoom(ownerId: string): Promise<Room> {
+        const id = Math.random().toString(36).substring(7);
         const room = new Room(id, ownerId);
-        rooms.set(id, room);
-        console.log(`[RoomManager] Created room ${id} for ${ownerId}. Total rooms: ${rooms.size}`);
+
+        await prisma.room.create({
+            data: {
+                id,
+                ownerId,
+                controllerId: room.controllerId,
+                quarkCookie: room.quarkCookie,
+                playlist: JSON.stringify(room.playlist),
+                members: {
+                    create: {
+                        userId: ownerId,
+                        joinedAt: new Date()
+                    }
+                }
+            }
+        });
+
+        cache.set(id, room);
+        console.log(`[RoomManager] Created room ${id} for ${ownerId} in DB`);
         return room;
     }
 
-    static getRoom(id: string): Room | undefined {
-        const room = rooms.get(id);
-        console.log(`[RoomManager] Getting room ${id}: ${!!room}`);
-        return room;
-    }
+    static async getRoom(id: string): Promise<Room | undefined> {
+        // Return from cache if available
+        if (cache.has(id)) return cache.get(id);
 
-    static joinRoom(id: string, userId: string, name?: string): Room {
-        let room = rooms.get(id);
-        if (!room) {
-            console.log(`[RoomManager] Room ${id} not found, auto-creating for ${userId}`);
-            room = new Room(id, userId);
-            rooms.set(id, room);
+        const dbRoom = await prisma.room.findUnique({
+            where: { id },
+            include: { members: true }
+        });
+
+        if (!dbRoom) {
+            console.log(`[RoomManager] Room ${id} not found in DB`);
+            return undefined;
         }
 
-        room.addMember({ userId, name, joinedAt: Date.now() });
+        const room = new Room(dbRoom.id, dbRoom.ownerId, {
+            controllerId: dbRoom.controllerId || undefined,
+            media: dbRoom.media ? JSON.parse(dbRoom.media) : undefined,
+            playlist: dbRoom.playlist ? JSON.parse(dbRoom.playlist) : [],
+            quarkCookie: dbRoom.quarkCookie || '',
+            members: dbRoom.members.map(m => ({
+                userId: m.userId,
+                name: m.name || undefined,
+                joinedAt: m.joinedAt.getTime(),
+                currentProgress: m.currentProgress || undefined
+            }))
+        });
+
+        cache.set(id, room);
+        console.log(`[RoomManager] Rehydrated room ${id} from DB`);
+        return room;
+    }
+
+    static async joinRoom(id: string, userId: string, name?: string): Promise<Room> {
+        let room = await this.getRoom(id);
+        if (!room) {
+            console.log(`[RoomManager] Room ${id} not found, auto-creating for ${userId}`);
+            room = await this.createRoom(userId);
+            if (name) room.addMember({ userId, name, joinedAt: Date.now() });
+        } else {
+            room.addMember({ userId, name, joinedAt: Date.now() });
+        }
+
+        await this.persist(room);
         console.log(`[RoomManager] User ${userId} (${name}) joined room ${id}`);
         return room;
     }
 
-    static listRooms(ownerId: string): Room[] {
-        return Array.from(rooms.values()).filter(r => r.ownerId === ownerId);
+    static async listRooms(userId: string): Promise<Room[]> {
+        const dbRooms = await prisma.room.findMany({
+            where: { ownerId: userId },
+            include: { members: true }
+        });
+
+        return Promise.all(dbRooms.map(async (dr) => {
+            const cached = cache.get(dr.id);
+            if (cached) return cached;
+
+            const r = new Room(dr.id, dr.ownerId, {
+                controllerId: dr.controllerId || undefined,
+                media: dr.media ? JSON.parse(dr.media) : undefined,
+                playlist: dr.playlist ? JSON.parse(dr.playlist) : [],
+                quarkCookie: dr.quarkCookie || '',
+                members: dr.members.map(m => ({
+                    userId: m.userId,
+                    name: m.name || undefined,
+                    joinedAt: m.joinedAt.getTime(),
+                    currentProgress: m.currentProgress || undefined
+                }))
+            });
+            cache.set(r.id, r);
+            return r;
+        }));
+    }
+
+    /**
+     * Persist current room state to database
+     */
+    static async persist(room: Room) {
+        const json = room.toJSON();
+        await prisma.room.update({
+            where: { id: room.id },
+            data: {
+                controllerId: json.controllerId || null,
+                media: json.media ? JSON.stringify(json.media) : null,
+                playlist: JSON.stringify(json.playlist),
+                quarkCookie: json.quarkCookie || '',
+            }
+        });
+
+        // Sync members
+        for (const member of json.members) {
+            await prisma.member.upsert({
+                where: { roomId_userId: { roomId: room.id, userId: member.userId } },
+                update: {
+                    name: member.name,
+                    currentProgress: member.currentProgress
+                },
+                create: {
+                    roomId: room.id,
+                    userId: member.userId,
+                    name: member.name,
+                    joinedAt: new Date(member.joinedAt || Date.now()),
+                    currentProgress: member.currentProgress
+                }
+            });
+        }
     }
 }

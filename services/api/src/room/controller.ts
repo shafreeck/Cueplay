@@ -8,7 +8,7 @@ export async function roomRoutes(fastify: FastifyInstance) {
         if (!query.userId) {
             return reply.code(400).send({ error: 'userId query param required' });
         }
-        const rooms = RoomManager.listRooms(query.userId);
+        const rooms = await RoomManager.listRooms(query.userId);
         return { rooms: rooms.map(r => r.toJSON()) };
     });
 
@@ -18,7 +18,7 @@ export async function roomRoutes(fastify: FastifyInstance) {
         const body = req.body as { userId: string };
         const userId = body?.userId || 'anon-' + Math.random().toString(36).substring(7);
 
-        const room = RoomManager.createRoom(userId);
+        const room = await RoomManager.createRoom(userId);
         return { room: room.toJSON() };
     });
 
@@ -27,7 +27,7 @@ export async function roomRoutes(fastify: FastifyInstance) {
         const body = req.body as { userId: string };
         const userId = body?.userId || 'anon-' + Math.random().toString(36).substring(7);
 
-        const room = RoomManager.joinRoom(id, userId);
+        const room = await RoomManager.joinRoom(id, userId);
         if (!room) {
             return reply.code(404).send({ error: 'Room not found' });
         }
@@ -38,7 +38,7 @@ export async function roomRoutes(fastify: FastifyInstance) {
         const { id } = req.params as { id: string };
         const body = req.body as { userId: string, cookie: string };
 
-        const room = RoomManager.getRoom(id);
+        const room = await RoomManager.getRoom(id);
         if (!room) {
             return reply.code(404).send({ error: 'Room not found' });
         }
@@ -48,6 +48,7 @@ export async function roomRoutes(fastify: FastifyInstance) {
         }
 
         room.setQuarkCookie(body.cookie);
+        await RoomManager.persist(room);
         console.log(`[RoomManager] Updated cookie for room ${id}`);
         return { success: true };
     });
