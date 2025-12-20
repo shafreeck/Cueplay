@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ApiClient } from '@/api/client';
 import { ModeToggle } from '@/components/mode-toggle';
-import { Trash2, PlayCircle, Plus, Settings, Copy } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye } from 'lucide-react';
 
 interface PlaylistItem {
     id: string;
@@ -452,6 +452,31 @@ export default function RoomDetail() {
                         }}>
                             <Copy className="h-3 w-3" />
                         </Button>
+                        <div
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${canControl
+                                ? 'bg-primary/10 text-primary border-primary/20 cursor-default'
+                                : 'bg-muted/50 text-muted-foreground border-border/50 cursor-pointer hover:bg-muted hover:text-foreground'
+                                }`}
+                            onClick={() => {
+                                if (!canControl && socketRef.current?.readyState === WebSocket.OPEN) {
+                                    socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId } }));
+                                    toast({ title: "Control Requested", description: "Taking over playback control." });
+                                }
+                            }}
+                            title={!canControl ? "Click to Take Control" : "You have control"}
+                        >
+                            {canControl ? (
+                                <>
+                                    <Cast className="h-3 w-3" />
+                                    <span>Controlling</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Eye className="h-3 w-3" />
+                                    <span>Viewing</span>
+                                </>
+                            )}
+                        </div>
                         <ModeToggle />
                     </div>
 
@@ -571,7 +596,7 @@ export default function RoomDetail() {
                                 </TabsList>
                             </CardHeader>
 
-                            <CardContent className="flex-1 overflow-hidden p-0 bg-background/50 flex flex-col">
+                            <CardContent className="flex-1 overflow-hidden p-0 bg-background/50 block">
                                 <TabsContent value="playlist" className="flex-1 flex flex-col min-h-0 m-0">
                                     <div className="p-3 border-b bg-muted/30 flex gap-2 shrink-0">
                                         <Input
@@ -614,41 +639,29 @@ export default function RoomDetail() {
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="members" className="flex-1 flex flex-col min-h-0 m-0 p-4">
-                                    <div className="mb-4">
-                                        <Button
-                                            variant={controllerId === currentUserId ? "outline" : "default"}
-                                            className="w-full"
-                                            disabled={controllerId === currentUserId}
-                                            onClick={() => {
-                                                if (socketRef.current?.readyState === WebSocket.OPEN) {
-                                                    socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId } }));
-                                                    toast({ title: "Control Requested", description: "Taking over playback control." });
-                                                }
-                                            }}
-                                        >
+                                <TabsContent value="members" className="h-full m-0 min-h-0 block">
+                                    <div className="flex flex-col h-full">
 
-                                            {controllerId === currentUserId ? "You have control (🎮)" : "Take Control"}
-                                        </Button>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto space-y-2">
-                                        {members.length === 0 && (
-                                            <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">No members info.</div>
-                                        )}
-                                        {members.map((m: any) => (
-                                            <div key={m.userId} className="flex items-center justify-between p-2 rounded-md border bg-card/50">
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`h-2 w-2 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} />
-                                                    <span className="text-sm font-medium">
-                                                        {m.userId === currentUserId ? `${m.userId} (You)` : m.userId}
-                                                    </span>
+
+                                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                            {members.length === 0 && (
+                                                <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">No members info.</div>
+                                            )}
+                                            {members.map((m: any) => (
+                                                <div key={m.userId} className="flex items-center justify-between p-2 rounded-md border bg-card/50">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`h-2 w-2 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} />
+                                                        <span className="text-sm font-medium">
+                                                            {m.userId === currentUserId ? `${m.userId} (You)` : m.userId}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        {m.userId === controllerId && <Cast className="h-4 w-4 text-primary animate-pulse" />}
+                                                        {m.userId === ownerId && <Crown className="h-3 w-3 text-yellow-500" />}
+                                                    </div>
                                                 </div>
-                                                <div className="flex items-center gap-1">
-                                                    {m.userId === controllerId && <span title="Controller" className="text-lg">🎮</span>}
-                                                    {m.userId === ownerId && <span title="Owner" className="text-xs">👑</span>}
-                                                </div>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 </TabsContent>
                             </CardContent>
