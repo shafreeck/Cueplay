@@ -2,26 +2,27 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "outDir": "./dist",
-        "rootDir": "./src"
+        "baseUrl": ".",
+        "paths": {
+            "@cueplay/lease-core": [
+                "../../packages/lease-core/src"
+            ],
+            "@cueplay/playback-core": [
+                "../../packages/playback-core/src"
+            ],
+            "@cueplay/protocol": [
+                "../../packages/protocol/src"
+            ],
+            "@cueplay/room-core": [
+                "../../packages/room-core/src"
+            ],
+            "@cueplay/sync-core": [
+                "../../packages/sync-core/src"
+            ]
+        }
     },
     "include": [
-        "src/**/*"
-    ],
-    "references": [
-        {
-            "path": "../../packages/lease-core"
-        },
-        {
-            "path": "../../packages/playback-core"
-        },
-        {
-            "path": "../../packages/room-core"
-        },
-        {
-            "path": "../../packages/protocol"
-        },
-        {
-            "path": "../../packages/sync-core"
-        }
+        "src/**/*",
+        "../../packages/*/src/**/*"
     ]
 }
