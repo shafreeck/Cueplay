@@ -6,7 +6,7 @@ RUN corepack enable
 FROM base AS build
 COPY . /usr/src/app
 WORKDIR /usr/src/app
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install
 RUN pnpm --filter=@cueplay/api exec prisma generate
 RUN pnpm --filter=@cueplay/api... build
 RUN pnpm deploy --filter=@cueplay/api /prod/api
