@@ -40,6 +40,7 @@ export default function RoomDetail() {
     const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [nickname, setNickname] = useState('');
     const [resetConfirm, setResetConfirm] = useState(false);
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -58,18 +59,25 @@ export default function RoomDetail() {
         cookieRef.current = cookie;
     }, [cookie]);
 
-    // Load/Save Cookie
+    // Load/Save Cookie & Nickname
     useEffect(() => {
         const stored = localStorage.getItem('quark_cookie');
         if (stored) {
             setCookie(stored);
             cookieRef.current = stored;
         }
+        const storedName = localStorage.getItem('cueplay_nickname');
+        if (storedName) setNickname(storedName);
     }, []);
 
     const saveCookie = (val: string) => {
         setCookie(val);
         localStorage.setItem('quark_cookie', val);
+    };
+
+    const saveNickname = (val: string) => {
+        setNickname(val);
+        localStorage.setItem('cueplay_nickname', val);
     };
 
     // Construct and Load Source
@@ -308,6 +316,9 @@ export default function RoomDetail() {
         localStorage.setItem('cueplay_userid', userId);
         setCurrentUserId(userId);
 
+        // Get latest nickname for join
+        const name = localStorage.getItem('cueplay_nickname') || '';
+
         const ws = new WebSocket(wsUrl);
         socketRef.current = ws;
 
@@ -351,7 +362,11 @@ export default function RoomDetail() {
             }));
         };
 
-        ws.onopen = () => ws.send(JSON.stringify({ type: 'JOIN_ROOM', payload: { roomId, userId } }));
+        ws.onopen = () => {
+            const payload = { roomId, userId, name };
+            console.log("JOIN_ROOM Payload:", payload); // Debug log
+            ws.send(JSON.stringify({ type: 'JOIN_ROOM', payload }));
+        };
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.type === 'MEDIA_CHANGE') {
@@ -506,6 +521,16 @@ export default function RoomDetail() {
                                                 type="password"
                                             />
                                         </div>
+                                        <div className="grid grid-cols-3 items-center gap-4">
+                                            <Label htmlFor="nickname">Display Name</Label>
+                                            <Input
+                                                id="nickname"
+                                                value={nickname}
+                                                onChange={(e) => saveNickname(e.target.value)}
+                                                placeholder="Enter a display name"
+                                                className="col-span-2 h-8"
+                                            />
+                                        </div>
                                         <Dialog>
                                             <DialogTrigger asChild>
                                                 <Button variant="outline" size="sm" className="w-full">View Debug Logs</Button>
@@ -647,20 +672,42 @@ export default function RoomDetail() {
                                             {members.length === 0 && (
                                                 <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">No members info.</div>
                                             )}
-                                            {members.map((m: any) => (
-                                                <div key={m.userId} className="flex items-center justify-between p-2 rounded-md border bg-card/50">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className={`h-2 w-2 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} />
-                                                        <span className="text-sm font-medium">
-                                                            {m.userId === currentUserId ? `${m.userId} (You)` : m.userId}
-                                                        </span>
+                                            {members.map((m: any) => {
+                                                // Generate consistent color from userId
+                                                const hash = m.userId.split('').reduce((acc: number, char: string) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
+                                                const colors = [
+                                                    'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500',
+                                                    'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500',
+                                                    'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500',
+                                                    'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'
+                                                ];
+                                                const colorClass = colors[Math.abs(hash) % colors.length];
+                                                const displayName = m.name || m.userId;
+                                                const initial = displayName.slice(0, 1).toUpperCase();
+
+                                                return (
+                                                    <div key={m.userId} className="flex items-center justify-between p-2 rounded-md border bg-card/50">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm ${colorClass} bg-opacity-90`}>
+                                                                {initial}
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-sm font-medium leading-none">
+                                                                        {m.userId === currentUserId ? `${displayName} (You)` : displayName}
+                                                                    </span>
+                                                                    <div className={`h-1.5 w-1.5 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} title={m.isOnline ? "Online" : "Offline"} />
+                                                                </div>
+                                                                {m.name && <span className="text-[10px] text-muted-foreground font-mono leading-none mt-1 opacity-70">{m.userId}</span>}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            {m.userId === controllerId && <span title="Controlling"><Cast className="h-4 w-4 text-primary animate-pulse" /></span>}
+                                                            {m.userId === ownerId && <span title="Owner"><Crown className="h-3 w-3 text-yellow-500" /></span>}
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center gap-1">
-                                                        {m.userId === controllerId && <Cast className="h-4 w-4 text-primary animate-pulse" />}
-                                                        {m.userId === ownerId && <Crown className="h-3 w-3 text-yellow-500" />}
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 </TabsContent>

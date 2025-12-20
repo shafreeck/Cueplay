@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from "@/components/ui/use-toast";
 
 import { ModeToggle } from '@/components/mode-toggle';
+import { UserProfile } from '@/components/user-profile';
 
 export default function Home() {
   const router = useRouter();
@@ -76,6 +77,9 @@ export default function Home() {
           <Button onClick={createRoom} disabled={loading}>
             {loading ? 'Creating...' : 'Create Room'}
           </Button>
+          <div className="ml-2 pl-2 border-l border-border/50">
+            <UserProfile userId={userId} />
+          </div>
         </div>
       </div>
 

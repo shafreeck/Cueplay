@@ -18,7 +18,7 @@ export class RoomManager {
         return room;
     }
 
-    static joinRoom(id: string, userId: string): Room {
+    static joinRoom(id: string, userId: string, name?: string): Room {
         let room = rooms.get(id);
         if (!room) {
             console.log(`[RoomManager] Room ${id} not found, auto-creating for ${userId}`);
@@ -26,8 +26,8 @@ export class RoomManager {
             rooms.set(id, room);
         }
 
-        room.addMember({ userId, joinedAt: Date.now() });
-        console.log(`[RoomManager] User ${userId} joined room ${id}`);
+        room.addMember({ userId, name, joinedAt: Date.now() });
+        console.log(`[RoomManager] User ${userId} (${name}) joined room ${id}`);
         return room;
     }
 

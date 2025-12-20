@@ -49,9 +49,9 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                 const event = JSON.parse(raw) as { type: EventType, payload: any };
 
                 if (event.type === 'JOIN_ROOM') {
-                    const payload = event.payload as JoinRoomEvent['payload'];
+                    const payload = event.payload as any;
                     // Use joinRoom to register member in Room model
-                    const room = RoomManager.joinRoom(payload.roomId, payload.userId);
+                    const room = RoomManager.joinRoom(payload.roomId, payload.userId, payload.name);
                     if (room) {
                         currentRoomId = payload.roomId;
                         pUserId = payload.userId;

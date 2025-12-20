@@ -40,7 +40,11 @@ export class Room {
     get playlist() { return this.state.playlist || []; }
 
     addMember(member: Member) {
-        if (!this.state.members.find(m => m.userId === member.userId)) {
+        const existingIndex = this.state.members.findIndex(m => m.userId === member.userId);
+        if (existingIndex !== -1) {
+            // Update existing member info (e.g. name, joinedAt if needed)
+            this.state.members[existingIndex] = { ...this.state.members[existingIndex], ...member };
+        } else {
             this.state.members.push(member);
         }
     }
