@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/use-toast";
 import Link from 'next/link';
 import { ArrowLeft, ShieldCheck, Lock } from 'lucide-react';
 
-const API_BASE = 'http://localhost:3000';
+import { API_BASE } from '@/api/config';
 
 export default function AdminPage() {
     const { toast } = useToast();

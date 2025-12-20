@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ApiClient } from '@/api/client';
+import { WS_BASE, PROXY_BASE } from '@/api/config';
 import { ModeToggle } from '@/components/mode-toggle';
 import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -222,7 +223,9 @@ export default function RoomDetail() {
 
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
-                finalUrl = `/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                finalUrl = `${PROXY_BASE}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+            } else {
+                console.warn("No cookie returned from API for this video.");
             }
             setVideoSrc(finalUrl);
         } catch (e) {
@@ -263,10 +266,15 @@ export default function RoomDetail() {
             // Local playback
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
-                finalUrl = `/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                finalUrl = `${PROXY_BASE}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
             } else {
-                console.warn("No cookie available, using raw URL.");
-                addLog("Warning: No cookie available for playback proxy.");
+                console.warn("No cookie available for proxy. Playback may fail.");
+                addLog("Warning: No cookie available. Please set a Global Cookie in Admin or Room Cookie in Settings.");
+                toast({
+                    variant: "destructive",
+                    title: "Missing Cookie",
+                    description: "Playback might fail because no cookie was provided by the server. Please check your configuration.",
+                });
             }
             setVideoSrc(finalUrl);
         } catch (e: any) {
@@ -431,7 +439,7 @@ export default function RoomDetail() {
 
     // WebSocket Synchronization
     useEffect(() => {
-        const wsUrl = 'ws://localhost:3000/ws';
+        const wsUrl = `${WS_BASE}/ws`;
         let userId = localStorage.getItem('cueplay_userid') || `user_${Math.random().toString(36).substring(7)}`;
         localStorage.setItem('cueplay_userid', userId);
         setCurrentUserId(userId);

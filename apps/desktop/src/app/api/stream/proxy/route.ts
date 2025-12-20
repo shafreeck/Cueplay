@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     if (range) {
         headers.set('Range', range);
     }
+    console.log(`[Proxy] Requesting: ${url?.substring(0, 50)}... Range: ${range}`);
 
     try {
         const response = await fetch(url, {
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
         responseHeaders.set('Access-Control-Allow-Headers', 'Range');
         responseHeaders.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
 
+        console.log(`[Proxy] Success: ${response.status} Content-Type: ${responseHeaders.get('content-type')}`);
         return new NextResponse(response.body, {
             status: response.status,
             headers: responseHeaders,
