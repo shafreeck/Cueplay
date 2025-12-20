@@ -450,6 +450,24 @@ export default function RoomDetail() {
         };
     }, [videoSrc, sendState, canControl]);
 
+    // Report Progress (Heartbeat) - Runs for everyone
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const ws = socketRef.current;
+            const video = videoRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN && video) {
+                // Only report if we have loaded a video
+                if (!video.duration) return;
+
+                ws.send(JSON.stringify({
+                    type: 'VIDEO_PROGRESS',
+                    payload: { time: video.currentTime }
+                }));
+            }
+        }, 2000);
+        return () => clearInterval(interval);
+    }, []);
+
 
 
     return (
@@ -685,9 +703,25 @@ export default function RoomDetail() {
                                                 const displayName = m.name || m.userId;
                                                 const initial = displayName.slice(0, 1).toUpperCase();
 
+                                                // Sync Calculation
+                                                const controllerMember = members.find((mem: any) => mem.userId === controllerId);
+                                                const targetTime = controllerMember?.currentProgress || 0;
+                                                const myTime = m.currentProgress || 0;
+                                                const diff = Math.abs(myTime - targetTime);
+                                                const isUnsync = diff > 2; // Tolerance 2s
+
+                                                let progressColor = 'bg-emerald-500/80';
+                                                if (diff > 15) progressColor = 'bg-red-900/90';
+                                                else if (diff > 5) progressColor = 'bg-red-600/90';
+                                                else if (diff > 2) progressColor = 'bg-yellow-500/90';
+
+                                                // Progress Percentage
+                                                const duration = videoRef.current?.duration || 1;
+                                                const percent = Math.min(100, Math.max(0, (myTime / duration) * 100));
+
                                                 return (
-                                                    <div key={m.userId} className="flex items-center justify-between p-2 rounded-md border bg-card/50">
-                                                        <div className="flex items-center gap-3">
+                                                    <div key={m.userId} className="relative flex items-center justify-between p-2 rounded-md border bg-card/50 overflow-hidden">
+                                                        <div className="flex items-center gap-3 relative z-10">
                                                             <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm ${colorClass} bg-opacity-90`}>
                                                                 {initial}
                                                             </div>
@@ -698,13 +732,24 @@ export default function RoomDetail() {
                                                                     </span>
                                                                     <div className={`h-1.5 w-1.5 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} title={m.isOnline ? "Online" : "Offline"} />
                                                                 </div>
-                                                                {m.name && <span className="text-[10px] text-muted-foreground font-mono leading-none mt-1 opacity-70">{m.userId}</span>}
+                                                                <div className="flex items-center gap-2 mt-1">
+                                                                    {m.name && <span className="text-[10px] text-muted-foreground font-mono leading-none opacity-70">{m.userId}</span>}
+                                                                    {/* Diff Debug text can be added here if needed */}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-1">
+                                                        <div className="flex items-center gap-1 relative z-10">
                                                             {m.userId === controllerId && <span title="Controlling"><Cast className="h-4 w-4 text-primary animate-pulse" /></span>}
                                                             {m.userId === ownerId && <span title="Owner"><Crown className="h-3 w-3 text-yellow-500" /></span>}
                                                         </div>
+
+                                                        {/* Progress Bar Background */}
+                                                        {m.isOnline && m.currentProgress !== undefined && (
+                                                            <div
+                                                                className={`absolute bottom-0 left-0 h-0.5 transition-all duration-1000 ease-linear ${progressColor}`}
+                                                                style={{ width: `${percent}%` }}
+                                                            />
+                                                        )}
                                                     </div>
                                                 )
                                             })}

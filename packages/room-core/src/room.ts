@@ -2,6 +2,7 @@ export interface Member {
     userId: string;
     name?: string;
     joinedAt: number;
+    currentProgress?: number;
 }
 
 export interface RoomState {

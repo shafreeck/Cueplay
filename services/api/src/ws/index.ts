@@ -132,6 +132,22 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                     } else {
                         fastify.log.warn({ msg: 'Failed PLAYLIST_UPDATE: Room not found', roomId: currentRoomId });
                     }
+                } else if (event.type === 'VIDEO_PROGRESS') {
+                    // Update member progress state without full logging to avoid spam
+                    if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
+                        const payload = event.payload; // { time: number }
+                        const room = RoomManager.getRoom(currentRoomId);
+                        if (room) {
+                            room.addMember({
+                                userId: pUserId,
+                                // Relying on spread in addMember to preserve existing joinedAt
+                                currentProgress: payload.time
+                            } as any);
+
+                            // Broadcast efficiently? For now, using standard broadcast.
+                            broadcastRoomUpdate(currentRoomId);
+                        }
+                    }
                 }
             } catch (e) {
                 fastify.log.error(e);
