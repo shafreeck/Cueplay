@@ -13,7 +13,10 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ApiClient } from '@/api/client';
 import { ModeToggle } from '@/components/mode-toggle';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface PlaylistItem {
     id: string;
@@ -28,6 +31,68 @@ interface ChatMessage {
     content: string;
     timestamp: number;
     isSystem?: boolean;
+}
+
+interface SortableItemProps {
+    item: PlaylistItem;
+    index: number;
+    playingItemId: string | null;
+    onPlay: (fileId: string, id: string) => void;
+    onRemove: (id: string) => void;
+}
+
+function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: SortableItemProps) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: item.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 'auto',
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`group flex items-center justify-between p-2 rounded-md border transition-colors ${item.id === playingItemId ? 'bg-accent border-primary/50' : 'bg-card border-border/50 hover:bg-accent'} ${isDragging ? 'opacity-50' : ''}`}
+        >
+            <div className="flex items-center flex-1 min-w-0 mr-2">
+                <div {...attributes} {...listeners} className="cursor-grab hover:text-foreground text-muted-foreground mr-2 p-1">
+                    <GripVertical className="h-4 w-4" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-mono text-muted-foreground">#{index + 1}</span>
+                    <span className="text-sm font-medium truncate" title={item.title || item.fileId}>
+                        {item.title || item.fileId}
+                    </span>
+                    {item.id === playingItemId && (
+                        <span className="text-[10px] text-green-500 font-bold flex items-center gap-1">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            </span>
+                            Playing
+                        </span>
+                    )}
+                </div>
+            </div>
+            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onPlay(item.fileId, item.id)}>
+                    <PlayCircle className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onRemove(item.id)}>
+                    <Trash2 className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
+    );
 }
 
 export default function RoomDetail() {
@@ -435,7 +500,6 @@ export default function RoomDetail() {
 
             } else if (data.type === 'ROOM_UPDATE') {
                 const { members, ownerId, controllerId } = data.payload;
-                console.log("ROOM_UPDATE Received:", members);
                 setMembers(members);
                 setOwnerId(ownerId);
                 setControllerId(controllerId);
@@ -514,6 +578,34 @@ export default function RoomDetail() {
     }, []);
 
 
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (active.id !== over?.id) {
+            setPlaylist((items) => {
+                const oldIndex = items.findIndex((i) => i.id === active.id);
+                const newIndex = items.findIndex((i) => i.id === over?.id);
+                const newItems = arrayMove(items, oldIndex, newIndex);
+
+                // Sync with server if we are connected
+                if (socketRef.current?.readyState === WebSocket.OPEN) {
+                    socketRef.current.send(JSON.stringify({
+                        type: 'PLAYLIST_UPDATE',
+                        payload: { playlist: newItems }
+                    }));
+                }
+                return newItems;
+            });
+        }
+    };
 
     return (
         <div className="min-h-screen bg-background text-foreground">
@@ -710,25 +802,27 @@ export default function RoomDetail() {
                                                 <p className="text-xs opacity-70">Add videos to play them sequentially.</p>
                                             </div>
                                         )}
-                                        {playlist.map((item, i) => (
-                                            <div
-                                                key={item.id}
-                                                className={`group flex items-center justify-between p-2 rounded-md border transition-colors ${item.id === playingItemId ? 'bg-accent border-primary/50' : 'bg-card border-border/50 hover:bg-accent'}`}
+                                        <DndContext
+                                            sensors={sensors}
+                                            collisionDetection={closestCenter}
+                                            onDragEnd={handleDragEnd}
+                                        >
+                                            <SortableContext
+                                                items={playlist}
+                                                strategy={verticalListSortingStrategy}
                                             >
-                                                <div className="flex flex-col flex-1 min-w-0 mr-2">
-                                                    <span className="text-xs font-mono text-muted-foreground">#{i + 1}</span>
-                                                    <span className="text-sm font-medium truncate" title={item.title || item.fileId}>{item.title || item.fileId}</span>
-                                                </div>
-                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => resolveAndPlay(item.fileId, item.id)}>
-                                                        <PlayCircle className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => removeFromPlaylist(item.id)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                                {playlist.map((item, i) => (
+                                                    <SortablePlaylistItem
+                                                        key={item.id}
+                                                        item={item}
+                                                        index={i}
+                                                        playingItemId={playingItemId}
+                                                        onPlay={resolveAndPlay}
+                                                        onRemove={removeFromPlaylist}
+                                                    />
+                                                ))}
+                                            </SortableContext>
+                                        </DndContext>
                                     </div>
                                 </TabsContent>
 
@@ -795,9 +889,6 @@ export default function RoomDetail() {
                                 <TabsContent value="members" className="flex-1 flex flex-col min-h-0 m-0">
                                     <div className="flex flex-col h-full">
                                         <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                                            <div className="text-xs text-muted-foreground mb-2">
-                                                DEBUG: {members.length} members. ID: {currentUserId}
-                                            </div>
                                             {members.length === 0 && (
                                                 <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">No members info.</div>
                                             )}
