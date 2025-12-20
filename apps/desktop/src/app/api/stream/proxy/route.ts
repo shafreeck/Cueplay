@@ -11,15 +11,25 @@ export async function GET(request: NextRequest) {
     }
 
     const headers = new Headers();
-    headers.set('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     headers.set('Referer', referer);
     if (cookie) {
         headers.set('Cookie', cookie);
     }
 
+    // Forward standard conditional headers to avoid 412
+    ['if-range', 'if-match', 'if-none-match', 'if-modified-since', 'if-unmodified-since'].forEach(h => {
+        const val = request.headers.get(h);
+        if (val) headers.set(h, val);
+    });
+
     const range = request.headers.get('range');
+    // Important: Only forward Range if present. Some servers 412 on empty or malformed Range.
     if (range) {
         headers.set('Range', range);
+    } else {
+        // Optional: Force a range request for initial stream probe if needed, but risky.
+        // headers.set('Range', 'bytes=0-');
     }
     console.log(`[Proxy] Requesting: ${url?.substring(0, 50)}... Range: ${range}`);
 
@@ -44,6 +54,13 @@ export async function GET(request: NextRequest) {
         responseHeaders.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
         responseHeaders.set('Access-Control-Allow-Headers', 'Range');
         responseHeaders.set('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[Proxy] Upstream Error ${response.status}:`, errorText);
+            console.error(`[Proxy] Request Headers:`, Object.fromEntries(headers.entries()));
+            return new NextResponse(errorText, { status: response.status });
+        }
 
         console.log(`[Proxy] Success: ${response.status} Content-Type: ${responseHeaders.get('content-type')}`);
         return new NextResponse(response.body, {
