@@ -25,6 +25,16 @@ export class ApiClient {
         return data.room;
     }
 
+    static async deleteRoom(id: string, userId: string): Promise<void> {
+        const res = await fetch(`${API_BASE}/rooms/${id}?userId=${userId}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to delete room');
+        }
+    }
+
     static async grantLease(deviceId: string): Promise<{ id: string, expiresAt: number }> {
         const res = await fetch(`${API_BASE}/leases`, {
             method: 'POST',

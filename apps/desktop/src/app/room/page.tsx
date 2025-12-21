@@ -14,7 +14,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { ApiClient } from '@/api/client';
 import { WS_BASE, getProxyBase } from '@/api/config';
 import { ModeToggle } from '@/components/mode-toggle';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical } from 'lucide-react';
+import { RoomHistory } from '@/utils/history';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -127,8 +128,10 @@ function RoomContent() {
     const [nickname, setNickname] = useState('');
     const [resetConfirm, setResetConfirm] = useState(false);
 
+    const [playbackRate, setPlaybackRate] = useState(1.0);
     // Chat State
     const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [isSynced, setIsSynced] = useState(true);
     const [chatInput, setChatInput] = useState('');
     const chatListRef = useRef<HTMLDivElement>(null);
 
@@ -139,6 +142,10 @@ function RoomContent() {
     const isRemoteUpdate = useRef(false);
     const isLoadingSource = useRef(false);
     const lastTimeRef = useRef(0);
+    const isSyncedRef = useRef(isSynced);
+
+    // Sync Ref with State
+    useEffect(() => { isSyncedRef.current = isSynced; }, [isSynced]);
 
     const addLog = (msg: string) => setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
@@ -548,6 +555,8 @@ function RoomContent() {
                     }).catch(() => { });
                 }
 
+                // ... inside RoomContent component ...
+
             } else if (data.type === 'ROOM_UPDATE') {
                 const { members, ownerId, controllerId, quarkCookie } = data.payload;
                 setMembers(members);
@@ -555,19 +564,70 @@ function RoomContent() {
                 setControllerId(controllerId);
                 controllerIdRef.current = controllerId;
                 if (quarkCookie !== undefined) setRoomCookie(quarkCookie);
+
+                // Add to visited history
+                if (roomId && ownerId) {
+                    RoomHistory.addVisitedRoom({
+                        id: roomId,
+                        ownerId: ownerId,
+                        members: members || []
+                    });
+                }
             } else if (data.type === 'PLAYER_STATE') {
                 const video = videoRef.current;
                 if (!video) return;
-                const { state, time } = data.payload;
+
+                // Independent Mode: Viewer disabled sync
+                // Use Ref and calculate control status locally to avoid closure staleness
+                const amIController = !controllerIdRef.current || controllerIdRef.current === userId;
+                if (!amIController && !isSyncedRef.current) return;
+
+                const { state, time, playbackRate } = data.payload;
+                const now = video.currentTime;
+                const drift = now - time;
+
                 isRemoteUpdate.current = true;
-                if (Math.abs(video.currentTime - time) > 0.8) {
-                    video.currentTime = time;
+
+                // 1. Hard Sync: State Mismatch or Large Drift
+                const isStateMismatch = (state === 'playing' && video.paused) || (state === 'paused' && !video.paused);
+
+                if (Math.abs(drift) > 2.0 || isStateMismatch) {
+                    // console.log("Hard Sync", { drift, state, myState: video.paused ? 'paused' : 'playing' });
+                    if (Math.abs(drift) > 0.5) { // Only seek if drift is significant to avoid stuttering on state changes
+                        video.currentTime = time;
+                    }
+                    if (state === 'playing') video.play().catch(() => { });
+                    else video.pause();
+
+                    // Reset rate on hard sync
+                    if (video.playbackRate !== playbackRate) {
+                        video.playbackRate = playbackRate;
+                    }
                 }
-                if (state === 'playing' && video.paused) {
-                    video.play().catch(() => { });
-                } else if (state === 'paused' && !video.paused) {
-                    video.pause();
+                // 2. Soft Sync: Small Drift (Speed Adjustment)
+                // Only if playing and no state mismatch
+                else if (state === 'playing' && Math.abs(drift) > 0.15) {
+                    // console.log("Soft Sync", { drift, currentRate: video.playbackRate });
+                    const targetRate = playbackRate || 1.0;
+
+                    if (drift > 0) {
+                        // We are ahead -> Slow down
+                        video.playbackRate = Math.max(0.5, targetRate - 0.1);
+                    } else {
+                        // We are behind -> Speed up
+                        video.playbackRate = Math.min(2.0, targetRate + 0.1);
+                    }
                 }
+                // 3. Stabilize
+                else {
+                    if (playbackRate && Math.abs(video.playbackRate - playbackRate) > 0.01) {
+                        video.playbackRate = playbackRate;
+                    }
+                }
+
+                // Debounce the remote update flag
+                // We use a shorter timeout because soft sync (rate change) doesn't trigger 'seeked' but might trigger 'ratechange'
+                // The 'seeked' event is the dangerous one for loops.
                 setTimeout(() => { isRemoteUpdate.current = false; }, 500);
             } else if (data.type === 'PLAYLIST_UPDATE') {
                 const { playlist: newPlaylist } = data.payload;
@@ -612,6 +672,7 @@ function RoomContent() {
     }, [videoSrc, sendState, canControl]);
 
     // Report Progress (Heartbeat) - Runs for everyone
+    // Report Progress (Heartbeat) - Runs for everyone
     useEffect(() => {
         const interval = setInterval(() => {
             const ws = socketRef.current;
@@ -620,14 +681,28 @@ function RoomContent() {
                 // Only report if we have loaded a video
                 if (!video.duration) return;
 
+                // 1. Always report progress for UI (Member List)
                 ws.send(JSON.stringify({
                     type: 'VIDEO_PROGRESS',
                     payload: { time: video.currentTime }
                 }));
+
+                // 2. If Controller, broadcast authoritative state for Active Sync
+                // We do this here (periodic) to handle drift actively, not just on events.
+                if (controllerIdRef.current === currentUserId) {
+                    ws.send(JSON.stringify({
+                        type: 'PLAYER_STATE',
+                        payload: {
+                            state: video.paused ? 'paused' : 'playing',
+                            time: video.currentTime,
+                            playbackRate: video.playbackRate
+                        }
+                    }));
+                }
             }
-        }, 2000);
+        }, 1000); // 1s interval for better sync resolution
         return () => clearInterval(interval);
-    }, []);
+    }, [currentUserId]); // Depends on currentUserId to identify if I am controller
 
 
 
@@ -699,6 +774,24 @@ function RoomContent() {
                                 </>
                             )}
                         </div>
+                        {!canControl && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-8 w-8 transition-colors ${isSynced ? 'text-primary' : 'text-muted-foreground'}`}
+                                onClick={() => {
+                                    const newState = !isSynced;
+                                    setIsSynced(newState);
+                                    toast({
+                                        title: newState ? "Sync Enabled" : "Sync Disabled",
+                                        description: newState ? "You are now synced with the room." : "You are playing independently."
+                                    });
+                                }}
+                                title={isSynced ? "Unlink (Play Independently)" : "Link (Sync with Room)"}
+                            >
+                                {isSynced ? <Link2 className="h-4 w-4" /> : <Unlink className="h-4 w-4" />}
+                            </Button>
+                        )}
                         <ModeToggle />
                     </div>
 

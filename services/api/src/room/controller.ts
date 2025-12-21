@@ -52,4 +52,28 @@ export async function roomRoutes(fastify: FastifyInstance) {
         console.log(`[RoomManager] Updated cookie for room ${id}`);
         return { success: true };
     });
+
+    fastify.delete('/rooms/:id', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const query = req.query as { userId: string }; // Ideally from auth, using query/body for now as per minimal setup
+
+        // Check both query param and body for userId flexibility, 
+        // though standard DELETE doesn't use body often. using query param for auth user id here.
+        const userId = query.userId;
+
+        if (!userId) {
+            return reply.code(400).send({ error: 'userId required' });
+        }
+
+        try {
+            await RoomManager.deleteRoom(id, userId);
+            return { success: true };
+        } catch (e: any) {
+            console.error(e);
+            if (e.message.includes('Only the owner')) {
+                return reply.code(403).send({ error: e.message });
+            }
+            return reply.code(500).send({ error: 'Failed to delete room' });
+        }
+    });
 }

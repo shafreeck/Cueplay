@@ -6,7 +6,20 @@ const cache: Map<string, Room> = new Map();
 
 export class RoomManager {
     static async createRoom(ownerId: string): Promise<Room> {
-        const id = Math.random().toString(36).substring(7);
+        let id = Math.random().toString(36).substring(7);
+        let retries = 5;
+
+        while (retries > 0) {
+            const existing = await prisma.room.findUnique({ where: { id } });
+            if (!existing) break;
+            id = Math.random().toString(36).substring(7);
+            retries--;
+        }
+
+        if (retries === 0) {
+            throw new Error('Failed to generate unique room ID');
+        }
+
         const room = new Room(id, ownerId);
 
         await prisma.room.create({
@@ -28,6 +41,27 @@ export class RoomManager {
         cache.set(id, room);
         console.log(`[RoomManager] Created room ${id} for ${ownerId} in DB`);
         return room;
+    }
+
+    static async deleteRoom(id: string, userId: string): Promise<void> {
+        const room = await this.getRoom(id);
+        if (!room) return;
+
+        if (room.ownerId !== userId) {
+            throw new Error('Only the owner can delete the room');
+        }
+
+        // Remove from DB (members will be cascade deleted if configured, effectively ensuring cleanup)
+        // Note: Prisma schema should ideally have onDelete: Cascade for members relation, 
+        // but even if not, we can delete manually if needed. 
+        // Assuming standard setup, or we clean up members first.
+
+        // Manual cleanup to be safe if cascade isn't set
+        await prisma.member.deleteMany({ where: { roomId: id } });
+        await prisma.room.delete({ where: { id } });
+
+        cache.delete(id);
+        console.log(`[RoomManager] Deleted room ${id} by ${userId}`);
     }
 
     static async getRoom(id: string): Promise<Room | undefined> {

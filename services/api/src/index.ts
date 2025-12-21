@@ -13,7 +13,8 @@ import { ConfigStore } from './config/store';
 const server = fastify({ logger: true });
 
 server.register(cors, {
-    origin: true // Allow all origins (for dev)
+    origin: true, // Allow all origins (for dev)
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 });
 server.register(websocket);
 server.register(websocketRoutes);
