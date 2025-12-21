@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ApiClient, Room } from '@/api/client';
@@ -28,23 +28,47 @@ export default function Home() {
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useTranslation('common');
+  // Hydration Fix: Initialize state as empty/null. Do not read localStorage during render.
   const [userId, setUserId] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [visitedRooms, setVisitedRooms] = useState<VisitedRoom[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [joinId, setJoinId] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+
   useEffect(() => {
-    // Generate or load user ID
-    let stored = localStorage.getItem('cueplay_userid');
-    if (!stored) {
-      stored = 'user-' + Math.random().toString(36).substring(7);
-      localStorage.setItem('cueplay_userid', stored);
-    }
-    setUserId(stored);
-    loadRooms(stored);
-    loadVisited();
+
+
+    const init = async () => {
+      let currentId = '';
+
+      // 1. Get or Generate User ID (Client-side only)
+      try {
+        currentId = localStorage.getItem('cueplay_userid') || '';
+        if (!currentId) {
+          currentId = 'user-' + Math.random().toString(36).substring(7);
+          localStorage.setItem('cueplay_userid', currentId);
+        }
+        setUserId(currentId);
+      } catch (e) {
+        console.error("Failed to access localStorage", e);
+      }
+
+      // 2. Load Data (Sequential: Only after ID is resolved)
+      if (currentId) {
+        await loadRooms(currentId);
+      } else {
+        setError("Failed to initialize user identity.");
+      }
+
+      loadVisited();
+      setIsInitializing(false);
+    };
+
+    init();
   }, []);
 
   const loadVisited = () => {
@@ -52,11 +76,16 @@ export default function Home() {
   };
 
   const loadRooms = async (uid: string) => {
+    setLoading(true);
+    setError(null);
     try {
       const list = await ApiClient.listRooms(uid);
       setRooms(list);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setError(e.message || "Failed to load rooms");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -175,7 +204,31 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {rooms.map((room) => (
+              {/* State 1: Global Loading (Initial or Reloading) */}
+              {(isInitializing || (loading && rooms.length === 0)) && (
+                <div className="col-span-full py-12 flex justify-center items-center">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                    <p className="text-muted-foreground animate-pulse">{t('loading_rooms')}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* State 2: Error with Retry */}
+              {!isInitializing && error && (
+                <div className="col-span-full py-12 flex justify-center items-center">
+                  <div className="flex flex-col items-center gap-4 text-center max-w-md bg-destructive/10 p-6 rounded-2xl border border-destructive/20">
+                    <p className="text-destructive font-semibold">{t('failed_to_load')}</p>
+                    <p className="text-sm text-muted-foreground">{error}</p>
+                    <Button variant="outline" onClick={() => loadRooms(userId)} className="mt-2">
+                      {t('retry')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* State 3: Success List */}
+              {!isInitializing && !error && rooms.map((room) => (
                 <Card key={room.id} className="glass border-white/5 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/10 hover:scale-[1.02] transition-all duration-300 relative group overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   <CardHeader>
@@ -204,7 +257,8 @@ export default function Home() {
                 </Card>
               ))}
 
-              {rooms.length === 0 && (
+              {/* State 4: Empty List */}
+              {!isInitializing && !error && !loading && rooms.length === 0 && (
                 <div className="col-span-full text-center py-12 border-2 border-dashed rounded-lg text-muted-foreground">
                   <p>{t('no_rooms_yet')}</p>
                   <Button variant="link" onClick={createRoom} className="mt-2">{t('create_first_room')}</Button>

@@ -55,7 +55,11 @@ export function UserProfile({ userId }: { userId: string }) {
         'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'
     ];
     const colorClass = colors[Math.abs(hash) % colors.length] || 'bg-gray-500';
-    const initial = (displayName || userId || '?').slice(0, 1).toUpperCase();
+
+    // Display Name Strategy:
+    // If we have a display name, show it. Otherwise show '?' (Server/Client match).
+    // User IDs start with 'U' so they are not useful for initials anyway.
+    const initial = (displayName || '?').slice(0, 1).toUpperCase();
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
