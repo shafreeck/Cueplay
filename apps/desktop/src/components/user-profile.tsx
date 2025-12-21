@@ -30,34 +30,20 @@ export function UserProfile({ userId }: { userId: string }) {
         }
     }, [open, userId]);
 
-    // Initial check for onboarding
+    // Load saved name on mount and handle onboarding
     useEffect(() => {
         const storedName = localStorage.getItem('cueplay_nickname');
-        if (userId && !storedName) {
+        if (storedName) {
+            setDisplayName(storedName);
+        } else if (userId) {
+            // Initial check for onboarding if no name set
             setOpen(true);
         }
     }, [userId]);
 
-
     const handleSave = () => {
         localStorage.setItem('cueplay_nickname', displayName);
         setOpen(false);
-        // Optional: Trigger a reload or context update if needed, but currently app reads from localStorage on mount/interaction
-        // Since we are inside the component that *might* be using it, we might need to notify the parent or
-        // if the parent reads from localStorage, it might need a re-read.
-        // However, looking at the previous code, it was purely local state + localStorage side effect.
-        // The header component reads it, but `user-profile` is likely IN the header.
-        // Let's reload to be safe and ensure name propagates, or simple state update if it's just for this session.
-        // The original code `saveNickname` in `room/page.tsx` also updated localStorage.
-        // Wait, `room/page.tsx` had its own Settings Popover with `saveNickname`.
-        // This `UserProfile` component seems to be the avatar button.
-        // If I change it here, does `room/page.tsx` know?
-        // `room/page.tsx` reads `localStorage.getItem('cueplay_nickname')` on mount.
-        // It doesn't listen to storage events.
-        // But for better UX, we might not want to reload entire page.
-        // Since the user asked for UI optimization on "Profile Setting input",
-        // likely they want the input itself to be confirmed.
-        window.location.reload();
     };
 
     // Generate Avatar Color
