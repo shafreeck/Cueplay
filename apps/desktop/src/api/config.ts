@@ -6,7 +6,8 @@
  * 2. PROXY_BASE: 本地客户端服务（Next.js API Routes），负责流媒体代理，通常在 3001 端口
  */
 
-const isProd = process.env.NODE_ENV === 'production';
+// const isProd = process.env.NODE_ENV === 'production';
+const isProd = true;
 
 // 后端 API 地址
 export const API_BASE = isProd
@@ -29,11 +30,15 @@ let dynamicProxyPort: number | null = null;
 let dynamicProxyBasePromise: Promise<string> | null = null;
 
 export const getProxyBase = async (): Promise<string> => {
-    // If not in Tauri or SSR, return fallback
-    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+    // 1. If we are NOT in a Tauri environment, use the configured HTTP proxy.
+    // In Tauri v2, __TAURI__ is not global. check __TAURI_INTERNALS__ or just proceed to try import.
+    const isTauri = typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+    if (!isTauri) {
+        console.log("[Config] Not in Tauri environment, using PROXY_BASE");
         return PROXY_BASE;
     }
 
+    // 2. We are in Tauri (Dev or Prod). Prefer the Rust-side local proxy.
     if (dynamicProxyPort) {
         return `http://localhost:${dynamicProxyPort}`;
     }
@@ -46,13 +51,15 @@ export const getProxyBase = async (): Promise<string> => {
                 const port = await invoke<number>('get_proxy_port');
                 if (port > 0) {
                     dynamicProxyPort = port;
-                    console.log(`[Config] Dynamic Proxy Port: ${port}`);
+                    console.log(`[Config] Using Rust Proxy on port: ${port}`);
                     return `http://localhost:${port}`;
+                } else {
+                    console.warn("[Config] Rust Proxy returned port 0.");
                 }
             } catch (e) {
-                console.error("Failed to get proxy port from Tauri:", e);
+                console.error("[Config] Failed to get Rust proxy port:", e);
             }
-            return PROXY_BASE; // Fallback
+            return "";
         })();
     }
 

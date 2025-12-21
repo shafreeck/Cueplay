@@ -24,9 +24,9 @@ pub async fn start_proxy_server(app_handle: AppHandle) {
     println!("Proxy server listening on port: {}", port);
 
     // Update the state so `get_proxy_port` returns the correct port
-    if let Some(state) = app_handle.try_state::<crate::ProxyState>() {
-        *state.port.lock().unwrap() = port;
-    }
+    // Use state() to ensure we panic if state is missing, and to confirm it works
+    let state = app_handle.state::<crate::ProxyState>();
+    *state.port.lock().unwrap() = port;
 
     let _ = app_handle.emit("proxy-server-started", port);
 
@@ -38,7 +38,13 @@ pub async fn start_proxy_server(app_handle: AppHandle) {
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods([Method::GET, Method::OPTIONS])
-                .allow_headers(Any),
+                .allow_headers(Any)
+                .expose_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::CONTENT_LENGTH,
+                    axum::http::header::CONTENT_RANGE,
+                    axum::http::header::ACCEPT_RANGES,
+                ]),
         )
         .with_state(client);
 
@@ -63,8 +69,14 @@ async fn proxy_handler(
 
     println!("[Proxy] Requesting: {}...", &url.chars().take(50).collect::<String>());
 
+    let user_agent = headers
+        .get("user-agent")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string());
+
     let mut req_builder = client.get(&url)
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("User-Agent", user_agent)
         .header("Referer", referer);
 
     if let Some(c) = cookie {

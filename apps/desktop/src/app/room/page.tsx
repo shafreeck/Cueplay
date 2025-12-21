@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -96,10 +96,19 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
     );
 }
 
-export default function RoomDetail() {
-    const params = useParams();
-    const roomId = params.id as string;
+function RoomContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const roomId = searchParams.get('id');
     const { toast } = useToast();
+
+    // Redirect if no ID
+    useEffect(() => {
+        if (!roomId) {
+            router.push('/');
+        }
+    }, [roomId, router]);
+
     const [logs, setLogs] = useState<string[]>([]);
     const [members, setMembers] = useState<any[]>([]);
     const [ownerId, setOwnerId] = useState<string>('');
@@ -215,7 +224,7 @@ export default function RoomDetail() {
 
     const resolveAndPlayWithoutSync = async (fid: string) => {
         try {
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
             setRawUrl(source.url);
             if (source.meta?.duration) {
                 setDuration(source.meta.duration);
@@ -245,7 +254,7 @@ export default function RoomDetail() {
 
         addLog(`Resolving video ${fid}...`);
         try {
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
             console.log("Resolve result:", { hasSource: !!source, cookieLen: cookie?.length });
 
             setRawUrl(source.url); // Use raw URL for sharing
@@ -303,7 +312,7 @@ export default function RoomDetail() {
 
         try {
             // Resolve first to validate
-            const { source } = await ApiClient.resolveVideo(fid, roomId);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '');
             const title = source.meta?.file_name || source.meta?.title || fid;
 
             const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title };
@@ -493,7 +502,7 @@ export default function RoomDetail() {
         };
 
         ws.onopen = () => {
-            const payload = { roomId, userId, name };
+            const payload = { roomId: roomId || '', userId, name };
             console.log("JOIN_ROOM Payload:", payload); // Debug log
             ws.send(JSON.stringify({ type: 'JOIN_ROOM', payload }));
         };
@@ -530,7 +539,7 @@ export default function RoomDetail() {
 
                 // Fetch metadata for the synced item if we just added it
                 if (remoteFileId) {
-                    ApiClient.resolveVideo(remoteFileId, roomId).then(({ source }) => {
+                    ApiClient.resolveVideo(remoteFileId, roomId || '').then(({ source }) => {
                         setPlaylist(prev => prev.map(item =>
                             item.fileId === remoteFileId && item.title === 'Current Video'
                                 ? { ...item, title: source.meta?.file_name || source.meta?.title || remoteFileId }
@@ -660,7 +669,7 @@ export default function RoomDetail() {
                         </Link>
                         <h1 className="text-xl font-bold truncate">Room: {roomId}</h1>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                            navigator.clipboard.writeText(roomId);
+                            navigator.clipboard.writeText(roomId || '');
                             toast({ description: "Room ID copied to clipboard" });
                         }}>
                             <Copy className="h-3 w-3" />
@@ -672,7 +681,7 @@ export default function RoomDetail() {
                                 }`}
                             onClick={() => {
                                 if (!canControl && socketRef.current?.readyState === WebSocket.OPEN) {
-                                    socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId } }));
+                                    socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId: roomId || '' } }));
                                     toast({ title: "Control Requested", description: "Taking over playback control." });
                                 }
                             }}
@@ -1011,7 +1020,6 @@ export default function RoomDetail() {
                                         </div>
                                     </div>
                                 </TabsContent>
-
                             </CardContent>
                         </Tabs>
                     </Card>
@@ -1020,3 +1028,13 @@ export default function RoomDetail() {
         </div >
     );
 }
+
+export default function RoomPage() {
+    return (
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading Room...</div>}>
+            <RoomContent />
+        </Suspense>
+    );
+}
+
+

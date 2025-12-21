@@ -46,7 +46,7 @@ export default function Home() {
     try {
       const room = await ApiClient.createRoom(userId);
       toast({ title: "Room Created", description: `Joined room ${room.id}` });
-      router.push(`/rooms/${room.id}`);
+      router.push(`/room?id=${room.id}`);
     } catch (e: any) {
       console.error(e);
       toast({ variant: "destructive", title: "Failed to create room", description: e.message });
@@ -57,7 +57,7 @@ export default function Home() {
 
   const joinRoom = () => {
     if (!joinId) return;
-    router.push(`/rooms/${joinId}`);
+    router.push(`/room?id=${joinId}`);
   };
 
   return (
@@ -95,7 +95,7 @@ export default function Home() {
                 <p className="text-sm text-muted-foreground">Owner: {room.ownerId}</p>
                 <p className="text-sm text-muted-foreground">Members: {room.members.length}</p>
                 <div className="mt-4">
-                  <Link href={`/rooms/${room.id}`}>
+                  <Link href={`/room?id=${room.id}`}>
                     <Button variant="outline" className="w-full">Join Room</Button>
                   </Link>
                 </div>

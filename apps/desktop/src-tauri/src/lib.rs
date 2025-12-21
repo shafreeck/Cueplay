@@ -8,8 +8,21 @@ struct ProxyState {
 }
 
 #[tauri::command]
-fn get_proxy_port(state: State<ProxyState>) -> u16 {
-    *state.port.lock().unwrap()
+async fn get_proxy_port(app_handle: tauri::AppHandle) -> u16 {
+    let state = app_handle.state::<ProxyState>();
+    let start = std::time::Instant::now();
+    loop {
+        {
+            let port = *state.port.lock().unwrap();
+            if port > 0 {
+                return port;
+            }
+        }
+        if start.elapsed() > std::time::Duration::from_secs(10) {
+            return 0;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
