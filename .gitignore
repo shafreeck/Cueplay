@@ -9,3 +9,4 @@ build
 target/
 .next/
 out/
+services/api/prisma/dev.db
