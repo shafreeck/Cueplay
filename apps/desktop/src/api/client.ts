@@ -6,7 +6,30 @@ export interface Room {
     members: any[];
 }
 
+export interface DriveFile {
+    id: string;
+    name: string;
+    type: 'folder' | 'file';
+    mimeType?: string;
+    size?: number;
+    updatedAt?: number;
+    thumbnail?: string;
+}
+
 export class ApiClient {
+    static async listQuarkFiles(parentId: string = '0', cookie?: string): Promise<DriveFile[]> {
+        const params = new URLSearchParams({ parentId });
+        if (cookie) params.append('cookie', cookie);
+
+        const res = await fetch(`${API_BASE}/quark/list?${params.toString()}`);
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to list files');
+        }
+        const data = await res.json();
+        return data.list;
+    }
+
     static async listRooms(userId: string): Promise<Room[]> {
         const res = await fetch(`${API_BASE}/rooms?userId=${userId}`);
         if (!res.ok) throw new Error('Failed to list rooms');

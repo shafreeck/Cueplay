@@ -12,11 +12,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useTranslation } from 'react-i18next';
-import { ApiClient } from '@/api/client';
+import { ApiClient, DriveFile } from '@/api/client';
 import { WS_BASE, getProxyBase } from '@/api/config';
 import { ModeToggle } from '@/components/mode-toggle';
+import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -129,6 +130,7 @@ function RoomContent() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [nickname, setNickname] = useState('');
     const [resetConfirm, setResetConfirm] = useState(false);
+    const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
     const [playbackRate, setPlaybackRate] = useState(1.0);
     // Chat State
@@ -379,6 +381,49 @@ function RoomContent() {
             }
         } else {
             addLog("WebSocket not open, playlist sync failed.");
+        }
+    };
+
+    const handleAddFileFromLibrary = async (file: DriveFile) => {
+        setIsResolving(true);
+        try {
+            // We have the ID and Name directly.
+            // We resolve it just to ensure it's playable/valid and maybe get updated metadata.
+            const { source } = await ApiClient.resolveVideo(file.id, roomId || '');
+            const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
+
+            const newItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title };
+            const newPlaylist = [...playlist, newItem];
+            setPlaylist(newPlaylist);
+
+            if (socketRef.current?.readyState === WebSocket.OPEN) {
+                const payload = { playlist: newPlaylist };
+                addLog(`Sending Playlist Update (len: ${newPlaylist.length})`);
+                socketRef.current.send(JSON.stringify({
+                    type: 'PLAYLIST_UPDATE',
+                    payload
+                }));
+            }
+            toast({
+                title: t('added_to_queue_title'),
+                description: t('added_to_queue_desc', { title })
+            });
+            addLog(`Added from library: ${file.id}`);
+
+            // Auto play if empty
+            if (playlist.length === 0) {
+                resolveAndPlay(file.id, newItem.id);
+            }
+
+        } catch (e: any) {
+            console.error(e);
+            toast({
+                variant: "destructive",
+                title: t('invalid_video_title'),
+                description: `Could not resolve video: ${e.message}`
+            });
+        } finally {
+            setIsResolving(false);
         }
     };
 
@@ -955,6 +1000,15 @@ function RoomContent() {
                             <CardContent className="flex-1 overflow-hidden p-0 bg-transparent block">
                                 <TabsContent value="playlist" className="flex-1 flex flex-col min-h-0 m-0">
                                     <div className="p-3 border-b bg-muted/30 flex gap-2 shrink-0">
+                                        <Button
+                                            onClick={() => setIsLibraryOpen(true)}
+                                            size="icon"
+                                            variant="outline"
+                                            className="h-8 w-8 shrink-0 border-dashed border-muted-foreground/50 hover:border-primary/50"
+                                            title={t('resource_library')}
+                                        >
+                                            <FolderSearch className="h-4 w-4" />
+                                        </Button>
                                         <Input
                                             placeholder={t('quark_url_or_id')}
                                             value={inputValue}
@@ -1134,6 +1188,12 @@ function RoomContent() {
                         </Tabs>
                     </Card>
                 </aside>
+                <ResourceLibrary
+                    open={isLibraryOpen}
+                    onOpenChange={setIsLibraryOpen}
+                    cookie={roomCookie}
+                    onAdd={handleAddFileFromLibrary}
+                />
             </main >
         </div >
     );

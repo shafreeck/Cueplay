@@ -87,6 +87,12 @@
         "display_name_label": "Display Name",
         "display_name_placeholder": "e.g. Eric",
         "user_id_label": "User ID",
-        "save_changes": "Save Changes"
+        "save_changes": "Save Changes",
+        "resource_library": "Resource Library",
+        "resource_library_desc": "Browse and add files from Quark Drive.",
+        "root_folder": "Root",
+        "empty_folder": "This folder is empty.",
+        "resource_load_failed": "Failed to load resources",
+        "library": "Library"
     }
 }

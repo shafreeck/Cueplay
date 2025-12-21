@@ -87,6 +87,12 @@
         "display_name_label": "显示名称",
         "display_name_placeholder": "例如：Eric",
         "user_id_label": "用户 ID",
-        "save_changes": "保存更改"
+        "save_changes": "保存更改",
+        "resource_library": "资源库",
+        "resource_library_desc": "浏览并添加夸克网盘中的文件。",
+        "root_folder": "根目录",
+        "empty_folder": "此文件夹为空。",
+        "resource_load_failed": "加载资源失败",
+        "library": "资源库"
     }
 }
