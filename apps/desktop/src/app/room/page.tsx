@@ -11,11 +11,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { useTranslation } from 'react-i18next';
 import { ApiClient } from '@/api/client';
 import { WS_BASE, getProxyBase } from '@/api/config';
 import { ModeToggle } from '@/components/mode-toggle';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -102,6 +103,7 @@ function RoomContent() {
     const router = useRouter();
     const roomId = searchParams.get('id');
     const { toast } = useToast();
+    const { t } = useTranslation('common');
 
     // Redirect if no ID
     useEffect(() => {
@@ -290,8 +292,8 @@ function RoomContent() {
                 addLog("Warning: No cookie available. Please set a Global Cookie in Admin or Room Cookie in Settings.");
                 toast({
                     variant: "destructive",
-                    title: "Missing Cookie",
-                    description: "Playback might fail because no cookie was provided by the server. Please check your configuration.",
+                    title: t('missing_cookie_title'),
+                    description: t('missing_cookie_desc'),
                 });
             }
             setVideoSrc(finalUrl);
@@ -299,8 +301,8 @@ function RoomContent() {
             console.error(e);
             toast({
                 variant: "destructive",
-                title: "Failed to resolve video",
-                description: e.message || "Unknown error occurred",
+                title: t('failed_resolve_title'),
+                description: e.message || t('unknown_error'),
             });
             addLog(`Resolve error: ${e.message}`);
         }
@@ -338,8 +340,8 @@ function RoomContent() {
             }
 
             toast({
-                title: "Added to Queue",
-                description: `Video ${title} added to playlist.`
+                title: t('added_to_queue_title'),
+                description: t('added_to_queue_desc', { title })
             });
             addLog(`Added to playlist: ${fid}`);
             setInputValue(''); // Clear input only on success
@@ -347,7 +349,7 @@ function RoomContent() {
             console.error(e);
             toast({
                 variant: "destructive",
-                title: "Invalid Video",
+                title: t('invalid_video_title'),
                 description: `Could not resolve video: ${e.message}`
             });
         } finally {
@@ -413,8 +415,8 @@ function RoomContent() {
             videoRef.current.play().catch(e => {
                 console.warn("Auto-play failed:", e);
                 toast({
-                    title: "Auto-play Blocked",
-                    description: "Please click play manually.",
+                    title: t('auto_play_blocked_title'),
+                    description: t('auto_play_blocked_desc'),
                     variant: "destructive"
                 })
             });
@@ -435,8 +437,8 @@ function RoomContent() {
             const now = Date.now();
             if (now - lastTimeRef.current > 2000) {
                 toast({
-                    title: "View Only Mode",
-                    description: `You must "Take Control" to playback actions.`,
+                    title: t('view_only_title'),
+                    description: t('view_only_desc'),
                     variant: "destructive"
                 });
                 lastTimeRef.current = now;
@@ -488,8 +490,8 @@ function RoomContent() {
                 const now = Date.now();
                 if (now - lastTimeRef.current > 2000) {
                     toast({
-                        title: "View Only Mode",
-                        description: `You must "Take Control" to playback actions.`,
+                        title: t('view_only_title'),
+                        description: t('view_only_desc'),
                         variant: "destructive"
                     });
                     lastTimeRef.current = now;
@@ -634,7 +636,7 @@ function RoomContent() {
                 addLog(`Received Playlist Update: ${newPlaylist ? newPlaylist.length : 'Invalid'} items`);
                 if (newPlaylist) {
                     setPlaylist(newPlaylist);
-                    toast({ description: "Playlist updated" });
+                    toast({ description: t('playlist_updated') });
                 }
             } else if (data.type === 'CHAT_MESSAGE') {
                 const message = data.payload;
@@ -740,12 +742,15 @@ function RoomContent() {
                 <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2 overflow-hidden shrink-0">
                         <Link href="/">
-                            <Button variant="ghost" size="sm" className="hidden sm:inline-flex">← Rooms</Button>
+                            <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
+                                <ArrowLeft className="h-4 w-4 mr-1" />
+                                {t('rooms')}
+                            </Button>
                         </Link>
-                        <h1 className="text-xl font-bold truncate">Room: {roomId}</h1>
+                        <h1 className="text-xl font-bold truncate">{t('room_title', { id: roomId })}</h1>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
                             navigator.clipboard.writeText(roomId || '');
-                            toast({ description: "Room ID copied to clipboard" });
+                            toast({ description: t('room_id_copied') });
                         }}>
                             <Copy className="h-3 w-3" />
                         </Button>
@@ -757,20 +762,20 @@ function RoomContent() {
                             onClick={() => {
                                 if (!canControl && socketRef.current?.readyState === WebSocket.OPEN) {
                                     socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId: roomId || '' } }));
-                                    toast({ title: "Control Requested", description: "Taking over playback control." });
+                                    toast({ title: t('control_requested_title'), description: t('control_requested_desc') });
                                 }
                             }}
-                            title={!canControl ? "Click to Take Control" : "You have control"}
+                            title={!canControl ? t('click_to_take_control') : t('you_have_control')}
                         >
                             {canControl ? (
                                 <>
                                     <Cast className="h-3 w-3" />
-                                    <span>Controlling</span>
+                                    <span>{t('controlling')}</span>
                                 </>
                             ) : (
                                 <>
                                     <Eye className="h-3 w-3" />
-                                    <span>Viewing</span>
+                                    <span>{t('viewing')}</span>
                                 </>
                             )}
                         </div>
@@ -783,11 +788,11 @@ function RoomContent() {
                                     const newState = !isSynced;
                                     setIsSynced(newState);
                                     toast({
-                                        title: newState ? "Sync Enabled" : "Sync Disabled",
-                                        description: newState ? "You are now synced with the room." : "You are playing independently."
+                                        title: newState ? t('sync_enabled_title') : t('sync_disabled_title'),
+                                        description: newState ? t('sync_enabled_desc') : t('sync_disabled_desc')
                                     });
                                 }}
-                                title={isSynced ? "Unlink (Play Independently)" : "Link (Sync with Room)"}
+                                title={isSynced ? t('unlink_play_independently') : t('link_sync_with_room')}
                             >
                                 {isSynced ? <Link2 className="h-4 w-4" /> : <Unlink className="h-4 w-4" />}
                             </Button>
@@ -805,44 +810,44 @@ function RoomContent() {
                             <PopoverContent className="w-80">
                                 <div className="grid gap-4">
                                     <div className="space-y-2">
-                                        <h4 className="font-medium leading-none">Settings</h4>
+                                        <h4 className="font-medium leading-none">{t('settings')}</h4>
                                         <p className="text-sm text-muted-foreground">
-                                            Configure playback settings.
+                                            {t('configure_playback')}
                                         </p>
                                     </div>
                                     <div className="grid gap-2">
                                         <div className="grid grid-cols-3 items-center gap-4">
-                                            <Label htmlFor="nickname">Display Name</Label>
+                                            <Label htmlFor="nickname">{t('display_name')}</Label>
                                             <Input
                                                 id="nickname"
                                                 value={nickname}
                                                 onChange={(e) => saveNickname(e.target.value)}
-                                                placeholder="Enter a display name"
+                                                placeholder={t('enter_display_name')}
                                                 className="col-span-2 h-8"
                                             />
                                         </div>
                                         {isOwner && (
                                             <div className="pt-2 mt-2 border-t space-y-2">
-                                                <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">Room Setup (Owner)</Label>
+                                                <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('room_setup_owner')}</Label>
                                                 <div className="grid grid-cols-3 items-center gap-4">
-                                                    <Label htmlFor="roomCookie" className="text-xs">Room Cookie</Label>
+                                                    <Label htmlFor="roomCookie" className="text-xs">{t('room_cookie')}</Label>
                                                     <Input
                                                         id="roomCookie"
                                                         value={roomCookie}
                                                         onChange={(e) => updateRoomCookie(e.target.value)}
                                                         className="col-span-2 h-7 text-xs"
-                                                        placeholder="Share with room..."
+                                                        placeholder={t('share_with_room')}
                                                         type="password"
                                                     />
                                                 </div>
                                                 <p className="text-[10px] text-muted-foreground leading-tight">
-                                                    This cookie is shared with all members in this room.
+                                                    {t('cookie_shared_desc')}
                                                 </p>
                                             </div>
                                         )}
                                         <Dialog>
                                             <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm" className="w-full">View Debug Logs</Button>
+                                                <Button variant="outline" size="sm" className="w-full">{t('view_debug_logs')}</Button>
                                             </DialogTrigger>
                                             <DialogContent className="max-w-2xl h-[500px] flex flex-col">
                                                 <div className="flex-1 overflow-y-auto p-4 bg-zinc-950 font-mono text-xs rounded-md border">
@@ -865,11 +870,11 @@ function RoomContent() {
                                                     return;
                                                 }
                                                 localStorage.removeItem('cueplay_userid');
-                                                toast({ title: "Identity Reset", description: "Reloading..." });
+                                                toast({ title: t('identity_reset_title'), description: t('identity_reset_desc') });
                                                 setTimeout(() => window.location.reload(), 500);
                                             }}
                                         >
-                                            {resetConfirm ? "Click again to CONFIRM" : "Reset Identity (New User)"}
+                                            {resetConfirm ? t('click_confirm_reset') : t('reset_identity')}
                                         </Button>
                                     </div>
                                 </div>
@@ -904,7 +909,7 @@ function RoomContent() {
                                 <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center animate-pulse">
                                     ▶
                                 </div>
-                                <p className="text-sm font-medium">Enter a Quark link and click Play to start</p>
+                                <p className="text-sm font-medium">{t('enter_quark_link')}</p>
                             </div>
                         )}
 
@@ -925,13 +930,13 @@ function RoomContent() {
                         <Tabs defaultValue="playlist" className="flex flex-col h-full">
                             <CardHeader className="py-2 px-4 border-b bg-muted/30">
                                 <TabsList className="grid w-full grid-cols-3">
-                                    <TabsTrigger value="playlist">Playlist</TabsTrigger>
+                                    <TabsTrigger value="playlist">{t('playlist')}</TabsTrigger>
                                     <TabsTrigger value="chat">
                                         <div className="flex items-center gap-1.5">
-                                            <span>Chat</span>
+                                            <span>{t('chat')}</span>
                                         </div>
                                     </TabsTrigger>
-                                    <TabsTrigger value="members">Members</TabsTrigger>
+                                    <TabsTrigger value="members">{t('members')}</TabsTrigger>
                                 </TabsList>
                             </CardHeader>
 
@@ -939,7 +944,7 @@ function RoomContent() {
                                 <TabsContent value="playlist" className="flex-1 flex flex-col min-h-0 m-0">
                                     <div className="p-3 border-b bg-muted/30 flex gap-2 shrink-0">
                                         <Input
-                                            placeholder="Quark URL or ID"
+                                            placeholder={t('quark_url_or_id')}
                                             value={inputValue}
                                             onChange={(e) => setInputValue(e.target.value)}
                                             className="h-8 flex-1"
@@ -952,8 +957,8 @@ function RoomContent() {
                                     <div className="flex-1 overflow-y-auto p-2 space-y-2">
                                         {playlist.length === 0 && (
                                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
-                                                <p>Queue is empty.</p>
-                                                <p className="text-xs opacity-70">Add videos to play them sequentially.</p>
+                                                <p>{t('queue_empty')}</p>
+                                                <p className="text-xs opacity-70">{t('add_videos_hint')}</p>
                                             </div>
                                         )}
                                         <DndContext
@@ -985,7 +990,7 @@ function RoomContent() {
                                         {messages.length === 0 && (
                                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 gap-2">
                                                 <MessageSquare className="h-8 w-8" />
-                                                <p className="text-sm">No messages yet.</p>
+                                                <p className="text-sm">{t('no_messages_yet')}</p>
                                             </div>
                                         )}
                                         {messages.map((msg) => {
@@ -1030,7 +1035,7 @@ function RoomContent() {
                                             <Input
                                                 value={chatInput}
                                                 onChange={(e) => setChatInput(e.target.value)}
-                                                placeholder="Type a message..."
+                                                placeholder={t('type_message')}
                                                 className="flex-1 h-9 bg-background/50"
                                             />
                                             <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={!chatInput.trim()}>
@@ -1044,7 +1049,7 @@ function RoomContent() {
                                     <div className="flex flex-col h-full">
                                         <div className="flex-1 overflow-y-auto p-2 space-y-2">
                                             {members.length === 0 && (
-                                                <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">No members info.</div>
+                                                <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">{t('no_members_info')}</div>
                                             )}
                                             {members.map((m: any) => {
                                                 if (!m || !m.userId) return null;
@@ -1085,9 +1090,9 @@ function RoomContent() {
                                                             <div className="flex flex-col">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-sm font-medium leading-none">
-                                                                        {m.userId === currentUserId ? `${displayName} (You)` : displayName}
+                                                                        {m.userId === currentUserId ? `${displayName} (${t('you')})` : displayName}
                                                                     </span>
-                                                                    <div className={`h-1.5 w-1.5 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} title={m.isOnline ? "Online" : "Offline"} />
+                                                                    <div className={`h-1.5 w-1.5 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} title={m.isOnline ? t('online') : t('offline')} />
                                                                 </div>
                                                                 <div className="flex items-center gap-2 mt-1">
                                                                     {m.name && <span className="text-[10px] text-muted-foreground font-mono leading-none opacity-70">{m.userId}</span>}
@@ -1123,8 +1128,9 @@ function RoomContent() {
 }
 
 export default function RoomPage() {
+    const { t } = useTranslation('common');
     return (
-        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading Room...</div>}>
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen">{t('loading_room')}</div>}>
             <RoomContent />
         </Suspense>
     );
