@@ -32,6 +32,7 @@ export interface MediaChangeEvent extends BaseEvent {
         url: string;
         title?: string;
         provider: 'quark' | 'hls' | 'local';
+        playingItemId?: string;
     };
 }
 

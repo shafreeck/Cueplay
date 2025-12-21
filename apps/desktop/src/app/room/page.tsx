@@ -280,7 +280,8 @@ function RoomContent() {
                         fileId: fid,
                         url: source.url,
                         provider: 'quark',
-                        meta: source.meta
+                        meta: source.meta,
+                        playingItemId: itemId || null
                     }
                 }));
             }
@@ -563,9 +564,10 @@ function RoomContent() {
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.type === 'MEDIA_CHANGE') {
-                const { url, fileId: remoteFileId, provider } = data.payload;
+                const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId } = data.payload;
                 setFileId(remoteFileId || '');
                 setRawUrl(url || '');
+                setPlayingItemId(remotePlayingItemId || null);
 
                 if (!remoteFileId) {
                     setVideoSrc('');

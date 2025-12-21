@@ -13,6 +13,7 @@ export interface RoomState {
         fileId: string;
         title?: string;
         provider: string;
+        playingItemId?: string;
     };
     controllerId: string | null;
     playlist?: any[];
