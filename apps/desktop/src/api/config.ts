@@ -10,12 +10,12 @@ const isProd = process.env.NODE_ENV === 'production';
 
 // 后端 API 地址
 export const API_BASE = isProd
-    ? 'https://api.cueplay.art'
+    ? 'https://cueplay-api.zeabur.app'
     : 'http://localhost:3000';
 
 // WebSocket 地址
 export const WS_BASE = isProd
-    ? 'wss://api.cueplay.art'
+    ? 'wss://cueplay-api.zeabur.app'
     : 'ws://localhost:3000';
 
 // 客户端本地代理地址 (始终指向客户端自己的 HTTP 服务)
@@ -23,3 +23,38 @@ export const WS_BASE = isProd
 export const PROXY_BASE = isProd
     ? '' // 生产环境下通常使用相对路径，或者根据你的客户端架构定义
     : 'http://localhost:3001';
+
+// Dynamic Proxy Base for Tauri
+let dynamicProxyPort: number | null = null;
+let dynamicProxyBasePromise: Promise<string> | null = null;
+
+export const getProxyBase = async (): Promise<string> => {
+    // If not in Tauri or SSR, return fallback
+    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
+        return PROXY_BASE;
+    }
+
+    if (dynamicProxyPort) {
+        return `http://localhost:${dynamicProxyPort}`;
+    }
+
+    if (!dynamicProxyBasePromise) {
+        dynamicProxyBasePromise = (async () => {
+            try {
+                // Dynamic import to avoid issues in non-Tauri envs if any
+                const { invoke } = await import('@tauri-apps/api/core');
+                const port = await invoke<number>('get_proxy_port');
+                if (port > 0) {
+                    dynamicProxyPort = port;
+                    console.log(`[Config] Dynamic Proxy Port: ${port}`);
+                    return `http://localhost:${port}`;
+                }
+            } catch (e) {
+                console.error("Failed to get proxy port from Tauri:", e);
+            }
+            return PROXY_BASE; // Fallback
+        })();
+    }
+
+    return dynamicProxyBasePromise;
+}

@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ApiClient } from '@/api/client';
-import { WS_BASE, PROXY_BASE } from '@/api/config';
+import { WS_BASE, getProxyBase } from '@/api/config';
 import { ModeToggle } from '@/components/mode-toggle';
 import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -223,7 +223,8 @@ export default function RoomDetail() {
 
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
-                finalUrl = `${PROXY_BASE}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                const proxyBase = await getProxyBase();
+                finalUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
             } else {
                 console.warn("No cookie returned from API for this video.");
             }
@@ -266,7 +267,8 @@ export default function RoomDetail() {
             // Local playback
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
-                finalUrl = `${PROXY_BASE}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                const proxyBase = await getProxyBase();
+                finalUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
             } else {
                 console.warn("No cookie available for proxy. Playback may fail.");
                 addLog("Warning: No cookie available. Please set a Global Cookie in Admin or Room Cookie in Settings.");
