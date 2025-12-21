@@ -84,7 +84,7 @@ jobs:
               run: pnpm --filter @cueplay/desktop tauri android init
 
             - name: Build Android APK
-              run: pnpm --filter @cueplay/desktop tauri android build --apk true
+              run: pnpm --filter @cueplay/desktop tauri android build --debug --apk true
               env:
                   NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
 
@@ -93,5 +93,4 @@ jobs:
               if: startsWith(github.ref, 'refs/tags/')
               with:
                   files: |
-                      apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
-                      apps/desktop/src-tauri/gen/android/app/build/outputs/apk/debug/app-universal-debug.apk
+                      apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
