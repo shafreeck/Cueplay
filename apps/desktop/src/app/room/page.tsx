@@ -137,6 +137,7 @@ function RoomContent() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isSynced, setIsSynced] = useState(true);
     const [chatInput, setChatInput] = useState('');
+    const [isFullscreen, setIsFullscreen] = useState(false);
     const chatListRef = useRef<HTMLDivElement>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -206,6 +207,60 @@ function RoomContent() {
         addLog(`Fullscreen Enabled: ${document.fullscreenEnabled}`);
     }, []);
 
+    const toggleFullscreen = () => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        if (!document.fullscreenElement) {
+            container.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    };
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+
+        const handleKeyPress = (e: KeyboardEvent) => {
+            // F key to toggle fullscreen
+            if (e.key === 'f' || e.key === 'F') {
+                if (!document.fullscreenElement && videoSrc) {
+                    e.preventDefault();
+                    toggleFullscreen();
+                }
+            }
+            // ESC is handled natively by browser, but we can add custom handling if needed
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('keydown', handleKeyPress);
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('keydown', handleKeyPress);
+        };
+    }, [videoSrc]);
+
+    // Double-click to toggle fullscreen
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleDoubleClick = (e: MouseEvent) => {
+            // Prevent double-click text selection
+            e.preventDefault();
+            toggleFullscreen();
+        };
+
+        container.addEventListener('dblclick', handleDoubleClick);
+
+        return () => {
+            container.removeEventListener('dblclick', handleDoubleClick);
+        };
+    }, []);
+
     // Subtitle Hijacking Logic
     useEffect(() => {
         const video = videoRef.current;
@@ -226,12 +281,16 @@ function RoomContent() {
         };
 
         video.textTracks.onchange = handleTrackChange;
+        video.addEventListener('loadedmetadata', handleTrackChange);
+        handleTrackChange();
         const interval = setInterval(handleTrackChange, 2000);
+
         return () => {
             video.textTracks.onchange = null;
+            video.removeEventListener('loadedmetadata', handleTrackChange);
             clearInterval(interval);
         };
-    }, []);
+    }, [videoSrc]);
 
     const resolveAndPlayWithoutSync = async (fid: string) => {
         try {
@@ -942,6 +1001,7 @@ function RoomContent() {
                                 key={videoSrc}
                                 ref={videoRef}
                                 controls
+                                controlsList="nofullscreen"
                                 crossOrigin="anonymous"
                                 autoPlay
                                 className="w-full h-full object-contain"
@@ -960,11 +1020,23 @@ function RoomContent() {
                         )}
 
                         {currentSubtitle && (
-                            <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none px-8 z-20">
+                            <div
+                                className="absolute bottom-20 left-0 right-0 pointer-events-none z-20"
+                                style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                            >
                                 <div
-                                    className="bg-black/80 text-white px-6 py-2 rounded-lg text-lg lg:text-3xl text-center break-words max-w-[90%] shadow-2xl border border-white/10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
-                                    dangerouslySetInnerHTML={{ __html: currentSubtitle.replace(/\n/g, '<br/>') }}
-                                />
+                                    className="bg-black/50 text-white px-6 py-2 rounded-lg text-lg lg:text-3xl shadow-2xl border border-white/10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+                                    style={{
+                                        textAlign: 'center',
+                                        display: 'inline-block',
+                                        maxWidth: '90%',
+                                        wordWrap: 'break-word'
+                                    }}
+                                >
+                                    {currentSubtitle.split('\n').map((line, i) => (
+                                        <div key={i} style={{ textAlign: 'center' }}>{line}</div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
