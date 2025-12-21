@@ -93,6 +93,9 @@
         "root_folder": "Root",
         "empty_folder": "This folder is empty.",
         "resource_load_failed": "Failed to load resources",
-        "library": "Library"
+        "library": "Library",
+        "search_files": "Filter current folder",
+        "loading_rooms": "Loading rooms...",
+        "no_search_results": "No results found"
     }
 }

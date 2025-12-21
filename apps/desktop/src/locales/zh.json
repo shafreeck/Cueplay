@@ -93,6 +93,9 @@
         "root_folder": "根目录",
         "empty_folder": "此文件夹为空。",
         "resource_load_failed": "加载资源失败",
-        "library": "资源库"
+        "library": "资源库",
+        "search_files": "筛选当前文件夹",
+        "loading_rooms": "加载房间列表中...",
+        "no_search_results": "未找到相关文件"
     }
 }
