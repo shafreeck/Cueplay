@@ -6,8 +6,8 @@
  * 2. PROXY_BASE: 本地客户端服务（Next.js API Routes），负责流媒体代理，通常在 3001 端口
  */
 
-// const isProd = process.env.NODE_ENV === 'production';
-const isProd = true;
+const isProd = process.env.NODE_ENV === 'production';
+// const isProd = true;
 
 // 后端 API 地址
 export const API_BASE = isProd

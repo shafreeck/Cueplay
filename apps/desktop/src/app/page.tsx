@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { ModeToggle } from '@/components/mode-toggle';
 import { UserProfile } from '@/components/user-profile';
-import { Shield, Trash2, History, Home as HomeIcon } from 'lucide-react';
+import { Shield, Trash2, History, Home as HomeIcon, Clapperboard, Sparkles } from 'lucide-react';
 import { RoomHistory, VisitedRoom } from '@/utils/history';
 import {
   Dialog,
@@ -99,30 +99,72 @@ export default function Home() {
   const otherVisitedRooms = visitedRooms.filter(r => r.ownerId !== userId);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <main className="container mx-auto p-8 flex-1">
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold">{t('rooms')}</h1>
-            <LanguageToggle />
-            <ModeToggle />
+
+    <div className="min-h-screen flex flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background">
+      <main className="container mx-auto p-8 flex-1 animate-fade-in">
+        <div className="flex flex-row items-center justify-between gap-4 mb-8 animate-fade-in relative z-50">
+          {/* Left: Brand & Title */}
+          {/* Left: Brand & Title */}
+          <div className="flex items-center gap-4 shrink-0">
+            <div className="p-2.5 bg-primary rounded-xl shadow-[0_0_20px_rgba(124,58,237,0.4)] ring-1 ring-white/20">
+              <Clapperboard className="w-5 h-5 text-white fill-white/20" />
+            </div>
+            <div className="flex items-center gap-3 bg-white/10 p-1 pl-4 pr-1.5 rounded-full border border-white/10 backdrop-blur-md shadow-sm">
+              <h1 className="text-lg font-bold tracking-tight text-white mr-2 shadow-black drop-shadow-md">
+                {t('rooms')}
+              </h1>
+              <div className="h-4 w-px bg-white/20" />
+              <div className="flex gap-0.5">
+                <LanguageToggle />
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder={t('enter_room_id')}
-              value={joinId}
-              onChange={(e) => setJoinId(e.target.value)}
-              className="w-40"
-            />
-            <Button onClick={joinRoom} variant="outline" disabled={!joinId}>{t('join')}</Button>
-            <Button onClick={createRoom} disabled={loading}>
-              {loading ? t('creating') : t('create_room')}
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-3">
+            {/* Join Group - Dark Pill */}
+            <div className="flex items-center bg-black/20 p-1 pl-4 rounded-full border border-white/5 backdrop-blur-sm shadow-sm ring-1 ring-white/5 transition-colors hover:bg-black/30 hover:border-white/10">
+              <Input
+                placeholder={t('enter_room_id')}
+                value={joinId}
+                onChange={(e) => setJoinId(e.target.value)}
+                className="w-24 md:w-32 h-8 bg-transparent border-none focus-visible:ring-0 px-0 placeholder:text-muted-foreground/50 text-sm transition-all"
+              />
+              <div className="h-4 w-px bg-white/10 mx-2" />
+              <Button
+                onClick={joinRoom}
+                disabled={!joinId}
+                size="sm"
+                variant="ghost"
+                className="h-8 px-3 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-all"
+              >
+                {t('join')}
+              </Button>
+            </div>
+
+            {/* Create Button - Primary Pill */}
+            <Button
+              onClick={createRoom}
+              disabled={loading}
+              className="h-10 rounded-full px-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)] transition-all duration-300 border border-white/10"
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  <span className="hidden md:inline">{t('creating')}</span>
+                </span>
+              ) : (
+                <span className="font-semibold text-sm">{t('create_room')}</span>
+              )}
             </Button>
-            <div className="ml-2 pl-2 border-l border-border/50">
+
+            {/* Profile - Circle */}
+            <div className="ml-1">
               <UserProfile userId={userId} />
             </div>
           </div>
         </div>
+
 
         <div className="space-y-12">
           {/* My Rooms Section */}
@@ -132,9 +174,10 @@ export default function Home() {
               <h2>{t('my_rooms')}</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {rooms.map((room) => (
-                <Card key={room.id} className="hover:shadow-lg transition-shadow relative group">
+                <Card key={room.id} className="glass border-white/5 hover:border-primary/50 hover:shadow-2xl hover:shadow-primary/10 hover:scale-[1.02] transition-all duration-300 relative group overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   <CardHeader>
                     <CardTitle className="flex justify-between items-center text-lg">
                       <span>{t('room_title', { id: room.id })}</span>
@@ -153,7 +196,7 @@ export default function Home() {
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">{t('members_count', { count: room.members.length })}</p>
                     <Link href={`/room?id=${room.id}`}>
-                      <Button className="w-full" variant="secondary">
+                      <Button className="w-full bg-primary/20 hover:bg-primary/40 text-primary-foreground border-primary/20" variant="outline">
                         {t('enter_room')}
                       </Button>
                     </Link>
@@ -180,14 +223,15 @@ export default function Home() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {otherVisitedRooms.map((room) => (
-                  <Card key={room.id} className="hover:shadow-lg transition-shadow relative group">
+                  <Card key={room.id} className="glass border-white/5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:scale-[1.01] transition-all duration-300 relative group overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                     <CardHeader>
                       <CardTitle className="flex justify-between items-center text-lg">
-                        <span>{t('room_title', { id: room.id })}</span>
+                        <span className="truncate pr-4">{t('room_title', { id: room.id })}</span>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                           title={t('remove_history')}
                           onClick={(e) => {
                             e.preventDefault();
@@ -204,7 +248,9 @@ export default function Home() {
                         {room.lastVisited ? t('visited_date', { date: new Date(room.lastVisited).toLocaleDateString() }) : t('visited_recently')}
                       </p>
                       <Link href={`/room?id=${room.id}`}>
-                        <Button variant="secondary" className="w-full">{t('rejoin')}</Button>
+                        <Button className="w-full bg-white/5 hover:bg-white/10 text-foreground border-white/10" variant="outline">
+                          {t('rejoin')}
+                        </Button>
                       </Link>
                     </CardContent>
                   </Card>
@@ -230,14 +276,14 @@ export default function Home() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </main>
+      </main >
 
       <footer className="py-8 border-t border-border/30 text-center text-sm text-muted-foreground flex items-center justify-center gap-4 bg-background">
         <span>{t('copyright')}</span>
-        <Link href="/admin" className="opacity-20 hover:opacity-100 transition-opacity" title={t('system_admin')}>
-          <Shield className="w-4 h-4" />
+        <Link href="/admin" className="opacity-50 hover:opacity-100 transition-opacity" title={t('system_admin')}>
+          <Shield className="w-4 h-4 text-primary fill-primary" />
         </Link>
       </footer>
-    </div>
+    </div >
   );
 }

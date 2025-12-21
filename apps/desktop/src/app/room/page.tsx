@@ -64,7 +64,7 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
         <div
             ref={setNodeRef}
             style={style}
-            className={`group flex items-center justify-between p-2 rounded-md border transition-colors ${item.id === playingItemId ? 'bg-accent border-primary/50' : 'bg-card border-border/50 hover:bg-accent'} ${isDragging ? 'opacity-50' : ''}`}
+            className={`group flex items-center justify-between p-2 rounded-md border transition-colors ${item.id === playingItemId ? 'bg-primary/20 border-primary/50' : 'bg-white/5 border-white/5 hover:bg-white/10'} ${isDragging ? 'opacity-50' : ''}`}
         >
             <div className="flex items-center flex-1 min-w-0 mr-2">
                 <div {...attributes} {...listeners} className="cursor-grab hover:text-foreground text-muted-foreground mr-2 p-1">
@@ -737,9 +737,9 @@ function RoomContent() {
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
-            <header className="border-b bg-card/50 backdrop-blur-md sticky top-0 z-10">
-                <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
+        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background text-foreground">
+            <header className="sticky top-4 z-50 px-4 mb-6 pointer-events-none">
+                <div className="container mx-auto h-14 rounded-full flex items-center justify-between gap-4 px-6 bg-black/40 backdrop-blur-2xl border border-white/5 shadow-2xl pointer-events-auto">
                     <div className="flex items-center gap-2 overflow-hidden shrink-0">
                         <Link href="/">
                             <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
@@ -755,9 +755,9 @@ function RoomContent() {
                             <Copy className="h-3 w-3" />
                         </Button>
                         <div
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${canControl
-                                ? 'bg-primary/10 text-primary border-primary/20 cursor-default'
-                                : 'bg-muted/50 text-muted-foreground border-border/50 cursor-pointer hover:bg-muted hover:text-foreground'
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all duration-300 ${canControl
+                                ? 'bg-primary/50 text-white border-primary/50 shadow-[0_0_15px_rgba(124,58,237,0.25)] cursor-default'
+                                : 'bg-muted/50 text-muted-foreground border-white/10 hover:bg-muted hover:text-foreground cursor-pointer'
                                 }`}
                             onClick={() => {
                                 if (!canControl && socketRef.current?.readyState === WebSocket.OPEN) {
@@ -769,12 +769,12 @@ function RoomContent() {
                         >
                             {canControl ? (
                                 <>
-                                    <Cast className="h-3 w-3" />
+                                    <Cast className="h-3.5 w-3.5" />
                                     <span>{t('controlling')}</span>
                                 </>
                             ) : (
                                 <>
-                                    <Eye className="h-3 w-3" />
+                                    <Eye className="h-3.5 w-3.5" />
                                     <span>{t('viewing')}</span>
                                 </>
                             )}
@@ -797,7 +797,6 @@ function RoomContent() {
                                 {isSynced ? <Link2 className="h-4 w-4" /> : <Unlink className="h-4 w-4" />}
                             </Button>
                         )}
-                        <ModeToggle />
                     </div>
 
                     <div className="flex items-center gap-2 flex-1 max-w-2xl justify-end">
@@ -884,12 +883,12 @@ function RoomContent() {
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <main className="container mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in">
                 {/* Video Section */}
                 <div className="lg:col-span-3 space-y-4">
                     <div
                         ref={containerRef}
-                        className="relative aspect-video bg-black rounded-xl overflow-hidden shadow-2xl group border border-border/50 transition-all duration-300"
+                        className="relative aspect-video bg-black rounded-xl overflow-hidden shadow-2xl group border border-white/10 transition-all duration-300 ring-1 ring-white/5"
                     >
                         {videoSrc ? (
                             <video
@@ -926,21 +925,34 @@ function RoomContent() {
 
                 {/* Sidebar */}
                 <aside className="space-y-6">
-                    <Card className="flex flex-col h-[500px] lg:h-[calc(100vh-12rem)] shadow-lg overflow-hidden border-border/50">
+                    <Card className="flex flex-col h-[500px] lg:h-[calc(100vh-12rem)] shadow-2xl overflow-hidden glass border-white/5">
                         <Tabs defaultValue="playlist" className="flex flex-col h-full">
-                            <CardHeader className="py-2 px-4 border-b bg-muted/30">
-                                <TabsList className="grid w-full grid-cols-3">
-                                    <TabsTrigger value="playlist">{t('playlist')}</TabsTrigger>
-                                    <TabsTrigger value="chat">
+                            <CardHeader className="py-4 px-4 border-b border-white/5 bg-transparent">
+                                <TabsList className="grid w-full grid-cols-3 bg-black/30 h-10 p-1 rounded-full border border-white/10">
+                                    <TabsTrigger
+                                        value="playlist"
+                                        className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
+                                    >
+                                        {t('playlist')}
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="chat"
+                                        className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
+                                    >
                                         <div className="flex items-center gap-1.5">
                                             <span>{t('chat')}</span>
                                         </div>
                                     </TabsTrigger>
-                                    <TabsTrigger value="members">{t('members')}</TabsTrigger>
+                                    <TabsTrigger
+                                        value="members"
+                                        className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
+                                    >
+                                        {t('members')}
+                                    </TabsTrigger>
                                 </TabsList>
                             </CardHeader>
 
-                            <CardContent className="flex-1 overflow-hidden p-0 bg-background/50 block">
+                            <CardContent className="flex-1 overflow-hidden p-0 bg-transparent block">
                                 <TabsContent value="playlist" className="flex-1 flex flex-col min-h-0 m-0">
                                     <div className="p-3 border-b bg-muted/30 flex gap-2 shrink-0">
                                         <Input
