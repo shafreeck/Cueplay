@@ -266,6 +266,9 @@ function RoomContent() {
         const video = videoRef.current;
         if (!video) return;
 
+        // Clear subtitle when video changes
+        setCurrentSubtitle('');
+
         const handleTrackChange = () => {
             const tracks = video.textTracks;
             for (let i = 0; i < tracks.length; i++) {
@@ -290,7 +293,7 @@ function RoomContent() {
             video.removeEventListener('loadedmetadata', handleTrackChange);
             clearInterval(interval);
         };
-    }, [videoSrc]);
+    }, [videoSrc]); // Re-run when video source changes
 
     const resolveAndPlayWithoutSync = async (fid: string) => {
         try {
