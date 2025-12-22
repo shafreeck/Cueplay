@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -239,6 +239,7 @@ function RoomContent() {
     const [showManualInput, setShowManualInput] = useState(false);
 
     const [playbackRate, setPlaybackRate] = useState(1.0);
+    const [isRoomLoading, setIsRoomLoading] = useState(true);
     // Chat State
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isSynced, setIsSynced] = useState(true);
@@ -1026,6 +1027,8 @@ function RoomContent() {
                 if (quarkCookie !== undefined) setRoomCookie(quarkCookie);
                 if (hasGlobalCookie !== undefined) setHasGlobalCookie(hasGlobalCookie);
 
+                setIsRoomLoading(false);
+
                 // Add to visited history
                 if (roomId && ownerId) {
                     RoomHistory.addVisitedRoom({
@@ -1420,10 +1423,19 @@ function RoomContent() {
                             </video>
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
-                                <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center animate-pulse">
-                                    ▶
-                                </div>
-                                <p className="text-sm font-medium">{t('enter_quark_link')}</p>
+                                {isRoomLoading ? (
+                                    <div className="flex flex-col items-center gap-3 animate-fade-in">
+                                        <Loader2 className="h-10 w-10 animate-spin text-primary/50" />
+                                        <p className="text-sm font-medium animate-pulse">{t('connecting_room')}</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center animate-pulse">
+                                            ▶
+                                        </div>
+                                        <p className="text-sm font-medium">{t('enter_quark_link')}</p>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -1503,33 +1515,40 @@ function RoomContent() {
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                                        {playlist.length === 0 && (
+                                        {isRoomLoading ? (
+                                            <div className="space-y-2 p-2">
+                                                {[1, 2, 3, 4].map((i) => (
+                                                    <div key={i} className="h-12 bg-white/5 rounded-md animate-pulse" />
+                                                ))}
+                                            </div>
+                                        ) : playlist.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
                                                 <p>{t('queue_empty')}</p>
                                                 <p className="text-xs opacity-70">{t('add_videos_hint')}</p>
                                             </div>
-                                        )}
-                                        <DndContext
-                                            sensors={sensors}
-                                            collisionDetection={closestCenter}
-                                            onDragEnd={handleDragEnd}
-                                        >
-                                            <SortableContext
-                                                items={playlist}
-                                                strategy={verticalListSortingStrategy}
+                                        ) : (
+                                            <DndContext
+                                                sensors={sensors}
+                                                collisionDetection={closestCenter}
+                                                onDragEnd={handleDragEnd}
                                             >
-                                                {playlist.map((item, i) => (
-                                                    <SortablePlaylistItem
-                                                        key={item.id}
-                                                        item={item}
-                                                        index={i}
-                                                        playingItemId={playingItemId}
-                                                        onPlay={resolveAndPlay}
-                                                        onRemove={removeFromPlaylist}
-                                                    />
-                                                ))}
-                                            </SortableContext>
-                                        </DndContext>
+                                                <SortableContext
+                                                    items={playlist}
+                                                    strategy={verticalListSortingStrategy}
+                                                >
+                                                    {playlist.map((item, i) => (
+                                                        <SortablePlaylistItem
+                                                            key={item.id}
+                                                            item={item}
+                                                            index={i}
+                                                            playingItemId={playingItemId}
+                                                            onPlay={resolveAndPlay}
+                                                            onRemove={removeFromPlaylist}
+                                                        />
+                                                    ))}
+                                                </SortableContext>
+                                            </DndContext>
+                                        )}
                                     </div>
                                 </TabsContent>
 
@@ -1596,10 +1615,19 @@ function RoomContent() {
                                 <TabsContent value="members" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col min-h-0 m-0">
                                     <div className="flex flex-col h-full">
                                         <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                                            {members.length === 0 && (
+                                            {isRoomLoading ? (
+                                                <div className="space-y-2">
+                                                    {[1, 2, 3].map((i) => (
+                                                        <div key={i} className="flex items-center gap-3 p-2">
+                                                            <div className="h-8 w-8 rounded-full bg-white/10 animate-pulse" />
+                                                            <div className="h-4 w-24 bg-white/10 rounded animate-pulse" />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : members.length === 0 ? (
                                                 <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">{t('no_members_info')}</div>
-                                            )}
-                                            {members.map((m: any) => {
+                                            ) : null}
+                                            {!isRoomLoading && members.map((m: any) => {
                                                 if (!m || !m.userId) return null;
                                                 // Generate consistent color from userId
                                                 const hash = m.userId.split('').reduce((acc: number, char: string) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
