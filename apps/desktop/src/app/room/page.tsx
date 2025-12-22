@@ -255,6 +255,7 @@ function RoomContent() {
     const lastTimeRef = useRef(0);
     const isSyncedRef = useRef(isSynced);
     const lastMinAgeRef = useRef<number>(Number.MAX_SAFE_INTEGER);
+    const lastResumedItemIdRef = useRef<string | null>(null);
 
     // Sync Ref with State
     useEffect(() => {
@@ -267,7 +268,12 @@ function RoomContent() {
     useEffect(() => {
         const interval = setInterval(() => {
             const video = videoRef.current;
+            // Only save if we have successfully resumed the current item
+            // This prevents overwriting server progress with 0 on reload
             if (video && video.duration && !video.paused && playingItemId) {
+                if (lastResumedItemIdRef.current !== playingItemId) {
+                    return;
+                }
                 setPlaylist(prev => {
                     let updated = false;
                     const updateProgress = (list: PlaylistItem[]): PlaylistItem[] => {
@@ -302,6 +308,72 @@ function RoomContent() {
     }, [playingItemId]);
 
     const addLog = (msg: string) => setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
+
+    // Helper to find item in nested playlist
+    const findPlaylistItem = useCallback((list: PlaylistItem[], id: string): PlaylistItem | null => {
+        for (const item of list) {
+            if (item.id === id) return item;
+            if (item.children) {
+                const found = findPlaylistItem(item.children, id);
+                if (found) return found;
+            }
+        }
+        return null;
+    }, []);
+
+    // Resume progress when playlist is loaded/updated or video source changes
+    useEffect(() => {
+        if (!playingItemId || !playlist.length || !videoRef.current || !videoSrc) return;
+        if (lastResumedItemIdRef.current === playingItemId) return;
+
+        const video = videoRef.current;
+        const item = findPlaylistItem(playlist, playingItemId);
+        if (!item) return;
+
+        if (item.progress !== undefined) {
+            const doResume = () => {
+                if (lastResumedItemIdRef.current === playingItemId) return;
+
+                addLog(`[Resume] Attempting seek to ${item.progress!.toFixed(1)}s (ReadyState: ${video.readyState}, Src: ${video.src.slice(-30)})`);
+                video.currentTime = item.progress!;
+
+                // Seek confirmation loop (Retry up to 10 times)
+                let attempts = 0;
+                const verifySeek = () => {
+                    attempts++;
+                    const drift = Math.abs(video.currentTime - (item.progress || 0));
+                    if (drift < 2) {
+                        addLog(`[Resume] Confirmed at ${video.currentTime.toFixed(1)}s`);
+                        lastResumedItemIdRef.current = playingItemId;
+                    } else if (attempts < 10) {
+                        addLog(`[Resume] Retry ${attempts}... (Current: ${video.currentTime.toFixed(1)}s, Target: ${item.progress}s)`);
+                        video.currentTime = item.progress!;
+                        setTimeout(verifySeek, 800);
+                    } else {
+                        addLog(`[Resume] Failed after max retries.`);
+                        lastResumedItemIdRef.current = playingItemId; // Give up
+                    }
+                };
+                setTimeout(verifySeek, 800);
+            };
+
+            if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+                doResume();
+            } else {
+                const onReady = () => {
+                    video.removeEventListener('canplay', onReady);
+                    video.removeEventListener('loadedmetadata', onReady);
+                    doResume();
+                };
+                video.addEventListener('canplay', onReady);
+                video.addEventListener('loadedmetadata', onReady);
+            }
+        } else {
+            addLog(`[Resume] Starting fresh (no saved progress)`);
+            lastResumedItemIdRef.current = playingItemId;
+        }
+    }, [playlist, playingItemId, videoSrc, findPlaylistItem]);
+
 
     // Load/Save Nickname
     useEffect(() => {
@@ -348,9 +420,6 @@ function RoomContent() {
         setMessages(prev => [...prev, payload]);
         setChatInput('');
     };
-
-
-
 
     useEffect(() => {
         addLog(`Fullscreen Enabled: ${document.fullscreenEnabled}`);
@@ -499,7 +568,12 @@ function RoomContent() {
         };
     }, [videoSrc]); // Re-run when video source changes
 
-    const resolveAndPlayWithoutSync = async (fid: string) => {
+    const resolveAndPlayWithoutSync = async (fid: string, itemId?: string) => {
+        if (itemId) {
+            lastResumedItemIdRef.current = null; // Prepare for resume
+            setPlayingItemId(itemId);
+        }
+
         try {
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
             setRawUrl(source.url);
@@ -514,7 +588,12 @@ function RoomContent() {
             } else {
                 console.warn("No cookie returned from API for this video.");
             }
+
+            // If the source is different or it's a new play, set it
             setVideoSrc(finalUrl);
+            if (itemId) {
+                addLog(`Resolving synced video: ${fid} (item: ${itemId})`);
+            }
         } catch (e) {
             console.error("resolveAndPlayWithoutSync error:", e);
         }
@@ -527,7 +606,9 @@ function RoomContent() {
         if (urlMatch) fid = urlMatch[1];
 
         setFileId(fid); // Sync internal state
+        lastResumedItemIdRef.current = null; // Prepare for resume
         setPlayingItemId(itemId || null); // Track playlist item
+        setVideoSrc(''); // Clear current source to force re-render/resume
 
         // Update lastPlayedId for parent folder if applicable
         if (itemId) {
@@ -587,30 +668,6 @@ function RoomContent() {
             }
 
             setVideoSrc(finalUrl);
-
-            // Resume Progress if available
-            if (itemId) {
-                const findItem = (list: PlaylistItem[]): PlaylistItem | null => {
-                    for (const item of list) {
-                        if (item.id === itemId) return item;
-                        if (item.children) {
-                            const found = findItem(item.children);
-                            if (found) return found;
-                        }
-                    }
-                    return null;
-                };
-                const item = findItem(playlist);
-                if (item?.progress && videoRef.current) {
-                    const video = videoRef.current;
-                    const onMetadata = () => {
-                        addLog(`Resuming playback at ${item.progress}s`);
-                        video.currentTime = item.progress!;
-                        video.removeEventListener('loadedmetadata', onMetadata);
-                    };
-                    video.addEventListener('loadedmetadata', onMetadata);
-                }
-            }
         } catch (e: any) {
             console.error(e);
             toast({
@@ -913,6 +970,7 @@ function RoomContent() {
                 const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId } = data.payload;
                 setFileId(remoteFileId || '');
                 setRawUrl(url || '');
+                lastResumedItemIdRef.current = null; // Prepare for resume
                 setPlayingItemId(remotePlayingItemId || null);
 
                 if (!remoteFileId) {
@@ -927,19 +985,11 @@ function RoomContent() {
                     // So we must resolve on every MEDIA_CHANGE if we want to use Global Cookie.
 
                     // Trigger resolution for self
-                    resolveAndPlayWithoutSync(remoteFileId);
+                    resolveAndPlayWithoutSync(remoteFileId, remotePlayingItemId);
                 }
                 setCurrentSubtitle('');
 
-                // Sync playlist with room state if empty
-                setPlaylist(prev => {
-                    if (prev.length === 0 && remoteFileId) {
-                        return [{ id: Math.random().toString(36).slice(2), fileId: remoteFileId, title: 'Current Video' }];
-                    }
-                    return prev;
-                });
-
-                // Fetch metadata for the synced item if we just added it
+                // Sync playlist metadata if needed (but don't set placeholder)
                 if (remoteFileId) {
                     ApiClient.resolveVideo(remoteFileId, roomId || '').then(({ source }) => {
                         setPlaylist(prev => prev.map(item =>
@@ -1046,7 +1096,7 @@ function RoomContent() {
                 setTimeout(() => { isRemoteUpdate.current = false; }, 500);
             } else if (data.type === 'PLAYLIST_UPDATE') {
                 const { playlist: newPlaylist } = data.payload;
-                addLog(`Received Playlist Update: ${newPlaylist ? newPlaylist.length : 'Invalid'} items`);
+                addLog(`Received Playlist Update: ${newPlaylist ? newPlaylist.length : 'Invalid'} items (playing: ${playingItemId})`);
                 if (newPlaylist) {
                     setPlaylist(newPlaylist);
                     toast({ description: t('playlist_updated') });
