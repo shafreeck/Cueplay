@@ -40,35 +40,43 @@ export default function Home() {
 
 
   useEffect(() => {
+    // Client-side only initialization
+    let currentId = '';
 
-
-    const init = async () => {
-      let currentId = '';
-
-      // 1. Get or Generate User ID (Client-side only)
-      try {
-        currentId = localStorage.getItem('cueplay_userid') || '';
-        if (!currentId) {
-          currentId = 'user-' + Math.random().toString(36).substring(7);
-          localStorage.setItem('cueplay_userid', currentId);
-        }
-        setUserId(currentId);
-      } catch (e) {
-        console.error("Failed to access localStorage", e);
+    // 1. Get or Generate User ID (Client-side only)
+    try {
+      currentId = localStorage.getItem('cueplay_userid') || '';
+      if (!currentId) {
+        currentId = 'user-' + Math.random().toString(36).substring(7);
+        localStorage.setItem('cueplay_userid', currentId);
       }
-
-      // 2. Load Data (Sequential: Only after ID is resolved)
-      if (currentId) {
-        await loadRooms(currentId);
-      } else {
-        setError("Failed to initialize user identity.");
-      }
-
-      loadVisited();
+      setUserId(currentId);
+    } catch (e) {
+      console.error("Failed to access localStorage", e);
       setIsInitializing(false);
-    };
+      return;
+    }
 
-    init();
+    // 2. Load visited rooms
+    setVisitedRooms(RoomHistory.getVisitedRooms());
+
+    // 3. Load rooms from API with timeout protection
+    if (currentId) {
+      const timeoutId = setTimeout(() => {
+        console.error('loadRooms timeout after 10s');
+        setError('Failed to load rooms: timeout');
+        setIsInitializing(false);
+      }, 10000);
+
+      loadRooms(currentId)
+        .finally(() => {
+          clearTimeout(timeoutId);
+          setIsInitializing(false);
+        });
+    } else {
+      setError("Failed to initialize user identity.");
+      setIsInitializing(false);
+    }
   }, []);
 
   const loadVisited = () => {

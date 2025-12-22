@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
-import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { I18nProvider } from "@/components/i18n-provider";
 
@@ -19,21 +18,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <div className="contents">
-            <I18nProvider>
-              {children}
-            </I18nProvider>
-          </div>
-          <Toaster />
-        </ThemeProvider>
+        <div className="contents">
+          <I18nProvider>
+            {children}
+          </I18nProvider>
+        </div>
+        <Toaster />
       </body>
     </html>
   );
