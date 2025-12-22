@@ -33,7 +33,8 @@ export default function Home() {
   const [userId, setUserId] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [visitedRooms, setVisitedRooms] = useState<VisitedRoom[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [joinId, setJoinId] = useState('');
@@ -85,7 +86,7 @@ export default function Home() {
   };
 
   const loadRooms = async (uid: string) => {
-    setLoading(true);
+    setIsLoadingRooms(true);
     setError(null);
     try {
       const list = await ApiClient.listRooms(uid);
@@ -94,12 +95,12 @@ export default function Home() {
       console.error(e);
       setError(e.message || "Failed to load rooms");
     } finally {
-      setLoading(false);
+      setIsLoadingRooms(false);
     }
   };
 
   const createRoom = async () => {
-    setLoading(true);
+    setIsCreatingRoom(true);
     try {
       const room = await ApiClient.createRoom(userId);
       toast({ title: t('room_created_title'), description: t('room_created_desc', { id: room.id }) });
@@ -108,7 +109,7 @@ export default function Home() {
       console.error(e);
       toast({ variant: "destructive", title: t('create_failed_title'), description: e.message });
     } finally {
-      setLoading(false);
+      setIsCreatingRoom(false);
     }
   };
 
@@ -185,10 +186,10 @@ export default function Home() {
             {/* Create Button - Primary Pill */}
             <Button
               onClick={createRoom}
-              disabled={loading}
+              disabled={isCreatingRoom}
               className="h-10 rounded-full px-6 bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:shadow-[0_0_30px_rgba(124,58,237,0.5)] transition-all duration-300 border border-white/10"
             >
-              {loading ? (
+              {isCreatingRoom ? (
                 <span className="flex items-center gap-2">
                   <span className="h-3 w-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                   <span className="hidden md:inline">{t('creating')}</span>
@@ -216,7 +217,7 @@ export default function Home() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* State 1: Global Loading (Initial or Reloading) */}
-              {(isInitializing || (loading && rooms.length === 0)) && (
+              {(isInitializing || (isLoadingRooms && rooms.length === 0)) && (
                 <div className="col-span-full py-12 flex justify-center items-center">
                   <div className="flex flex-col items-center gap-4">
                     <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -269,7 +270,7 @@ export default function Home() {
               ))}
 
               {/* State 4: Empty List */}
-              {!isInitializing && !error && !loading && rooms.length === 0 && (
+              {!isInitializing && !error && !isLoadingRooms && rooms.length === 0 && (
                 <div className="col-span-full text-center py-12 border-2 border-dashed rounded-lg text-muted-foreground">
                   <p>{t('no_rooms_yet')}</p>
                   <Button variant="link" onClick={createRoom} className="mt-2">{t('create_first_room')}</Button>
