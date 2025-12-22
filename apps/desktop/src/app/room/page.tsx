@@ -1147,7 +1147,7 @@ function RoomContent() {
                 {/* Sidebar */}
                 <aside className="space-y-6">
                     <Card className="flex flex-col h-[500px] lg:h-[calc(100vh-12rem)] shadow-2xl overflow-hidden glass border-white/5">
-                        <Tabs defaultValue="playlist" className="flex flex-col h-full">
+                        <Tabs defaultValue="playlist" className="flex flex-col flex-1 min-h-0">
                             <CardHeader className="py-4 px-4 border-b border-white/5 bg-transparent">
                                 <TabsList className="grid w-full grid-cols-3 bg-black/30 h-10 p-1 rounded-full border border-white/10">
                                     <TabsTrigger
@@ -1173,8 +1173,8 @@ function RoomContent() {
                                 </TabsList>
                             </CardHeader>
 
-                            <CardContent className="flex-1 overflow-hidden p-0 bg-transparent block">
-                                <TabsContent value="playlist" className="flex-1 flex flex-col min-h-0 m-0">
+                            <CardContent className="flex-1 overflow-hidden p-0 bg-transparent flex flex-col">
+                                <TabsContent value="playlist" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col min-h-0 m-0">
                                     <div className="p-3 border-b bg-muted/30 flex gap-2 shrink-0">
                                         <Button
                                             onClick={() => setIsLibraryOpen(true)}
@@ -1227,7 +1227,7 @@ function RoomContent() {
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 m-0">
+                                <TabsContent value="chat" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col min-h-0 m-0">
                                     <div ref={chatListRef} className="flex-1 overflow-y-auto p-4 space-y-4">
                                         {messages.length === 0 && (
                                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 gap-2">
@@ -1287,7 +1287,7 @@ function RoomContent() {
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="members" className="flex-1 flex flex-col min-h-0 m-0">
+                                <TabsContent value="members" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col min-h-0 m-0">
                                     <div className="flex flex-col h-full">
                                         <div className="flex-1 overflow-y-auto p-2 space-y-2">
                                             {members.length === 0 && (
