@@ -126,6 +126,8 @@
         "save_failed": "Save failed",
         "authorized_welcome": "Authorized. Welcome back, Admin.",
         "access_denied": "Access Denied",
-        "invalid_password": "Invalid password."
+        "invalid_password": "Invalid password.",
+        "enter_fullscreen": "Enter Fullscreen",
+        "exit_fullscreen": "Exit Fullscreen"
     }
 }

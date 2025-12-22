@@ -42,6 +42,7 @@ export interface PlayerStateEvent extends BaseEvent {
         state: 'playing' | 'paused' | 'buffering';
         time: number;
         playbackRate: number;
+        sentAt?: number; // Added for latency compensation
     };
 }
 
@@ -49,6 +50,7 @@ export interface VideoProgressEvent extends BaseEvent {
     type: 'VIDEO_PROGRESS';
     payload: {
         time: number;
+        sentAt?: number;
     };
 }
 
@@ -63,4 +65,3 @@ export interface ChatMessageEvent extends BaseEvent {
         isSystem?: boolean;
     };
 }
-

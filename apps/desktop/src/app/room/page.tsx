@@ -154,9 +154,14 @@ function RoomContent() {
     const isLoadingSource = useRef(false);
     const lastTimeRef = useRef(0);
     const isSyncedRef = useRef(isSynced);
+    const lastMinAgeRef = useRef<number>(Number.MAX_SAFE_INTEGER);
 
     // Sync Ref with State
-    useEffect(() => { isSyncedRef.current = isSynced; }, [isSynced]);
+    useEffect(() => {
+        isSyncedRef.current = isSynced;
+        // Reset min age on sync toggle to recalibrate
+        if (isSynced) lastMinAgeRef.current = Number.MAX_SAFE_INTEGER;
+    }, [isSynced]);
 
     const addLog = (msg: string) => setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
@@ -275,19 +280,40 @@ function RoomContent() {
         // Clear subtitle when video changes
         setCurrentSubtitle('');
 
-        // Hide native subtitles and set up tracking
+        // Manage tracks: In native fullscreen, we show native tracks. In all other cases, we hide them and use Custom Overlay.
         const handleTrackChange = () => {
+            // Check if we are in Native Fullscreen (Video is the fullscreen element)
+            const isNativeFullscreen = document.fullscreenElement === video;
             const tracks = video.textTracks;
+
             for (let i = 0; i < tracks.length; i++) {
                 const track = tracks[i];
-                if (track.mode === 'showing') {
-                    track.mode = 'hidden';
+                if (track.mode === 'disabled') continue;
+
+                // If native fullscreen: Force SHOWING
+                // If not native fullscreen (Windowed or Container FS): Force HIDDEN (so we use overlay)
+                const shouldBeShowing = isNativeFullscreen;
+
+                if (shouldBeShowing) {
+                    if (track.mode === 'hidden') track.mode = 'showing';
+                } else {
+                    if (track.mode === 'showing') track.mode = 'hidden';
                 }
             }
         };
 
+        const handleFullscreenChange = () => {
+            handleTrackChange();
+        };
+
         // Check current active cues and update subtitle on every timeupdate
         const updateCurrentSubtitle = () => {
+            // Don't update custom overlay if in native fullscreen (optimization)
+            if (document.fullscreenElement === video) {
+                if (currentSubtitle) setCurrentSubtitle('');
+                return;
+            }
+
             const tracks = video.textTracks;
             let hasActiveCue = false;
             const currentTime = video.currentTime;
@@ -320,6 +346,9 @@ function RoomContent() {
         video.textTracks.onchange = handleTrackChange;
         video.addEventListener('loadedmetadata', handleTrackChange);
         video.addEventListener('timeupdate', updateCurrentSubtitle);
+        // Also listen to document fullscreen changes to toggle modes
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+
         handleTrackChange();
         const interval = setInterval(handleTrackChange, 2000);
 
@@ -327,6 +356,7 @@ function RoomContent() {
             video.textTracks.onchange = null;
             video.removeEventListener('loadedmetadata', handleTrackChange);
             video.removeEventListener('timeupdate', updateCurrentSubtitle);
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
             clearInterval(interval);
         };
     }, [videoSrc]); // Re-run when video source changes
@@ -568,8 +598,6 @@ function RoomContent() {
 
         // Enforce View Only: Only controller can broadcast state
         if (controllerIdRef.current && controllerIdRef.current !== currentUserId) {
-            // Trace why this was called
-            // console.warn("Blocked Sync", new Error().stack); 
             addLog(`Blocked Sync: Controller is ${controllerIdRef.current}`);
 
             // Rate limited toast
@@ -585,16 +613,18 @@ function RoomContent() {
             return;
         }
 
-        addLog(`Sending State: ${videoRef.current.currentTime.toFixed(1)}s`);
+        const video = videoRef.current;
+        addLog(`Sending State: ${video.currentTime.toFixed(1)}s`);
         ws.send(JSON.stringify({
             type: 'PLAYER_STATE',
             payload: {
-                state: videoRef.current.paused ? 'paused' : 'playing',
-                time: videoRef.current.currentTime,
-                playbackRate: videoRef.current.playbackRate
+                state: video.paused ? 'paused' : 'playing',
+                time: video.currentTime,
+                playbackRate: video.playbackRate,
+                sentAt: Date.now()
             }
         }));
-    }, [currentUserId]);
+    }, [currentUserId, t, toast]);
 
     // WebSocket Synchronization
     useEffect(() => {
@@ -609,42 +639,24 @@ function RoomContent() {
         const ws = new WebSocket(wsUrl);
         socketRef.current = ws;
 
-        const sendState = () => {
-            // Debug Log
-            // console.log("sendState check", { 
-            //     isRemote: isRemoteUpdate.current, 
-            //     video: !!videoRef.current, 
-            //     ws: ws.readyState, 
-            //     controller: controllerIdRef.current, 
-            //     me: currentUserId 
-            // });
-
+        const sendStateLocal = () => {
             if (isRemoteUpdate.current || isLoadingSource.current || !videoRef.current || ws.readyState !== WebSocket.OPEN) return;
 
             // Enforce View Only: Only controller can broadcast state
             if (controllerIdRef.current && controllerIdRef.current !== currentUserId) {
                 addLog(`Blocked Sync: I am ${currentUserId}, Controller is ${controllerIdRef.current}`);
-
-                // Rate limited toast
-                const now = Date.now();
-                if (now - lastTimeRef.current > 2000) {
-                    toast({
-                        title: t('view_only_title'),
-                        description: t('view_only_desc'),
-                        variant: "destructive"
-                    });
-                    lastTimeRef.current = now;
-                }
                 return;
             }
 
-            addLog(`Sending State: ${videoRef.current.currentTime.toFixed(1)}s`);
+            const video = videoRef.current;
+            addLog(`Sending State: ${video.currentTime.toFixed(1)}s`);
             ws.send(JSON.stringify({
                 type: 'PLAYER_STATE',
                 payload: {
-                    state: videoRef.current.paused ? 'paused' : 'playing',
-                    time: videoRef.current.currentTime,
-                    playbackRate: videoRef.current.playbackRate
+                    state: video.paused ? 'paused' : 'playing',
+                    time: video.currentTime,
+                    playbackRate: video.playbackRate,
+                    sentAt: Date.now()
                 }
             }));
         };
@@ -721,23 +733,38 @@ function RoomContent() {
                 if (!video) return;
 
                 // Independent Mode: Viewer disabled sync
-                // Use Ref and calculate control status locally to avoid closure staleness
                 const amIController = !controllerIdRef.current || controllerIdRef.current === userId;
                 if (!amIController && !isSyncedRef.current) return;
 
-                const { state, time, playbackRate } = data.payload;
+                const { state, time, playbackRate, sentAt } = data.payload;
+
+                // Latency Compensation
+                let compensatedTime = time;
+                if (sentAt) {
+                    const age = Date.now() - sentAt;
+                    // Reset if too old (> 1 min) or first time
+                    if (age < lastMinAgeRef.current || lastMinAgeRef.current === Number.MAX_SAFE_INTEGER) {
+                        lastMinAgeRef.current = age;
+                    }
+                    // Relative latency: how much older this specific message is compared to the 'fastest' message seen
+                    // Plus a small constant base latency guess (50ms) to jump slightly ahead of what we received
+                    const relativeLatency = (age - lastMinAgeRef.current) / 1000;
+                    compensatedTime = time + relativeLatency + 0.05;
+                }
+
                 const now = video.currentTime;
-                const drift = now - time;
+                const drift = now - compensatedTime;
 
                 isRemoteUpdate.current = true;
 
-                // 1. Hard Sync: State Mismatch or Large Drift
+                // 1. Hard Sync: State Mismatch or Very Large Drift (> 3.0s)
+                // We use a larger threshold (3s) to avoid frequent seeking, which causes buffering/stuttering.
                 const isStateMismatch = (state === 'playing' && video.paused) || (state === 'paused' && !video.paused);
 
-                if (Math.abs(drift) > 2.0 || isStateMismatch) {
-                    // console.log("Hard Sync", { drift, state, myState: video.paused ? 'paused' : 'playing' });
-                    if (Math.abs(drift) > 0.5) { // Only seek if drift is significant to avoid stuttering on state changes
-                        video.currentTime = time;
+                if (Math.abs(drift) > 3.0 || isStateMismatch) {
+                    // console.log("Hard Sync", { drift, state });
+                    if (Math.abs(drift) > 0.5) { // Minimum seek threshold
+                        video.currentTime = compensatedTime;
                     }
                     if (state === 'playing') video.play().catch(() => { });
                     else video.pause();
@@ -747,18 +774,22 @@ function RoomContent() {
                         video.playbackRate = playbackRate;
                     }
                 }
-                // 2. Soft Sync: Small Drift (Speed Adjustment)
-                // Only if playing and no state mismatch
-                else if (state === 'playing' && Math.abs(drift) > 0.15) {
-                    // console.log("Soft Sync", { drift, currentRate: video.playbackRate });
+                // 2. Soft Sync: Small/Medium Drift (Speed Adjustment)
+                // We prefer this over Hard Sync to maintain smoothness.
+                else if (state === 'playing' && Math.abs(drift) > 0.1) {
                     const targetRate = playbackRate || 1.0;
-
                     if (drift > 0) {
                         // We are ahead -> Slow down
-                        video.playbackRate = Math.max(0.5, targetRate - 0.1);
+                        // 0.1 - 0.5s drift: -0.05 speed
+                        // 0.5s - 3.0s drift: -0.15 speed
+                        const factor = drift > 0.5 ? 0.15 : 0.05;
+                        video.playbackRate = Math.max(0.25, targetRate - factor);
                     } else {
                         // We are behind -> Speed up
-                        video.playbackRate = Math.min(2.0, targetRate + 0.1);
+                        // 0.1 - 0.5s drift: +0.05 speed
+                        // 0.5s - 3.0s drift: +0.15 speed
+                        const factor = drift < -0.5 ? 0.15 : 0.05;
+                        video.playbackRate = Math.min(4.0, targetRate + factor);
                     }
                 }
                 // 3. Stabilize
@@ -817,6 +848,7 @@ function RoomContent() {
     // Report Progress (Heartbeat) - Runs for everyone
     // Report Progress (Heartbeat) - Runs for everyone
     useEffect(() => {
+        let lastProgressSent = 0;
         const interval = setInterval(() => {
             const ws = socketRef.current;
             const video = videoRef.current;
@@ -824,28 +856,34 @@ function RoomContent() {
                 // Only report if we have loaded a video
                 if (!video.duration) return;
 
-                // 1. Always report progress for UI (Member List)
-                ws.send(JSON.stringify({
-                    type: 'VIDEO_PROGRESS',
-                    payload: { time: video.currentTime }
-                }));
+                const now = Date.now();
+
+                // 1. Progress for UI (Member List) - Throttle to every 3s to reduce server-wide broadcasts
+                if (now - lastProgressSent > 3000) {
+                    ws.send(JSON.stringify({
+                        type: 'VIDEO_PROGRESS',
+                        payload: { time: video.currentTime, sentAt: now }
+                    }));
+                    lastProgressSent = now;
+                }
 
                 // 2. If Controller, broadcast authoritative state for Active Sync
-                // We do this here (periodic) to handle drift actively, not just on events.
+                // We do this every 1s to maintain tight sync.
                 if (controllerIdRef.current === currentUserId) {
                     ws.send(JSON.stringify({
                         type: 'PLAYER_STATE',
                         payload: {
                             state: video.paused ? 'paused' : 'playing',
                             time: video.currentTime,
-                            playbackRate: video.playbackRate
+                            playbackRate: video.playbackRate,
+                            sentAt: now
                         }
                     }));
                 }
             }
-        }, 1000); // 1s interval for better sync resolution
+        }, 1000);
         return () => clearInterval(interval);
-    }, [currentUserId]); // Depends on currentUserId to identify if I am controller
+    }, [currentUserId]);
 
 
 
@@ -1066,7 +1104,6 @@ function RoomContent() {
                                 key={videoSrc}
                                 ref={videoRef}
                                 controls
-                                controlsList="nofullscreen"
                                 crossOrigin="anonymous"
                                 autoPlay
                                 className="w-full h-full object-contain"
