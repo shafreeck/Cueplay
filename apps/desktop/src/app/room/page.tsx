@@ -442,14 +442,29 @@ function RoomContent() {
         };
 
         const handleKeyPress = (e: KeyboardEvent) => {
+            // Check if user is typing in an input or textarea
+            const target = e.target as HTMLElement;
+            const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
             // F key to toggle fullscreen
             if (e.key === 'f' || e.key === 'F') {
-                if (!document.fullscreenElement && videoSrc) {
+                if (!isTyping && !document.fullscreenElement && videoSrc) {
                     e.preventDefault();
                     toggleFullscreen();
                 }
             }
-            // ESC is handled natively by browser, but we can add custom handling if needed
+
+            // Space key to toggle play/pause
+            if (e.key === ' ') {
+                if (!isTyping && videoRef.current && videoSrc) {
+                    e.preventDefault();
+                    if (videoRef.current.paused) {
+                        videoRef.current.play().catch(() => { });
+                    } else {
+                        videoRef.current.pause();
+                    }
+                }
+            }
         };
 
         document.addEventListener('fullscreenchange', handleFullscreenChange);
