@@ -1138,7 +1138,7 @@ function RoomContent() {
         if (!canControl) return;
 
         const video = videoRef.current;
-        const syncEvents = ['play', 'pause', 'seeked'];
+        const syncEvents = ['play', 'pause', 'seeked', 'ratechange'];
         const handleSync = (e: Event) => {
             if (e.isTrusted && !isRemoteUpdate.current && !isLoadingSource.current) {
                 sendState();
