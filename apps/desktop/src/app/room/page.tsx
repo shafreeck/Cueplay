@@ -137,7 +137,7 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
                         <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                            className="h-7 w-7"
                             onClick={() => {
                                 const toPlay = item.children?.find(c => c.id === item.lastPlayedId) || item.children?.[0];
                                 if (toPlay) onPlay(toPlay.fileId, toPlay.id);
