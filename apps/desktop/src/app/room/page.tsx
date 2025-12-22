@@ -14,10 +14,11 @@ import { useToast } from "@/components/ui/use-toast";
 import { useTranslation } from 'react-i18next';
 import { ApiClient, DriveFile } from '@/api/client';
 import { WS_BASE, getProxyBase } from '@/api/config';
-import { ModeToggle } from '@/components/mode-toggle';
+import { LanguageToggle } from '@/components/language-toggle';
+import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -133,6 +134,7 @@ function RoomContent() {
     const [nickname, setNickname] = useState('');
     const [resetConfirm, setResetConfirm] = useState(false);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+    const [showQuarkLogin, setShowQuarkLogin] = useState(false);
 
     const [playbackRate, setPlaybackRate] = useState(1.0);
     // Chat State
@@ -970,7 +972,18 @@ function RoomContent() {
                                             <div className="pt-2 mt-2 border-t space-y-2">
                                                 <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('room_setup_owner')}</Label>
                                                 <div className="grid grid-cols-3 items-center gap-4">
-                                                    <Label htmlFor="roomCookie" className="text-xs">{t('room_cookie')}</Label>
+                                                    <div className="flex items-center justify-between col-span-1">
+                                                        <Label htmlFor="roomCookie" className="text-xs">{t('room_cookie')}</Label>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-5 w-5"
+                                                            title={t('login_quark')}
+                                                            onClick={() => setShowQuarkLogin(true)}
+                                                        >
+                                                            <QrCode className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
                                                     <Input
                                                         id="roomCookie"
                                                         value={roomCookie}
@@ -1302,6 +1315,17 @@ function RoomContent() {
                     onOpenChange={setIsLibraryOpen}
                     cookie={roomCookie}
                     onAdd={handleAddFileFromLibrary}
+                />
+
+                <QuarkLoginDialog
+                    open={showQuarkLogin}
+                    onOpenChange={setShowQuarkLogin}
+                    onSuccess={(cookie) => {
+                        if (cookie) {
+                            updateRoomCookie(cookie);
+                            toast({ description: t('logged_in_room_updated') });
+                        }
+                    }}
                 />
             </main >
         </div >

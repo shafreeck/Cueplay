@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useToast } from "@/components/ui/use-toast";
 import Link from 'next/link';
-import { ArrowLeft, ShieldCheck, Lock } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Lock, QrCode } from 'lucide-react';
+import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 
 import { API_BASE } from '@/api/config';
 
@@ -16,6 +17,7 @@ export default function AdminPage() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [cookie, setCookie] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showLoginDialog, setShowLoginDialog] = useState(false);
 
     // Initial check (could verify stored token)
     useEffect(() => {
@@ -166,7 +168,18 @@ export default function AdminPage() {
                                 </p>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Quark Cookie String</label>
+                                <div className="flex justify-between items-center">
+                                    <label className="text-sm font-medium">Quark Cookie String</label>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 text-xs gap-1"
+                                        onClick={() => setShowLoginDialog(true)}
+                                    >
+                                        <QrCode className="w-3 h-3" />
+                                        Get via Login
+                                    </Button>
+                                </div>
                                 <Input
                                     type="password"
                                     value={cookie}
@@ -195,6 +208,17 @@ export default function AdminPage() {
                     </Card>
                 </div>
             </div>
+
+            <QuarkLoginDialog
+                open={showLoginDialog}
+                onOpenChange={setShowLoginDialog}
+                onSuccess={(newCookie) => {
+                    setCookie(newCookie);
+                    // Optional: You could auto-save here, or let the user click save.
+                    // Let's at least update the input so they see it.
+                    toast({ description: "Cookie captured! Click 'Save Configuration' to apply." });
+                }}
+            />
         </div>
     );
 }
