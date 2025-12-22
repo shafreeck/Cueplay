@@ -126,46 +126,67 @@ export class QuarkProvider implements PlayableProvider {
             'Origin': 'https://pan.quark.cn'
         };
 
-        const query = new URLSearchParams({
-            pr: 'ucpro',
-            fr: 'pc',
-            uc_param_str: '',
-            pdir_fid: parentId,
-            _page: '1',
-            _size: '50',
-            _fetch_total: '1',
-            _fetch_sub_dirs: '0',
-            _sort: 'file_type:asc,file_name:asc',
-            fetch_all_file: '1',
-            fetch_risk_file_name: '1'
-        });
+        let allFiles: DriveFile[] = [];
+        let page = 1;
+        const size = 100;
+        let hasMore = true;
 
-        const response = await fetch(`${QuarkProvider.LIST_URL}?${query.toString()}`, {
-            method: 'GET',
-            headers
-        });
+        while (hasMore) {
+            const query = new URLSearchParams({
+                pr: 'ucpro',
+                fr: 'pc',
+                uc_param_str: '',
+                pdir_fid: parentId,
+                _page: page.toString(),
+                _size: size.toString(),
+                _fetch_total: '1',
+                _fetch_sub_dirs: '0',
+                _sort: 'file_type:asc,file_name:asc',
+                fetch_all_file: '1',
+                fetch_risk_file_name: '1'
+            });
 
-        if (!response.ok) {
-            throw new Error(`Quark List API failed: ${response.status} ${response.statusText}`);
+            const response = await fetch(`${QuarkProvider.LIST_URL}?${query.toString()}`, {
+                method: 'GET',
+                headers
+            });
+
+            if (!response.ok) {
+                throw new Error(`Quark List API failed: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json() as any;
+
+            if (data.code !== 0 && data.code !== 200) {
+                throw new Error(`Quark List API error: ${JSON.stringify(data)}`);
+            }
+
+            const list = data.data?.list || [];
+            const total = data.data?.total || 0;
+
+            const mappedFiles: DriveFile[] = list.map((item: any) => ({
+                id: item.fid,
+                name: item.file_name,
+                type: item.dir === true ? 'folder' : 'file',
+                mimeType: item.mime_type,
+                size: item.size,
+                updatedAt: item.updated_at,
+                thumbnail: item.thumbnail
+            }));
+
+            allFiles = [...allFiles, ...mappedFiles];
+
+            // Termination condition:
+            // 1. If we have fetched all items according to 'total'
+            // 2. Or if the returned list is empty or smaller than 'size' (fallback)
+            if (allFiles.length >= total || list.length < size) {
+                hasMore = false;
+            } else {
+                page++;
+            }
         }
 
-        const data = await response.json() as any;
-
-        if (data.code !== 0 && data.code !== 200) {
-            throw new Error(`Quark List API error: ${JSON.stringify(data)}`);
-        }
-
-        const list = data.data?.list || [];
-
-        return list.map((item: any) => ({
-            id: item.fid,
-            name: item.file_name,
-            type: item.dir === true ? 'folder' : 'file',
-            mimeType: item.mime_type,
-            size: item.size,
-            updatedAt: item.updated_at,
-            thumbnail: item.thumbnail
-        }));
+        return allFiles;
     }
 
     /**
