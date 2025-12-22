@@ -12,6 +12,7 @@ interface ResourceLibraryProps {
     onOpenChange: (open: boolean) => void;
     cookie?: string;
     onAdd: (file: DriveFile) => void;
+    onAddSeries?: (folder: DriveFile, files: DriveFile[]) => void;
 }
 
 interface PathItem {
@@ -19,7 +20,7 @@ interface PathItem {
     name: string;
 }
 
-export function ResourceLibrary({ open, onOpenChange, cookie, onAdd }: ResourceLibraryProps) {
+export function ResourceLibrary({ open, onOpenChange, cookie, onAdd, onAddSeries }: ResourceLibraryProps) {
     const { t } = useTranslation('common');
     const { toast } = useToast();
     const [files, setFiles] = useState<DriveFile[]>([]);
@@ -66,6 +67,55 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd }: ResourceL
     const handleAdd = (file: DriveFile) => {
         onAdd(file);
         toast({ title: t('added_to_queue_title'), description: file.name });
+    };
+
+    const [isCollecting, setIsCollecting] = useState(false);
+
+    const handleAddSeries = async (folder: DriveFile) => {
+        if (!onAddSeries) return;
+        setIsCollecting(true);
+        try {
+            const allVideos: DriveFile[] = [];
+
+            // Recursive function to fetch all videos
+            const collectVideos = async (dirId: string, currentPath: string, depth: number) => {
+                if (depth > 3) return; // Limit recursion depth
+                const list = await ApiClient.listQuarkFiles(dirId, cookie);
+                for (const item of list) {
+                    if (item.type === 'folder') {
+                        await collectVideos(item.id, currentPath ? `${currentPath} / ${item.name}` : item.name, depth + 1);
+                    } else if (item.mimeType?.startsWith('video/') || item.name.match(/\.(mp4|mkv|avi|flv|mov|wmv)$/i)) {
+                        allVideos.push({
+                            ...item,
+                            name: currentPath ? `${currentPath} / ${item.name}` : item.name
+                        });
+                    }
+                }
+            };
+
+            await collectVideos(folder.id, '', 1);
+
+            if (allVideos.length === 0) {
+                toast({
+                    variant: 'destructive',
+                    title: t('no_videos_found'),
+                    description: t('no_videos_found_desc')
+                });
+                return;
+            }
+
+            onAddSeries(folder, allVideos);
+            toast({ title: t('added_to_queue_title'), description: `${folder.name} (${allVideos.length} ${t('episodes')})` });
+        } catch (e: any) {
+            console.error(e);
+            toast({
+                variant: 'destructive',
+                title: t('resource_load_failed'),
+                description: e.message
+            });
+        } finally {
+            setIsCollecting(false);
+        }
     };
 
     const filteredFiles = files.filter(file =>
@@ -133,9 +183,10 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd }: ResourceL
 
                 {/* File List */}
                 <div className="flex-1 overflow-y-auto p-4">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-full">
+                    {(loading || isCollecting) ? (
+                        <div className="flex flex-col items-center justify-center h-full gap-4">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            {isCollecting && <p className="text-sm text-muted-foreground animate-pulse">{t('collecting_episodes')}</p>}
                         </div>
                     ) : filteredFiles.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -172,13 +223,23 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd }: ResourceL
                                             </div>
                                         </div>
 
-                                        {file.type === 'file' && (
+                                        {file.type === 'file' ? (
                                             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full shadow-lg" onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleAdd(file);
                                                 }}>
                                                     <Plus className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button size="sm" variant="secondary" className="h-8 px-2 rounded-full shadow-lg text-[10px] font-bold" onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleAddSeries(file);
+                                                }}>
+                                                    <Plus className="h-3 w-3 mr-1" />
+                                                    {t('add_as_series')}
                                                 </Button>
                                             </div>
                                         )}
@@ -212,12 +273,20 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd }: ResourceL
                                             </span>
                                         </div>
 
-                                        {file.type === 'file' && (
+                                        {file.type === 'file' ? (
                                             <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleAdd(file);
                                             }}>
                                                 <Plus className="h-4 w-4" />
+                                            </Button>
+                                        ) : (
+                                            <Button size="sm" variant="ghost" className="h-8 px-2 opacity-0 group-hover:opacity-100 text-[10px] font-bold" onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleAddSeries(file);
+                                            }}>
+                                                <Plus className="h-3 w-3 mr-1" />
+                                                {t('add_as_series')}
                                             </Button>
                                         )}
                                     </div>

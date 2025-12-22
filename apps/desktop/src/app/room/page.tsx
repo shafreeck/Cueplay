@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -27,6 +27,11 @@ interface PlaylistItem {
     id: string;
     fileId: string;
     title?: string;
+    type?: 'file' | 'folder';
+    children?: PlaylistItem[];
+    lastPlayedId?: string;
+    progress?: number;
+    duration?: number;
 }
 
 interface ChatMessage {
@@ -47,6 +52,7 @@ interface SortableItemProps {
 }
 
 function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: SortableItemProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
     const {
         attributes,
         listeners,
@@ -62,40 +68,133 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
         zIndex: isDragging ? 50 : 'auto',
     };
 
+    const isFolder = item.type === 'folder';
+    const playingChild = isFolder ? item.children?.find(c => c.id === playingItemId) : null;
+    const isPlaying = item.id === playingItemId || !!playingChild;
+
     return (
-        <div
-            ref={setNodeRef}
-            style={style}
-            className={`group flex items-center justify-between p-2 rounded-md border transition-colors ${item.id === playingItemId ? 'bg-primary/20 border-primary/50' : 'bg-white/5 border-white/5 hover:bg-white/10'} ${isDragging ? 'opacity-50' : ''}`}
-        >
-            <div className="flex items-center flex-1 min-w-0 mr-2">
-                <div {...attributes} {...listeners} className="cursor-grab hover:text-foreground text-muted-foreground mr-2 p-1">
-                    <GripVertical className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-mono text-muted-foreground">#{index + 1}</span>
-                    <span className="text-sm font-medium truncate" title={item.title || item.fileId}>
-                        {item.title || item.fileId}
-                    </span>
-                    {item.id === playingItemId && (
-                        <span className="text-[10px] text-green-500 font-bold flex items-center gap-1">
-                            <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                            </span>
-                            Playing
-                        </span>
+        <div ref={setNodeRef} style={style} className={`${isDragging ? 'opacity-50' : ''}`}>
+            <div className={`group flex items-center justify-between p-2 rounded-md border transition-colors ${isPlaying ? 'bg-primary/20 border-primary/50' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
+                <div className="flex items-center flex-1 min-w-0 mr-2">
+                    <div {...attributes} {...listeners} className="cursor-grab hover:text-foreground text-muted-foreground mr-2 p-1">
+                        <GripVertical className="h-4 w-4" />
+                    </div>
+                    {isFolder && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 mr-1" onClick={() => setIsExpanded(!isExpanded)}>
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </Button>
                     )}
+                    <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-muted-foreground">#{index + 1}</span>
+                            {isFolder && <Folder className="h-3.5 w-3.5 text-primary" />}
+                            <span className="text-sm font-medium truncate" title={item.title || item.fileId}>
+                                {item.title || item.fileId}
+                            </span>
+                        </div>
+
+                        {playingChild ? (
+                            <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5 animate-in fade-in duration-300">
+                                <PlayCircle className="h-3 w-3" />
+                                Now Playing: {playingChild.title}
+                            </span>
+                        ) : item.id === playingItemId && (
+                            <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                </span>
+                                Playing
+                            </span>
+                        )}
+                        {isFolder && !playingChild && (
+                            <span className="text-[10px] text-muted-foreground opacity-70 ml-6">{item.children?.length} episodes</span>
+                        )}
+
+                        {/* Progress Bar for Folder */}
+                        {isFolder && item.children && item.children.some(c => c.progress) && (
+                            <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden">
+                                {(() => {
+                                    const totalProcessed = item.children.filter(c => c.progress && c.duration).length;
+                                    const avgProgress = totalProcessed > 0
+                                        ? (item.children.reduce((acc, c) => acc + (c.progress && c.duration ? (c.progress / c.duration) : 0), 0) / item.children.length) * 100
+                                        : 0;
+                                    return <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${avgProgress}%` }} />;
+                                })()}
+                            </div>
+                        )}
+
+                        {/* Progress Bar for File */}
+                        {!isFolder && item.progress && item.duration && (
+                            <div className="mt-1.5 h-1 w-full max-w-[100px] bg-white/10 rounded-full overflow-hidden">
+                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${(item.progress / item.duration) * 100}%` }} />
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    {isFolder ? (
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                            onClick={() => {
+                                const toPlay = item.children?.find(c => c.id === item.lastPlayedId) || item.children?.[0];
+                                if (toPlay) onPlay(toPlay.fileId, toPlay.id);
+                                if (!isExpanded) setIsExpanded(true);
+                            }}
+                            title={item.lastPlayedId ? "Resume Series" : "Play Series"}
+                        >
+                            <PlayCircle className="h-4 w-4" />
+                        </Button>
+                    ) : (
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onPlay(item.fileId, item.id)}>
+                            <PlayCircle className="h-4 w-4" />
+                        </Button>
+                    )}
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onRemove(item.id)}>
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
                 </div>
             </div>
-            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onPlay(item.fileId, item.id)}>
-                    <PlayCircle className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onRemove(item.id)}>
-                    <Trash2 className="h-4 w-4" />
-                </Button>
-            </div>
+
+            {isFolder && isExpanded && item.children && (
+                <div className="ml-8 mt-1.5 space-y-1 border-l-2 border-white/10 pl-3 animate-in slide-in-from-left-2 duration-200">
+                    {item.children.map((child, childIdx) => (
+                        <div
+                            key={child.id}
+                            className={`flex items-center justify-between p-2 rounded-md text-xs group/child transition-all ${child.id === playingItemId ? 'bg-primary/15 text-primary font-medium' : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'}`}
+                        >
+                            <div className="flex items-center gap-2 min-w-0 mr-2 flex-1">
+                                <span className="font-mono opacity-40 tabular-nums">{index + 1}.{childIdx + 1}</span>
+                                <div className="flex flex-col min-w-0 flex-1">
+                                    <span className="truncate" title={child.title}>{child.title}</span>
+                                    {child.progress && child.duration && (
+                                        <div className="mt-1 h-0.5 w-full max-w-[80px] bg-white/10 rounded-full overflow-hidden">
+                                            <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${(child.progress / child.duration) * 100}%` }} />
+                                        </div>
+                                    )}
+                                </div>
+                                {child.id === playingItemId && (
+                                    <div className="flex gap-0.5 h-3 items-end pb-0.5">
+                                        <div className="w-0.5 bg-primary animate-[music-bar_0.6s_ease-in-out_infinite]" style={{ height: '60%' }}></div>
+                                        <div className="w-0.5 bg-primary animate-[music-bar_0.8s_ease-in-out_infinite]" style={{ height: '100%' }}></div>
+                                        <div className="w-0.5 bg-primary animate-[music-bar_0.7s_ease-in-out_infinite]" style={{ height: '80%' }}></div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover/child:opacity-100 transition-opacity">
+                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onPlay(child.fileId, child.id)}>
+                                    <PlayCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive/70 hover:text-destructive" onClick={() => onRemove(child.id)}>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -113,6 +212,7 @@ function RoomContent() {
             router.push('/');
         }
     }, [roomId, router]);
+
 
     const [logs, setLogs] = useState<string[]>([]);
     const [members, setMembers] = useState<any[]>([]);
@@ -162,6 +262,44 @@ function RoomContent() {
         // Reset min age on sync toggle to recalibrate
         if (isSynced) lastMinAgeRef.current = Number.MAX_SAFE_INTEGER;
     }, [isSynced]);
+
+    // Auto-save progress
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const video = videoRef.current;
+            if (video && video.duration && !video.paused && playingItemId) {
+                setPlaylist(prev => {
+                    let updated = false;
+                    const updateProgress = (list: PlaylistItem[]): PlaylistItem[] => {
+                        return list.map(item => {
+                            if (item.id === playingItemId) {
+                                if (Math.abs((item.progress || 0) - video.currentTime) > 1) { // Only update if drift > 1s
+                                    updated = true;
+                                    return { ...item, progress: video.currentTime, duration: video.duration };
+                                }
+                                return item;
+                            }
+                            if (item.children) {
+                                const newChildren = updateProgress(item.children);
+                                if (updated) return { ...item, children: newChildren };
+                            }
+                            return item;
+                        });
+                    };
+
+                    const newPlaylist = updateProgress(prev);
+                    if (updated && socketRef.current?.readyState === WebSocket.OPEN) {
+                        socketRef.current.send(JSON.stringify({
+                            type: 'PLAYLIST_UPDATE',
+                            payload: { playlist: newPlaylist }
+                        }));
+                    }
+                    return updated ? newPlaylist : prev;
+                });
+            }
+        }, 5000); // Save every 5s
+        return () => clearInterval(interval);
+    }, [playingItemId]);
 
     const addLog = (msg: string) => setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
@@ -391,6 +529,24 @@ function RoomContent() {
         setFileId(fid); // Sync internal state
         setPlayingItemId(itemId || null); // Track playlist item
 
+        // Update lastPlayedId for parent folder if applicable
+        if (itemId) {
+            setPlaylist(prev => prev.map(item => {
+                if (item.children?.some(c => c.id === itemId)) {
+                    const newPlaylist = prev.map(p => p.id === item.id ? { ...p, lastPlayedId: itemId } : p);
+                    // Sync with server
+                    if (socketRef.current?.readyState === WebSocket.OPEN) {
+                        socketRef.current.send(JSON.stringify({
+                            type: 'PLAYLIST_UPDATE',
+                            payload: { playlist: newPlaylist }
+                        }));
+                    }
+                    return { ...item, lastPlayedId: itemId };
+                }
+                return item;
+            }));
+        }
+
         addLog(`Resolving video ${fid}...`);
         try {
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
@@ -401,6 +557,7 @@ function RoomContent() {
                 setDuration(source.meta.duration);
             }
 
+            // Sync with others
             if (socketRef.current?.readyState === WebSocket.OPEN) {
                 socketRef.current.send(JSON.stringify({
                     type: 'MEDIA_CHANGE',
@@ -413,6 +570,7 @@ function RoomContent() {
                     }
                 }));
             }
+
             // Local playback
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
@@ -427,7 +585,32 @@ function RoomContent() {
                     description: t('missing_cookie_desc'),
                 });
             }
+
             setVideoSrc(finalUrl);
+
+            // Resume Progress if available
+            if (itemId) {
+                const findItem = (list: PlaylistItem[]): PlaylistItem | null => {
+                    for (const item of list) {
+                        if (item.id === itemId) return item;
+                        if (item.children) {
+                            const found = findItem(item.children);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                };
+                const item = findItem(playlist);
+                if (item?.progress && videoRef.current) {
+                    const video = videoRef.current;
+                    const onMetadata = () => {
+                        addLog(`Resuming playback at ${item.progress}s`);
+                        video.currentTime = item.progress!;
+                        video.removeEventListener('loadedmetadata', onMetadata);
+                    };
+                    video.addEventListener('loadedmetadata', onMetadata);
+                }
+            }
         } catch (e: any) {
             console.error(e);
             toast({
@@ -489,7 +672,23 @@ function RoomContent() {
     };
 
     const removeFromPlaylist = (id: string) => {
-        const newPlaylist = playlist.filter(item => item.id !== id);
+        const removeById = (list: PlaylistItem[]): PlaylistItem[] => {
+            return list.reduce((acc: PlaylistItem[], item) => {
+                if (item.id === id) return acc;
+                if (item.children) {
+                    const newChildren = removeById(item.children);
+                    if (newChildren.length === 0 && item.type === 'folder') {
+                        // If folder becomes empty, maybe remove it too? 
+                        // For now let's keep it or remove it. Better to remove it if all episodes are gone.
+                        return acc;
+                    }
+                    return [...acc, { ...item, children: newChildren }];
+                }
+                return [...acc, item];
+            }, []);
+        };
+
+        const newPlaylist = removeById(playlist);
         setPlaylist(newPlaylist);
         if (socketRef.current?.readyState === WebSocket.OPEN) {
             socketRef.current.send(JSON.stringify({
@@ -503,25 +702,20 @@ function RoomContent() {
                     type: 'MEDIA_CHANGE',
                     payload: { fileId: '', url: '', provider: 'quark' }
                 }));
-                // Clear local state immediately for better UX
                 setFileId('');
                 setRawUrl('');
                 setVideoSrc('');
             }
-        } else {
-            addLog("WebSocket not open, playlist sync failed.");
         }
     };
 
     const handleAddFileFromLibrary = async (file: DriveFile) => {
         setIsResolving(true);
         try {
-            // We have the ID and Name directly.
-            // We resolve it just to ensure it's playable/valid and maybe get updated metadata.
             const { source } = await ApiClient.resolveVideo(file.id, roomId || '');
             const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
 
-            const newItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title };
+            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file' };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -556,26 +750,73 @@ function RoomContent() {
         }
     };
 
+    const handleAddSeriesFromLibrary = (folder: DriveFile, files: DriveFile[]) => {
+        const children: PlaylistItem[] = files.map(f => ({
+            id: Math.random().toString(36).slice(2),
+            fileId: f.id,
+            title: f.name,
+            type: 'file'
+        }));
+
+        const newItem: PlaylistItem = {
+            id: Math.random().toString(36).slice(2),
+            fileId: folder.id,
+            title: folder.name,
+            type: 'folder',
+            children
+        };
+
+        const newPlaylist = [...playlist, newItem];
+        setPlaylist(newPlaylist);
+
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+            const payload = { playlist: newPlaylist };
+            addLog(`Sending Playlist Update (len: ${newPlaylist.length})`);
+            socketRef.current.send(JSON.stringify({
+                type: 'PLAYLIST_UPDATE',
+                payload
+            }));
+        }
+
+        // Auto play if empty
+        if (playlist.length === 0 && children.length > 0) {
+            resolveAndPlay(children[0].fileId, children[0].id);
+        }
+    };
+
     const playNext = () => {
         if (playlist.length === 0) return;
 
-        // Try getting by ID first, then fallback to fileId
-        let currentIndex = -1;
-        if (playingItemId) {
-            currentIndex = playlist.findIndex(item => item.id === playingItemId);
-        } else {
-            currentIndex = playlist.findIndex(item => item.fileId === fileId);
-        }
+        const findNext = (list: PlaylistItem[]): PlaylistItem | null => {
+            for (let i = 0; i < list.length; i++) {
+                const item = list[i];
+                if (item.id === playingItemId) {
+                    // Found current item
+                    if (i + 1 < list.length) {
+                        const next = list[i + 1];
+                        return next.type === 'folder' && next.children?.[0] ? next.children[0] : next;
+                    }
+                    return null;
+                }
+                if (item.children) {
+                    const nextInFolder = findNext(item.children);
+                    if (nextInFolder === null) {
+                        // Was last child of this folder
+                        const isLastChild = item.children[item.children.length - 1].id === playingItemId;
+                        if (isLastChild && i + 1 < list.length) {
+                            const next = list[i + 1];
+                            return next.type === 'folder' && next.children?.[0] ? next.children[0] : next;
+                        }
+                    } else {
+                        return nextInFolder;
+                    }
+                }
+            }
+            return null;
+        };
 
-        if (currentIndex === -1) {
-            addLog("Current video not found in playlist.");
-            return;
-        }
-
-        const nextIndex = currentIndex + 1;
-
-        if (nextIndex < playlist.length) {
-            const nextItem = playlist[nextIndex];
+        const nextItem = findNext(playlist);
+        if (nextItem) {
             addLog(`Auto-playing next: ${nextItem.title || nextItem.fileId}`);
             resolveAndPlay(nextItem.fileId, nextItem.id);
         } else {
@@ -1367,8 +1608,9 @@ function RoomContent() {
                 <ResourceLibrary
                     open={isLibraryOpen}
                     onOpenChange={setIsLibraryOpen}
-                    cookie={roomCookie}
+                    cookie={roomCookie || undefined}
                     onAdd={handleAddFileFromLibrary}
+                    onAddSeries={handleAddSeriesFromLibrary}
                 />
 
                 <QuarkLoginDialog

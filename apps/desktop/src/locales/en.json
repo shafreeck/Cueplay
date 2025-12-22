@@ -128,6 +128,11 @@
         "access_denied": "Access Denied",
         "invalid_password": "Invalid password.",
         "enter_fullscreen": "Enter Fullscreen",
-        "exit_fullscreen": "Exit Fullscreen"
+        "exit_fullscreen": "Exit Fullscreen",
+        "episodes": "episodes",
+        "no_videos_found": "No videos found",
+        "no_videos_found_desc": "No playable video files were found in this folder or its subdirectories.",
+        "collecting_episodes": "Scanning for episodes...",
+        "add_as_series": "Add as Series"
     }
 }
