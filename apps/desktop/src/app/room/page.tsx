@@ -124,6 +124,8 @@ function RoomContent() {
     const [fileId, setFileId] = useState('');
     const [inputValue, setInputValue] = useState('');
     const [currentSubtitle, setCurrentSubtitle] = useState('');
+    const lastSubtitleChangeTime = useRef<number>(0);
+    const MAX_SUBTITLE_DURATION = 8; // Maximum subtitle display duration in seconds
     const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
@@ -269,28 +271,58 @@ function RoomContent() {
         // Clear subtitle when video changes
         setCurrentSubtitle('');
 
+        // Hide native subtitles and set up tracking
         const handleTrackChange = () => {
             const tracks = video.textTracks;
             for (let i = 0; i < tracks.length; i++) {
                 const track = tracks[i];
                 if (track.mode === 'showing') {
                     track.mode = 'hidden';
-                    track.oncuechange = () => {
-                        const activeCue = track.activeCues?.[0] as VTTCue;
-                        setCurrentSubtitle(activeCue ? activeCue.text : '');
-                    };
                 }
+            }
+        };
+
+        // Check current active cues and update subtitle on every timeupdate
+        const updateCurrentSubtitle = () => {
+            const tracks = video.textTracks;
+            let hasActiveCue = false;
+            const currentTime = video.currentTime;
+
+            for (let i = 0; i < tracks.length; i++) {
+                const track = tracks[i];
+
+                if (track.mode === 'hidden' && track.activeCues && track.activeCues.length > 0) {
+                    const activeCue = track.activeCues[0] as VTTCue;
+                    const cueDisplayDuration = currentTime - activeCue.startTime;
+
+                    // Check if subtitle has been displayed for too long
+                    // This handles cases where browser sets endTime to video duration during progressive loading
+                    if (cueDisplayDuration > MAX_SUBTITLE_DURATION) {
+                        setCurrentSubtitle('');
+                    } else {
+                        setCurrentSubtitle(activeCue.text);
+                        hasActiveCue = true;
+                    }
+                    break;
+                }
+            }
+
+            // Clear subtitle if no active cue
+            if (!hasActiveCue) {
+                setCurrentSubtitle('');
             }
         };
 
         video.textTracks.onchange = handleTrackChange;
         video.addEventListener('loadedmetadata', handleTrackChange);
+        video.addEventListener('timeupdate', updateCurrentSubtitle);
         handleTrackChange();
         const interval = setInterval(handleTrackChange, 2000);
 
         return () => {
             video.textTracks.onchange = null;
             video.removeEventListener('loadedmetadata', handleTrackChange);
+            video.removeEventListener('timeupdate', updateCurrentSubtitle);
             clearInterval(interval);
         };
     }, [videoSrc]); // Re-run when video source changes
