@@ -1,7 +1,10 @@
+
 import { FastifyInstance } from 'fastify';
 import { QuarkProvider } from '@cueplay/playback-core';
 import { ConfigStore } from '../config/store';
 import { RoomManager } from '../room/manager';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const provider = new QuarkProvider();
 
@@ -37,8 +40,14 @@ export async function playbackRoutes(fastify: FastifyInstance) {
             fastify.log.info({ msg: 'Resolved source', fileId: body.fileId, source });
             return { source, cookie };
         } catch (e: any) {
+            const logMsg = `[${new Date().toISOString()}] Resolve failed for ${body.fileId}: ${e.message}\n`;
+            try {
+                fs.appendFileSync(path.join(process.cwd(), 'api-debug.log'), logMsg);
+            } catch (err) { /* ignore */ }
+
             fastify.log.error({ msg: 'Resolve failed', error: e.message });
-            return reply.code(500).send({ error: 'Failed to resolve video' });
+            // Return detailed error to client for debugging
+            return reply.code(500).send({ error: `Failed to resolve video: ${e.message}` });
         }
     });
 }

@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { JoinRoomEvent, PlayerStateEvent, MediaChangeEvent, EventType } from '@cueplay/protocol';
 import { RoomManager } from '../room/manager';
+import { ConfigStore } from '../config/store';
 
 // Map roomId -> Map<userId, WebSocket>
 const roomConnections = new Map<string, Map<string, any>>();
@@ -34,7 +35,8 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                     members,
                     ownerId: room.ownerId,
                     controllerId: room.controllerId,
-                    quarkCookie: room.quarkCookie
+                    quarkCookie: room.quarkCookie,
+                    hasGlobalCookie: !!ConfigStore.getGlobalCookie()
                 }
             };
 

@@ -24,6 +24,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { LanguageToggle } from '@/components/language-toggle';
 
+
 export default function Home() {
   const router = useRouter();
   const { toast } = useToast();
@@ -159,6 +160,8 @@ export default function Home() {
 
           {/* Right: Actions */}
           <div className="flex items-center gap-3">
+
+
             {/* Join Group - Dark Pill */}
             <div className="flex items-center bg-black/20 p-1 pl-4 rounded-full border border-white/5 backdrop-blur-sm shadow-sm ring-1 ring-white/5 transition-colors hover:bg-black/30 hover:border-white/10">
               <Input
@@ -346,6 +349,8 @@ export default function Home() {
           <Shield className="w-4 h-4 text-primary fill-primary" />
         </Link>
       </footer>
+
+
     </div >
   );
 }

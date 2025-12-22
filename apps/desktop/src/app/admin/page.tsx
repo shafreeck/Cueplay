@@ -6,18 +6,21 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useToast } from "@/components/ui/use-toast";
 import Link from 'next/link';
-import { ArrowLeft, ShieldCheck, Lock, QrCode } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Lock, QrCode, Settings } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 
 import { API_BASE } from '@/api/config';
 
 export default function AdminPage() {
     const { toast } = useToast();
+    const { t } = useTranslation('common');
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [cookie, setCookie] = useState('');
     const [loading, setLoading] = useState(false);
     const [showLoginDialog, setShowLoginDialog] = useState(false);
+    const [showManualInput, setShowManualInput] = useState(false);
 
     // Initial check (could verify stored token)
     useEffect(() => {
@@ -77,9 +80,11 @@ export default function AdminPage() {
         setPassword('');
     };
 
-    const saveConfig = async () => {
+    const saveConfig = async (cookieToSave?: string) => {
         const token = localStorage.getItem('admin_token');
         if (!token) return;
+
+        const value = cookieToSave !== undefined ? cookieToSave : cookie;
 
         setLoading(true);
         try {
@@ -89,11 +94,12 @@ export default function AdminPage() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ cookie })
+                body: JSON.stringify({ cookie: value })
             });
 
             if (res.ok) {
                 toast({ title: "Saved", description: "Global configuration updated." });
+                if (cookieToSave !== undefined) setCookie(cookieToSave);
             } else {
                 throw new Error('Save failed');
             }
@@ -148,61 +154,79 @@ export default function AdminPage() {
                         </Link>
                         <h1 className="text-3xl font-bold flex items-center gap-2">
                             <ShieldCheck className="w-8 h-8 text-primary" />
-                            System Console
+                            {t('system_console')}
                         </h1>
                     </div>
-                    <Button variant="outline" onClick={logout}>Logout</Button>
+                    <Button variant="outline" onClick={logout}>{t('logout')}</Button>
                 </div>
 
                 <div className="grid gap-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Global Cookie Management</CardTitle>
+                            <CardTitle>{t('global_cookie_management')}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
-                                <p className="font-medium text-foreground mb-1">Service-Level Credential</p>
-                                <p>This cookie is used as a fallback for all users who do not have their own cookie set.</p>
-                                <p className="mt-2 text-xs opacity-70">
-                                    Format: A valid Quark cookie string. Stored securely on the server.
-                                </p>
+                                <p className="font-medium text-foreground mb-1">{t('service_level_credential')}</p>
+                                <p>{t('service_credential_desc')}</p>
                             </div>
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-sm font-medium">Quark Cookie String</label>
+
+                            <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`h-2 w-2 rounded-full ${cookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
+                                        <span className="text-sm font-medium text-foreground">
+                                            {cookie ? t('quark_drive_connected') : t('quark_drive_disconnected')}
+                                        </span>
+                                    </div>
                                     <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-6 text-xs gap-1"
-                                        onClick={() => setShowLoginDialog(true)}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 hover:bg-white/10"
+                                        onClick={() => setShowManualInput(!showManualInput)}
+                                        title={t('manual_configuration')}
                                     >
-                                        <QrCode className="w-3 h-3" />
-                                        Get via Login
+                                        <Settings className="w-4 h-4 text-muted-foreground" />
                                     </Button>
                                 </div>
-                                <Input
-                                    type="password"
-                                    value={cookie}
-                                    onChange={(e) => setCookie(e.target.value)}
-                                    placeholder="Enter full cookie string..."
-                                    className="font-mono text-xs"
-                                />
-                            </div>
-                            <div className="flex justify-end">
-                                <Button onClick={saveConfig} disabled={loading}>
-                                    {loading ? 'Saving...' : 'Save Configuration'}
+
+                                <Button
+                                    variant={cookie ? "outline" : "default"}
+                                    size="sm"
+                                    className="w-full gap-2"
+                                    onClick={() => setShowLoginDialog(true)}
+                                >
+                                    <QrCode className="w-4 h-4" />
+                                    {cookie ? t('update_connection') : t('login_to_quark_drive')}
                                 </Button>
+
+                                {showManualInput && (
+                                    <div className="pt-3 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200 space-y-2">
+                                        <label className="text-xs font-medium text-muted-foreground">{t('manual_cookie_string')}</label>
+                                        <Input
+                                            type="password"
+                                            value={cookie}
+                                            onChange={(e) => setCookie(e.target.value)}
+                                            onBlur={() => saveConfig()}
+                                            placeholder="Enter cookie string..."
+                                            className="font-mono text-xs h-8"
+                                        />
+                                        <p className="text-[10px] text-muted-foreground">
+                                            {t('changes_saved_automatically')}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>System Status</CardTitle>
+                            <CardTitle>{t('system_status')}</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-sm text-muted-foreground">
-                                Status monitoring is coming soon.
+                                {t('status_monitoring_soon')}
                             </div>
                         </CardContent>
                     </Card>
@@ -213,10 +237,7 @@ export default function AdminPage() {
                 open={showLoginDialog}
                 onOpenChange={setShowLoginDialog}
                 onSuccess={(newCookie) => {
-                    setCookie(newCookie);
-                    // Optional: You could auto-save here, or let the user click save.
-                    // Let's at least update the input so they see it.
-                    toast({ description: "Cookie captured! Click 'Save Configuration' to apply." });
+                    saveConfig(newCookie);
                 }}
             />
         </div>

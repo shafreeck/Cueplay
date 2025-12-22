@@ -1,5 +1,9 @@
 {
     "common": {
+        "cloud_storage": "云盘存储",
+        "reconnect_login": "更新连接",
+        "login_quark_scan": "登录夸克网盘",
+        "manual_cookie_input": "手动输入 Cookie (高级)",
         "rooms": "房间列表",
         "enter_room_id": "输入房间号",
         "join": "加入",
@@ -96,6 +100,32 @@
         "library": "资源库",
         "search_files": "筛选当前文件夹",
         "loading_rooms": "加载房间列表中...",
-        "no_search_results": "未找到相关文件"
+        "no_search_results": "未找到相关文件",
+        "quark_drive_connected": "夸克网盘已连接",
+        "quark_drive_disconnected": "未连接",
+        "using_global_connection": "正在使用全局连接",
+        "login_to_quark_drive": "登录夸克网盘",
+        "update_connection": "更新连接",
+        "scan_with_quark_app": "请使用夸克 App 扫码登录",
+        "waiting_for_scan": "等待扫码...",
+        "scan_success": "扫码成功，正在登录...",
+        "manual_configuration": "手动配置",
+        "manual_cookie_string": "手动输入 Cookie",
+        "changes_saved_automatically": "更改将自动保存。",
+        "service_level_credential": "服务级凭证",
+        "service_credential_desc": "作为没有个人连接的用户的备用 Cookie。",
+        "global_cookie_management": "全局 Cookie 管理",
+        "system_status": "系统状态",
+        "status_monitoring_soon": "状态监控即将上线。",
+        "system_administration": "系统管理",
+        "unlock": "解锁",
+        "admin_password": "管理员密码",
+        "back_to_home": "返回首页",
+        "system_console": "系统控制台",
+        "logout": "注销",
+        "save_failed": "保存失败",
+        "authorized_welcome": "验证成功。欢迎回来，管理员。",
+        "access_denied": "访问拒绝",
+        "invalid_password": "密码无效。"
     }
 }

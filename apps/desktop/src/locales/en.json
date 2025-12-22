@@ -1,5 +1,9 @@
 {
     "common": {
+        "cloud_storage": "Cloud Drive",
+        "reconnect_login": "Update Connection",
+        "login_quark_scan": "Login to Quark Drive",
+        "manual_cookie_input": "Manual Cookie (Advanced)",
         "rooms": "Rooms",
         "enter_room_id": "Enter Room ID",
         "join": "Join",
@@ -96,6 +100,32 @@
         "library": "Library",
         "search_files": "Filter current folder",
         "loading_rooms": "Loading rooms...",
-        "no_search_results": "No results found"
+        "no_search_results": "No results found",
+        "quark_drive_connected": "Quark Drive Connected",
+        "quark_drive_disconnected": "Not Connected",
+        "using_global_connection": "Using Global Connection",
+        "login_to_quark_drive": "Login to Quark Drive",
+        "update_connection": "Update Connection",
+        "scan_with_quark_app": "Scan with Quark App to login",
+        "waiting_for_scan": "Waiting for scan...",
+        "scan_success": "Scan successful, logging in...",
+        "manual_configuration": "Manual Configuration",
+        "manual_cookie_string": "Manual Cookie String",
+        "changes_saved_automatically": "Changes are saved automatically.",
+        "service_level_credential": "Service-Level Credential",
+        "service_credential_desc": "Used as fallback for users without personal connection.",
+        "global_cookie_management": "Global Cookie Management",
+        "system_status": "System Status",
+        "status_monitoring_soon": "Status monitoring is coming soon.",
+        "system_administration": "System Administration",
+        "unlock": "Unlock",
+        "admin_password": "Admin Password",
+        "back_to_home": "Back to Home",
+        "system_console": "System Console",
+        "logout": "Logout",
+        "save_failed": "Save failed",
+        "authorized_welcome": "Authorized. Welcome back, Admin.",
+        "access_denied": "Access Denied",
+        "invalid_password": "Invalid password."
     }
 }

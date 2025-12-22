@@ -130,11 +130,13 @@ function RoomContent() {
     const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
+    const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [nickname, setNickname] = useState('');
     const [resetConfirm, setResetConfirm] = useState(false);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [showQuarkLogin, setShowQuarkLogin] = useState(false);
+    const [showManualInput, setShowManualInput] = useState(false);
 
     const [playbackRate, setPlaybackRate] = useState(1.0);
     // Chat State
@@ -556,11 +558,6 @@ function RoomContent() {
         if (videoSrc && videoRef.current) {
             videoRef.current.play().catch(e => {
                 console.warn("Auto-play failed:", e);
-                toast({
-                    title: t('auto_play_blocked_title'),
-                    description: t('auto_play_blocked_desc'),
-                    variant: "destructive"
-                })
             });
         }
     }, [videoSrc]);
@@ -703,12 +700,13 @@ function RoomContent() {
                 // ... inside RoomContent component ...
 
             } else if (data.type === 'ROOM_UPDATE') {
-                const { members, ownerId, controllerId, quarkCookie } = data.payload;
+                const { members, ownerId, controllerId, quarkCookie, hasGlobalCookie } = data.payload;
                 setMembers(members);
                 setOwnerId(ownerId);
                 setControllerId(controllerId);
                 controllerIdRef.current = controllerId;
                 if (quarkCookie !== undefined) setRoomCookie(quarkCookie);
+                if (hasGlobalCookie !== undefined) setHasGlobalCookie(hasGlobalCookie);
 
                 // Add to visited history
                 if (roomId && ownerId) {
@@ -969,33 +967,52 @@ function RoomContent() {
                                             />
                                         </div>
                                         {isOwner && (
-                                            <div className="pt-2 mt-2 border-t space-y-2">
-                                                <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('room_setup_owner')}</Label>
-                                                <div className="grid grid-cols-3 items-center gap-4">
-                                                    <div className="flex items-center justify-between col-span-1">
-                                                        <Label htmlFor="roomCookie" className="text-xs">{t('room_cookie')}</Label>
+                                            <div className="pt-2 mt-2 border-t space-y-3">
+                                                <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('cloud_storage')}</Label>
+
+                                                <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`h-2 w-2 rounded-full ${roomCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-zinc-600')}`} />
+                                                            <span className="text-xs font-medium text-foreground">
+                                                                {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
+                                                            </span>
+                                                        </div>
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-5 w-5"
-                                                            title={t('login_quark')}
-                                                            onClick={() => setShowQuarkLogin(true)}
+                                                            className="h-5 w-5 hover:bg-white/10"
+                                                            title={t('manual_cookie_input')}
+                                                            onClick={() => setShowManualInput(!showManualInput)}
                                                         >
-                                                            <QrCode className="h-3 w-3" />
+                                                            <Settings className="h-3 w-3 text-muted-foreground" />
                                                         </Button>
                                                     </div>
-                                                    <Input
-                                                        id="roomCookie"
-                                                        value={roomCookie}
-                                                        onChange={(e) => updateRoomCookie(e.target.value)}
-                                                        className="col-span-2 h-7 text-xs"
-                                                        placeholder={t('share_with_room')}
-                                                        type="password"
-                                                    />
+
+                                                    <Button
+                                                        variant={roomCookie ? "outline" : "default"}
+                                                        size="sm"
+                                                        className="w-full h-8 text-xs gap-2"
+                                                        onClick={() => setShowQuarkLogin(true)}
+                                                    >
+                                                        <QrCode className="h-3.5 w-3.5" />
+                                                        {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
+                                                    </Button>
+
+                                                    {showManualInput && (
+                                                        <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
+                                                            <Label htmlFor="roomCookie" className="text-[10px] text-muted-foreground mb-1.5 block">{t('manual_cookie_input')}</Label>
+                                                            <Input
+                                                                id="roomCookie"
+                                                                value={roomCookie}
+                                                                onChange={(e) => updateRoomCookie(e.target.value)}
+                                                                className="h-7 text-xs font-mono bg-muted/20"
+                                                                placeholder="Paste cookie string..."
+                                                                type="password"
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <p className="text-[10px] text-muted-foreground leading-tight">
-                                                    {t('cookie_shared_desc')}
-                                                </p>
                                             </div>
                                         )}
                                         <Dialog>

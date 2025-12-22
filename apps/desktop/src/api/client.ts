@@ -75,7 +75,10 @@ export class ApiClient {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fileId, roomId }),
         });
-        if (!res.ok) throw new Error('Failed to resolve video');
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to resolve video');
+        }
         const data = await res.json();
         return { source: data.source, cookie: data.cookie };
     }
