@@ -10,3 +10,4 @@ target/
 .next/
 out/
 services/api/prisma/dev.db
+apps/desktop/src-tauri/gen/android/
