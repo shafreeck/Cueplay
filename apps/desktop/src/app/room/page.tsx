@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useTranslation } from 'react-i18next';
 import { ApiClient, DriveFile } from '@/api/client';
@@ -1368,6 +1368,9 @@ function RoomContent() {
                                                 <Button variant="outline" size="sm" className="w-full">{t('view_debug_logs')}</Button>
                                             </DialogTrigger>
                                             <DialogContent className="max-w-2xl h-[500px] flex flex-col">
+                                                <DialogHeader>
+                                                    <DialogTitle>{t('view_debug_logs')}</DialogTitle>
+                                                </DialogHeader>
                                                 <div className="flex-1 overflow-y-auto p-4 bg-zinc-950 font-mono text-xs rounded-md border">
                                                     {logs.map((log, i) => (
                                                         <div key={i} className="text-emerald-400 border-b border-white/5 pb-1 mb-1">
