@@ -18,10 +18,12 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2 } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { PlaylistItem, ChatMessage } from './types';
 import { PlaylistItemRenderer } from './components/playlist-item';
@@ -47,6 +49,7 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
         isDragging
     } = useSortable({ id: item.id });
 
+    const isMobile = useIsMobile();
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
@@ -64,13 +67,38 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
                 isExpanded={isExpanded}
                 onToggleExpand={() => setIsExpanded(!isExpanded)}
                 dragHandleProps={{ ...attributes, ...listeners }}
-                isMobile={false}
+                isMobile={isMobile}
             />
         </div>
     );
 }
 
-import { MobileRoomLayout } from './mobile-layout';
+// Mobile Wrapper for Playlist Items
+function MobilePlaylistItemWrapper({ item, index, playingItemId, onPlay, onRemove, level = 0 }: {
+    item: PlaylistItem,
+    index: number,
+    playingItemId: string | null,
+    onPlay: (fid: string, id: string) => void,
+    onRemove: (id: string) => void,
+    level?: number
+}) {
+    const [expanded, setExpanded] = useState(false);
+
+    return (
+        <PlaylistItemRenderer
+            item={item}
+            index={index}
+            playingItemId={playingItemId}
+            onPlay={onPlay}
+            onRemove={onRemove}
+            isExpanded={expanded}
+            onToggleExpand={() => setExpanded(!expanded)}
+            isMobile={true}
+            level={level}
+        />
+    );
+}
+
 import { useIsMobile } from '@/hooks/use-mobile';
 
 // Helper to check if playlist structure changed (ignoring progress/metadata updates)
@@ -81,7 +109,7 @@ const isPlaylistStructureDifferent = (a: PlaylistItem[], b: PlaylistItem[]): boo
 
         // Check children recursively for folders
         if (a[i].children && b[i].children) {
-            if (isPlaylistStructureDifferent(a[i].children, b[i].children)) return true;
+            if (isPlaylistStructureDifferent(a[i].children as PlaylistItem[], b[i].children as PlaylistItem[])) return true;
         } else if (!!a[i].children !== !!b[i].children) {
             // One has children, the other doesn't
             return true;
@@ -134,11 +162,18 @@ function RoomContent() {
     const [playbackRate, setPlaybackRate] = useState(1.0);
     const [isRoomLoading, setIsRoomLoading] = useState(true);
     const isMobile = useIsMobile();
+
+    // UI State for Mobile/Responsive Layout
+    const [activeTab, setActiveTab] = useState('playlist');
+    const [isInputFocused, setIsInputFocused] = useState(false);
+    const lastTapRef = useRef<number>(0);
+
     // Chat State
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isSynced, setIsSynced] = useState(true);
     const [chatInput, setChatInput] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isImmersiveMode, setIsImmersiveMode] = useState(false);
     const chatListRef = useRef<HTMLDivElement>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -163,8 +198,9 @@ function RoomContent() {
     useEffect(() => {
         const interval = setInterval(() => {
             const video = videoRef.current;
-            // Only save if we have successfully resumed the current item
+            // only save if we have successfully resumed the current item
             // This prevents overwriting server progress with 0 on reload
+
             if (video && video.duration && !video.paused && playingItemId) {
                 if (lastResumedItemIdRef.current !== playingItemId) {
                     return;
@@ -201,6 +237,28 @@ function RoomContent() {
         }, 5000); // Save every 5s
         return () => clearInterval(interval);
     }, [playingItemId]);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        const now = Date.now();
+        const DOUBLE_TAP_DELAY = 300;
+        if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+            // Double tap detected
+            e.preventDefault();
+            toggleFullscreen();
+            lastTapRef.current = 0; // Reset
+        } else {
+            lastTapRef.current = now;
+        }
+    };
+
+    const styles = `
+    .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+    }
+    .pt-safe {
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+    `;
 
     const addLog = (msg: string) => setLogs(prev => [...prev.slice(-49), `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
@@ -1134,58 +1192,30 @@ function RoomContent() {
     };
 
 
-    if (isMobile) {
-        return (
-            <>
-                <MobileRoomLayout
-                    roomId={roomId}
-                    videoRef={videoRef}
-                    containerRef={containerRef}
-                    videoSrc={videoSrc}
-                    playlist={playlist}
-                    playingItemId={playingItemId}
-                    messages={messages}
-                    members={members}
-                    chatInput={chatInput}
-                    setChatInput={setChatInput}
-                    sendChatMessage={sendChatMessage}
-                    onPlay={resolveAndPlay}
-                    onRemoveFromPlaylist={removeFromPlaylist}
-                    addToPlaylist={addToPlaylist}
-                    inputValue={inputValue}
-                    setInputValue={setInputValue}
-                    toggleFullscreen={toggleFullscreen}
-                    setIsLibraryOpen={setIsLibraryOpen}
-                    onEnded={playNext}
-                    isResolving={isResolving}
-                    currentUserId={currentUserId}
-                    ownerId={ownerId}
-                    controllerId={controllerId}
-                />
-                <ResourceLibrary
-                    open={isLibraryOpen}
-                    onOpenChange={setIsLibraryOpen}
-                    cookie={roomCookie || undefined}
-                    onAdd={handleAddFileFromLibrary}
-                    onAddSeries={handleAddSeriesFromLibrary}
-                />
-                <QuarkLoginDialog
-                    open={showQuarkLogin}
-                    onOpenChange={setShowQuarkLogin}
-                    onSuccess={(cookie) => {
-                        if (cookie) {
-                            updateRoomCookie(cookie);
-                            toast({ description: t('logged_in_room_updated') });
-                        }
-                    }}
-                />
-            </>
-        );
-    }
+
 
     return (
-        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background text-foreground">
-            <header className="sticky top-4 z-50 px-4 mb-6 pointer-events-none">
+        <div className="min-h-screen flex flex-col bg-black md:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] md:from-indigo-900/20 md:via-background md:to-background text-foreground overflow-hidden md:overflow-auto">
+            <style>{styles}</style>
+
+            {/* Mobile Header */}
+            <header className="md:hidden relative z-50 bg-black/80 backdrop-blur-2xl border-b border-white/5 px-4 h-[44px] shrink-0 flex items-center justify-between pt-safe box-content">
+                <div className="flex-1 -ml-1">
+                    <Link href="/" className="flex items-center text-primary active:opacity-50 transition-opacity p-2 -m-2">
+                        <ChevronRight className="w-6 h-6 rotate-180" strokeWidth={2.5} />
+                    </Link>
+                </div>
+                <div className="absolute left-1/2 -translate-x-1/2">
+                    <h1 className="text-[17px] font-bold text-foreground tracking-tight">{roomId}</h1>
+                </div>
+                <div className="flex-1 flex justify-end"></div>
+            </header>
+
+            {/* Desktop Header */}
+            <header className={cn(
+                "hidden md:block sticky top-4 z-50 px-4 mb-6 transition-all duration-300",
+                isImmersiveMode ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
+            )}>
                 <div className="container mx-auto h-14 rounded-full flex items-center justify-between gap-4 px-6 bg-black/40 backdrop-blur-2xl border border-white/5 shadow-2xl pointer-events-auto">
                     <div className="flex items-center gap-2 overflow-hidden shrink-0">
                         <Link href="/">
@@ -1247,6 +1277,18 @@ function RoomContent() {
                     </div>
 
                     <div className="flex items-center gap-2 flex-1 max-w-2xl justify-end">
+                        {/* Immersive Mode Toggle (Enter) */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsImmersiveMode(true)}
+                            className="hidden md:flex h-8 w-8 text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10"
+                            title={t('enter_immersive_mode')}
+                        >
+                            <Maximize className="w-5 h-5" />
+                        </Button>
+                        <div className="h-4 w-px bg-white/10 mx-2 hidden md:block" />
+
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button variant="ghost" size="icon">
@@ -1360,12 +1402,41 @@ function RoomContent() {
                 </div>
             </header>
 
-            <main className="container mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in">
+            {/* Exit Immersive Mode Floating Button */}
+            <div className={cn(
+                "fixed top-4 right-8 z-[60] transition-all duration-500",
+                isImmersiveMode ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
+            )}>
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    onClick={() => setIsImmersiveMode(false)}
+                    className="h-10 w-10 rounded-full shadow-2xl bg-black/50 backdrop-blur-xl border border-white/10 hover:bg-black/70 text-white"
+                    title={t('exit_immersive_mode')}
+                >
+                    <Minimize className="w-5 h-5" />
+                </Button>
+            </div>
+
+            <main className={cn(
+                "flex-1 flex flex-col min-h-0 animate-fade-in",
+                "md:container md:mx-auto md:grid md:gap-6 transition-all duration-300 ease-in-out",
+                isImmersiveMode ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : "md:p-6 md:grid-cols-4"
+            )}>
                 {/* Video Section */}
-                <div className="lg:col-span-3 space-y-4">
+                <div className={cn(
+                    "space-y-4 shrink-0 z-10 w-full transition-all duration-300 ease-in-out",
+                    isImmersiveMode ? "md:col-span-1" : "md:col-span-3"
+                )}>
                     <div
                         ref={containerRef}
-                        className="relative aspect-video bg-black rounded-xl overflow-hidden shadow-2xl group border border-white/10 transition-all duration-300 ring-1 ring-white/5"
+                        className={cn(
+                            "bg-black overflow-hidden shadow-xl group transition-all duration-500 ease-in-out touch-manipulation",
+                            isImmersiveMode
+                                ? "fixed inset-0 z-50 w-screen h-screen rounded-none"
+                                : "relative w-full aspect-video md:rounded-xl md:shadow-2xl md:border border-white/10 ring-0 md:ring-1 ring-white/5"
+                        )}
+                        onTouchStart={handleTouchStart}
                     >
                         {videoSrc ? (
                             <video
@@ -1420,11 +1491,16 @@ function RoomContent() {
                     </div>
                 </div>
 
-                {/* Sidebar */}
-                <aside className="space-y-6">
-                    <Card className="flex flex-col h-[500px] lg:h-[calc(100vh-12rem)] shadow-2xl overflow-hidden glass border-white/5">
-                        <Tabs defaultValue="playlist" className="flex flex-col flex-1 min-h-0">
-                            <CardHeader className="py-4 px-4 border-b border-white/5 bg-transparent">
+                {/* Sidebar / Mobile Content Area */}
+                <aside className={cn(
+                    "flex-1 flex flex-col min-h-0 overflow-hidden md:overflow-visible w-full transition-all duration-300 ease-in-out",
+                    // Desktop Logic
+                    "md:block md:space-y-6",
+                    !isImmersiveMode ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
+                )}>
+                    <Card className="flex-1 flex flex-col md:h-[calc(100vh-12rem)] shadow-none md:shadow-2xl overflow-hidden bg-transparent md:glass border-0 md:border-white/5 rounded-none md:rounded-xl">
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 relative">
+                            <CardHeader className="hidden md:block py-4 px-4 border-b border-white/5 bg-transparent">
                                 <TabsList className="grid w-full grid-cols-3 bg-black/30 h-10 p-1 rounded-full border border-white/10">
                                     <TabsTrigger
                                         value="playlist"
@@ -1511,7 +1587,7 @@ function RoomContent() {
                                 </TabsContent>
 
                                 <TabsContent value="chat" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col min-h-0 m-0">
-                                    <div ref={chatListRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+                                    <div ref={chatListRef} className={cn("flex-1 overflow-y-auto p-4 space-y-4", isMobile ? "pb-48 no-scrollbar" : "")}>
                                         {messages.length === 0 && (
                                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 gap-2">
                                                 <MessageSquare className="h-8 w-8" />
@@ -1526,16 +1602,37 @@ function RoomContent() {
                                             />
                                         ))}
                                     </div>
-                                    <div className="p-3 border-t bg-muted/20">
-                                        <form onSubmit={sendChatMessage} className="flex gap-2">
+                                    {/* Responsive Chat Input */}
+                                    <div className={cn(
+                                        "transition-all duration-300 z-[60]",
+                                        // Desktop
+                                        "md:relative md:bottom-auto md:left-auto md:right-auto md:p-3 md:border-t md:bg-muted/20 md:transform-none md:opacity-100",
+                                        // Mobile
+                                        "absolute left-6 right-6",
+                                        isMobile && isInputFocused
+                                            ? "bottom-4"
+                                            : "bottom-[calc(1.5rem+env(safe-area-inset-bottom)+3.5rem+0.75rem)]"
+                                    )}>
+                                        <form onSubmit={sendChatMessage} className={cn(
+                                            "flex gap-2",
+                                            isMobile ? "p-2 bg-zinc-900/90 backdrop-blur-3xl border border-white/10 rounded-full shadow-2xl" : ""
+                                        )}>
                                             <Input
                                                 value={chatInput}
                                                 onChange={(e) => setChatInput(e.target.value)}
+                                                onFocus={() => isMobile && setIsInputFocused(true)}
+                                                onBlur={() => isMobile && setIsInputFocused(false)}
                                                 placeholder={t('type_message')}
-                                                className="flex-1 h-9 bg-background/50"
+                                                className={cn(
+                                                    "flex-1 md:h-9 bg-background/50",
+                                                    isMobile ? "h-10 bg-transparent border-0 rounded-full pl-4 ring-0 focus-visible:ring-0 text-[16px] placeholder:text-zinc-500" : ""
+                                                )}
                                             />
-                                            <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={!chatInput.trim()}>
-                                                <Send className="h-4 w-4" />
+                                            <Button type="submit" size="icon" className={cn(
+                                                "shrink-0",
+                                                isMobile ? "h-10 w-10 rounded-full aspect-square bg-primary hover:bg-primary/90 text-white border-0 shadow-lg shadow-primary/20" : "h-9 w-9"
+                                            )} disabled={!chatInput.trim()}>
+                                                {isMobile ? <ArrowRightIcon className="w-5 h-5" /> : <Send className="h-4 w-4" />}
                                             </Button>
                                         </form>
                                     </div>
@@ -1543,7 +1640,7 @@ function RoomContent() {
 
                                 <TabsContent value="members" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col min-h-0 m-0">
                                     <div className="flex flex-col h-full">
-                                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                        <div className={cn("flex-1 overflow-y-auto p-2 space-y-2", isMobile ? "pb-40 no-scrollbar" : "")}>
                                             {isRoomLoading ? (
                                                 <div className="space-y-2">
                                                     {[1, 2, 3].map((i) => (
@@ -1571,6 +1668,32 @@ function RoomContent() {
                                     </div>
                                 </TabsContent>
                             </CardContent>
+
+                            {/* Bottom Navigation Bar - Mobile */}
+                            <div className={cn(
+                                "md:hidden fixed left-6 right-6 z-50 flex flex-col gap-2 transition-all duration-300",
+                                isInputFocused
+                                    ? "translate-y-32 opacity-0 pointer-events-none"
+                                    : "bottom-[calc(1.5rem+env(safe-area-inset-bottom))] translate-y-0 opacity-100"
+                            )}>
+                                <TabsList className="flex items-center justify-between h-14 bg-zinc-900/90 backdrop-blur-3xl border border-white/10 rounded-full shadow-2xl p-1 gap-1 w-full overflow-hidden">
+                                    <TabsTrigger value="playlist" className="flex-1 flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-white/10 data-[state=active]:text-primary rounded-full transition-all h-full bg-transparent border-0 ring-0 px-2 m-0 py-0 shadow-none">
+                                        <List className="w-5 h-5 mb-0" />
+                                        <span className="text-[10px] font-semibold leading-none">{t('playlist')}</span>
+                                    </TabsTrigger>
+                                    <TabsTrigger value="chat" className="flex-1 flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-white/10 data-[state=active]:text-primary rounded-full transition-all h-full bg-transparent border-0 ring-0 px-2 m-0 py-0 shadow-none relative">
+                                        <MessageSquare className="w-5 h-5 mb-0" />
+                                        <span className="text-[10px] font-semibold leading-none">{t('chat')}</span>
+                                    </TabsTrigger>
+                                    <TabsTrigger value="members" className="flex-1 flex flex-col items-center justify-center gap-0.5 data-[state=active]:bg-white/10 data-[state=active]:text-primary rounded-full transition-all h-full bg-transparent border-0 ring-0 px-2 m-0 py-0 shadow-none">
+                                        <Users className="w-5 h-5 mb-0" />
+                                        <span className="text-[10px] font-semibold leading-none">{t('members')}</span>
+                                    </TabsTrigger>
+                                </TabsList>
+                            </div>
+
+                            {/* Mobile Bottom Safety Area */}
+                            <div className="md:hidden fixed bottom-0 left-0 right-0 h-[env(safe-area-inset-bottom)] bg-black z-[40]" />
                         </Tabs>
                     </Card>
                 </aside>
