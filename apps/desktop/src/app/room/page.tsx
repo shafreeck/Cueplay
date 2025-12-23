@@ -24,6 +24,9 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { CSS } from '@dnd-kit/utilities';
 
 import { PlaylistItem, ChatMessage } from './types';
+import { PlaylistItemRenderer } from './components/playlist-item';
+import { ChatMessageItem } from './components/chat-message-item';
+import { MemberItem } from './components/member-item';
 
 interface SortableItemProps {
     item: PlaylistItem;
@@ -50,133 +53,19 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
         zIndex: isDragging ? 50 : 'auto',
     };
 
-    const isFolder = item.type === 'folder';
-    const playingChild = isFolder ? item.children?.find(c => c.id === playingItemId) : null;
-    const isPlaying = item.id === playingItemId || !!playingChild;
-
     return (
         <div ref={setNodeRef} style={style} className={`${isDragging ? 'opacity-50' : ''}`}>
-            <div className={`group flex items-center justify-between p-2 rounded-md border transition-colors ${isPlaying ? 'bg-primary/20 border-primary/50' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
-                <div className="flex items-center flex-1 min-w-0 mr-2">
-                    <div {...attributes} {...listeners} className="cursor-grab hover:text-foreground text-muted-foreground mr-2 p-1">
-                        <GripVertical className="h-4 w-4" />
-                    </div>
-                    {isFolder && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 mr-1" onClick={() => setIsExpanded(!isExpanded)}>
-                            {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                        </Button>
-                    )}
-                    <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-muted-foreground">#{index + 1}</span>
-                            {isFolder && <Folder className="h-3.5 w-3.5 text-primary" />}
-                            <span className="text-sm font-medium truncate" title={item.title || item.fileId}>
-                                {item.title || item.fileId}
-                            </span>
-                        </div>
-
-                        {playingChild ? (
-                            <div className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5 animate-in fade-in duration-300 min-w-0">
-                                <PlayCircle className="h-3 w-3 shrink-0" />
-                                <span className="truncate" title={`Now Playing: ${playingChild.title}`}>Now Playing: {playingChild.title}</span>
-                            </div>
-                        ) : item.id === playingItemId && (
-                            <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                </span>
-                                Playing
-                            </span>
-                        )}
-                        {isFolder && !playingChild && (
-                            <span className="text-[10px] text-muted-foreground opacity-70 ml-6 shrink-0">{item.children?.length} episodes</span>
-                        )}
-
-                        {/* Progress Bar for Folder */}
-                        {isFolder && item.children && item.children.some(c => c.progress) && (
-                            <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden shrink-0">
-                                {(() => {
-                                    const totalProcessed = item.children.filter(c => c.progress && c.duration).length;
-                                    const avgProgress = totalProcessed > 0
-                                        ? (item.children.reduce((acc, c) => acc + (c.progress && c.duration ? (c.progress / c.duration) : 0), 0) / item.children.length) * 100
-                                        : 0;
-                                    return <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${avgProgress}%` }} />;
-                                })()}
-                            </div>
-                        )}
-
-                        {/* Progress Bar for File */}
-                        {!isFolder && item.progress && item.duration && (
-                            <div className="mt-1.5 h-1 w-full max-w-[100px] bg-white/10 rounded-full overflow-hidden shrink-0">
-                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${(item.progress / item.duration) * 100}%` }} />
-                            </div>
-                        )}
-                    </div>
-                </div>
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    {isFolder ? (
-                        <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => {
-                                const toPlay = item.children?.find(c => c.id === item.lastPlayedId) || item.children?.[0];
-                                if (toPlay) onPlay(toPlay.fileId, toPlay.id);
-                                if (!isExpanded) setIsExpanded(true);
-                            }}
-                            title={item.lastPlayedId ? "Resume Series" : "Play Series"}
-                        >
-                            <PlayCircle className="h-4 w-4" />
-                        </Button>
-                    ) : (
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => onPlay(item.fileId, item.id)}>
-                            <PlayCircle className="h-4 w-4" />
-                        </Button>
-                    )}
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onRemove(item.id)}>
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
-                </div>
-            </div>
-
-            {isFolder && isExpanded && item.children && (
-                <div className="ml-8 mt-1.5 space-y-1 border-l-2 border-white/10 pl-3 animate-in slide-in-from-left-2 duration-200">
-                    {item.children.map((child, childIdx) => (
-                        <div
-                            key={child.id}
-                            className={`flex items-center justify-between p-2 rounded-md text-xs group/child transition-all ${child.id === playingItemId ? 'bg-primary/15 text-primary font-medium' : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'}`}
-                        >
-                            <div className="flex items-center gap-2 min-w-0 mr-2 flex-1">
-                                <span className="font-mono opacity-40 tabular-nums">{index + 1}.{childIdx + 1}</span>
-                                <div className="flex flex-col min-w-0 flex-1">
-                                    <span className="truncate" title={child.title}>{child.title}</span>
-                                    {child.progress && child.duration && (
-                                        <div className="mt-1 h-0.5 w-full max-w-[80px] bg-white/10 rounded-full overflow-hidden">
-                                            <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${(child.progress / child.duration) * 100}%` }} />
-                                        </div>
-                                    )}
-                                </div>
-                                {child.id === playingItemId && (
-                                    <div className="flex gap-0.5 h-3 items-end pb-0.5">
-                                        <div className="w-0.5 bg-primary animate-[music-bar_0.6s_ease-in-out_infinite]" style={{ height: '60%' }}></div>
-                                        <div className="w-0.5 bg-primary animate-[music-bar_0.8s_ease-in-out_infinite]" style={{ height: '100%' }}></div>
-                                        <div className="w-0.5 bg-primary animate-[music-bar_0.7s_ease-in-out_infinite]" style={{ height: '80%' }}></div>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover/child:opacity-100 transition-opacity">
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => onPlay(child.fileId, child.id)}>
-                                    <PlayCircle className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive/70 hover:text-destructive" onClick={() => onRemove(child.id)}>
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+            <PlaylistItemRenderer
+                item={item}
+                index={index}
+                playingItemId={playingItemId}
+                onPlay={onPlay}
+                onRemove={onRemove}
+                isExpanded={isExpanded}
+                onToggleExpand={() => setIsExpanded(!isExpanded)}
+                dragHandleProps={{ ...attributes, ...listeners }}
+                isMobile={false}
+            />
         </div>
     );
 }
@@ -1629,42 +1518,13 @@ function RoomContent() {
                                                 <p className="text-sm">{t('no_messages_yet')}</p>
                                             </div>
                                         )}
-                                        {messages.map((msg) => {
-                                            const isMe = msg.senderId === currentUserId;
-                                            const isSystem = msg.isSystem;
-
-                                            if (isSystem) {
-                                                return (
-                                                    <div key={msg.id} className="flex justify-center my-2">
-                                                        <span className="text-xs bg-muted/50 text-muted-foreground px-2 py-1 rounded-full">{msg.content}</span>
-                                                    </div>
-                                                );
-                                            }
-
-                                            return (
-                                                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                                                    <div className="flex items-end gap-2 max-w-[85%]">
-                                                        {!isMe && (
-                                                            <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] shrink-0 font-bold border border-white/10">
-                                                                {msg.senderName?.slice(0, 1).toUpperCase()}
-                                                            </div>
-                                                        )}
-                                                        <div
-                                                            className={`px-3 py-2 rounded-2xl text-sm break-words shadow-sm ${isMe
-                                                                ? 'bg-primary text-primary-foreground rounded-br-none'
-                                                                : 'bg-muted text-foreground rounded-bl-none'
-                                                                }`}
-                                                        >
-                                                            {msg.content}
-                                                        </div>
-                                                    </div>
-                                                    <span className="text-[10px] text-muted-foreground mt-1 px-1 opacity-70">
-                                                        {!isMe && <span className="mr-1">{msg.senderName}</span>}
-                                                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
+                                        {messages.map((msg) => (
+                                            <ChatMessageItem
+                                                key={msg.id}
+                                                message={msg}
+                                                currentUserId={currentUserId}
+                                            />
+                                        ))}
                                     </div>
                                     <div className="p-3 border-t bg-muted/20">
                                         <form onSubmit={sendChatMessage} className="flex gap-2">
@@ -1696,70 +1556,17 @@ function RoomContent() {
                                             ) : members.length === 0 ? (
                                                 <div className="text-center text-muted-foreground text-sm opacity-70 mt-4">{t('no_members_info')}</div>
                                             ) : null}
-                                            {!isRoomLoading && members.map((m: any) => {
-                                                if (!m || !m.userId) return null;
-                                                // Generate consistent color from userId
-                                                const hash = m.userId.split('').reduce((acc: number, char: string) => char.charCodeAt(0) + ((acc << 5) - acc), 0);
-                                                const colors = [
-                                                    'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500',
-                                                    'bg-lime-500', 'bg-green-500', 'bg-emerald-500', 'bg-teal-500',
-                                                    'bg-cyan-500', 'bg-sky-500', 'bg-blue-500', 'bg-indigo-500',
-                                                    'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'
-                                                ];
-                                                const colorClass = colors[Math.abs(hash) % colors.length];
-                                                const displayName = m.name || m.userId;
-                                                const initial = displayName.slice(0, 1).toUpperCase();
-
-                                                // Sync Calculation
-                                                const controllerMember = members.find((mem: any) => mem.userId === controllerId);
-                                                const targetTime = controllerMember?.currentProgress || 0;
-                                                const myTime = m.currentProgress || 0;
-                                                const diff = Math.abs(myTime - targetTime);
-                                                const isUnsync = diff > 2; // Tolerance 2s
-
-                                                let progressColor = 'bg-emerald-500/80';
-                                                if (diff > 15) progressColor = 'bg-red-900/90';
-                                                else if (diff > 5) progressColor = 'bg-red-600/90';
-                                                else if (diff > 2) progressColor = 'bg-yellow-500/90';
-
-                                                // Progress Percentage
-                                                const duration = videoRef.current?.duration || 1;
-                                                const percent = Math.min(100, Math.max(0, (myTime / duration) * 100));
-
-                                                return (
-                                                    <div key={m.userId} className="relative flex items-center justify-between p-2 rounded-md border bg-card/50 overflow-hidden">
-                                                        <div className="flex items-center gap-3 relative z-10">
-                                                            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm ${colorClass} bg-opacity-90`}>
-                                                                {initial}
-                                                            </div>
-                                                            <div className="flex flex-col">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-sm font-medium leading-none">
-                                                                        {m.userId === currentUserId ? `${displayName} (${t('you')})` : displayName}
-                                                                    </span>
-                                                                    <div className={`h-1.5 w-1.5 rounded-full ${m.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-zinc-700'}`} title={m.isOnline ? t('online') : t('offline')} />
-                                                                </div>
-                                                                <div className="flex items-center gap-2 mt-1">
-                                                                    {m.name && <span className="text-[10px] text-muted-foreground font-mono leading-none opacity-70">{m.userId}</span>}
-                                                                    {/* Diff Debug text can be added here if needed */}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-1 relative z-10">
-                                                            {m.userId === controllerId && <span title="Controlling"><Cast className="h-4 w-4 text-primary animate-pulse" /></span>}
-                                                            {m.userId === ownerId && <span title="Owner"><Crown className="h-3 w-3 text-yellow-500" /></span>}
-                                                        </div>
-
-                                                        {/* Progress Bar Background */}
-                                                        {m.isOnline && m.currentProgress !== undefined && (
-                                                            <div
-                                                                className={`absolute bottom-0 left-0 h-0.5 transition-all duration-1000 ease-linear ${progressColor}`}
-                                                                style={{ width: `${percent}%` }}
-                                                            />
-                                                        )}
-                                                    </div>
-                                                )
-                                            })}
+                                            {!isRoomLoading && members.map((m: any, idx: number) => (
+                                                <MemberItem
+                                                    key={m.userId}
+                                                    member={m}
+                                                    currentUserId={currentUserId}
+                                                    controllerId={controllerId}
+                                                    ownerId={ownerId}
+                                                    videoDuration={videoRef.current?.duration || 1}
+                                                    controllerProgress={members.find((mem: any) => mem.userId === controllerId)?.currentProgress}
+                                                />
+                                            ))}
                                         </div>
                                     </div>
                                 </TabsContent>
