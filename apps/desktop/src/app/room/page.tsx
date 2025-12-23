@@ -184,6 +184,23 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
 import { MobileRoomLayout } from './mobile-layout';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+// Helper to check if playlist structure changed (ignoring progress/metadata updates)
+const isPlaylistStructureDifferent = (a: PlaylistItem[], b: PlaylistItem[]): boolean => {
+    if (a.length !== b.length) return true;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i].id !== b[i].id) return true;
+
+        // Check children recursively for folders
+        if (a[i].children && b[i].children) {
+            if (isPlaylistStructureDifferent(a[i].children, b[i].children)) return true;
+        } else if (!!a[i].children !== !!b[i].children) {
+            // One has children, the other doesn't
+            return true;
+        }
+    }
+    return false;
+}
+
 function RoomContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -213,6 +230,8 @@ function RoomContent() {
     const lastSubtitleChangeTime = useRef<number>(0);
     const MAX_SUBTITLE_DURATION = 8; // Maximum subtitle display duration in seconds
     const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
+    const playlistRef = useRef(playlist);
+    useEffect(() => { playlistRef.current = playlist; }, [playlist]);
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
@@ -1114,8 +1133,11 @@ function RoomContent() {
                 const { playlist: newPlaylist } = data.payload;
                 addLog(`Received Playlist Update: ${newPlaylist ? newPlaylist.length : 'Invalid'} items (playing: ${playingItemId})`);
                 if (newPlaylist) {
+                    const isStructureChanged = isPlaylistStructureDifferent(playlistRef.current, newPlaylist);
                     setPlaylist(newPlaylist);
-                    toast({ description: t('playlist_updated') });
+                    if (isStructureChanged) {
+                        toast({ description: t('playlist_updated') });
+                    }
                 }
             } else if (data.type === 'CHAT_MESSAGE') {
                 const message = data.payload;
