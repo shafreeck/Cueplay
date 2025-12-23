@@ -59,6 +59,11 @@ export class QuarkProvider implements PlayableProvider {
             throw new Error(`Quark API failed: ${response.status} ${response.statusText}`);
         }
 
+        // Capture new cookies (e.g. Video-Auth) from the response to use for playback
+        const newCookies = (response.headers as any).getSetCookie
+            ? (response.headers as any).getSetCookie().map((c: string) => c.split(';')[0]).join('; ')
+            : (response.headers.get('set-cookie') ? this.parseCookieHeader(response.headers.get('set-cookie')!) : '');
+
         const data = await response.json() as any;
 
         if (data.code !== 0 && data.code !== 200) {
@@ -102,7 +107,8 @@ export class QuarkProvider implements PlayableProvider {
             type: 'mp4', // The URL provided in the log is mp4, but sometimes m3u8. Check format extension if needed.
             headers: {
                 'User-Agent': headers['User-Agent'], // Important for playing the stream
-                'Referer': 'https://pan.quark.cn/'
+                'Referer': 'https://pan.quark.cn/',
+                'Cookie': newCookies ? `${headers.Cookie}; ${newCookies}` : headers.Cookie
             },
             meta: data.data // Keep full data for debug/refresh
         };

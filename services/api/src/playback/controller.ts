@@ -38,7 +38,10 @@ export async function playbackRoutes(fastify: FastifyInstance) {
             });
 
             fastify.log.info({ msg: 'Resolved source', fileId: body.fileId, source });
-            return { source, cookie };
+
+            // Return the cookie from source headers which may include fresh Video-Auth tokens
+            const finalCookie = source.headers?.['Cookie'] || cookie;
+            return { source, cookie: finalCookie };
         } catch (e: any) {
             const logMsg = `[${new Date().toISOString()}] Resolve failed for ${body.fileId}: ${e.message}\n`;
             try {
