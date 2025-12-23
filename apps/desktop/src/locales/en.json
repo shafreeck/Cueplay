@@ -137,6 +137,7 @@
         "no_videos_found_desc": "No playable video files were found in this folder or its subdirectories.",
         "collecting_episodes": "Scanning for episodes...",
         "add_as_series": "Add as Series",
-        "connecting_room": "Connecting to room..."
+        "connecting_room": "Connecting to room...",
+        "room_not_found": "Room not found"
     }
 }

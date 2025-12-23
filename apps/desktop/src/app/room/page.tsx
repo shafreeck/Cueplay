@@ -969,12 +969,13 @@ function RoomContent() {
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.type === 'error') {
+                const isRoomNotFound = data.payload.msg === 'Room not found';
                 toast({
                     variant: "destructive",
                     title: t('error'),
-                    description: data.payload.msg
+                    description: isRoomNotFound ? t('room_not_found') : data.payload.msg
                 });
-                if (data.payload.msg === 'Room not found') {
+                if (isRoomNotFound) {
                     router.push('/');
                 }
                 return;

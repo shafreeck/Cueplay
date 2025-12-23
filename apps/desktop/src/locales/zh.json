@@ -137,6 +137,7 @@
         "no_videos_found_desc": "在此文件夹或其子目录中未找到可播放的视频文件。",
         "collecting_episodes": "正在扫描剧集...",
         "add_as_series": "添加为系列",
-        "connecting_room": "正在连接房间..."
+        "connecting_room": "正在连接房间...",
+        "room_not_found": "房间未找到"
     }
 }
