@@ -38,6 +38,9 @@ pub fn run() {
             .build(),
         )?;
       }
+
+      #[cfg(target_os = "ios")]
+      app.handle().plugin(tauri_plugin_swipe_back_ios::init())?;
       
       let app_handle = app.handle().clone();
       tauri::async_runtime::spawn(async move {

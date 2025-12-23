@@ -80,6 +80,65 @@
   .glass {
     @apply bg-background/60 backdrop-blur-xl border border-white/10;
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Aggressive mobile scrollbar hiding and viewport management */
+@media (max-width: 768px) {
+
+  html,
+  body {
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    /* manipulation allows single-finger panning and gestures like edge-swipe, but disables double-tap zoom, which speeds up tap response and allows our custom double-tap logic to work better */
+    touch-action: manipulation;
+  }
+
+  /* Force video controls visibility and a solid primary color accent for the slider on iOS */
+  video {
+    accent-color: #7c3aed !important;
+  }
+
+  * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+    /* Prevent selection and callouts for a more native feel */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Re-enable selection for inputs specifically */
+  input,
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
 }
 
 @keyframes music-bar {

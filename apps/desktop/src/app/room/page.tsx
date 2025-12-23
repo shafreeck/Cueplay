@@ -23,25 +23,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-interface PlaylistItem {
-    id: string;
-    fileId: string;
-    title?: string;
-    type?: 'file' | 'folder';
-    children?: PlaylistItem[];
-    lastPlayedId?: string;
-    progress?: number;
-    duration?: number;
-}
-
-interface ChatMessage {
-    id: string;
-    senderId: string;
-    senderName?: string;
-    content: string;
-    timestamp: number;
-    isSystem?: boolean;
-}
+import { PlaylistItem, ChatMessage } from './types';
 
 interface SortableItemProps {
     item: PlaylistItem;
@@ -94,10 +76,10 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
                         </div>
 
                         {playingChild ? (
-                            <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5 animate-in fade-in duration-300">
-                                <PlayCircle className="h-3 w-3" />
-                                Now Playing: {playingChild.title}
-                            </span>
+                            <div className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5 animate-in fade-in duration-300 min-w-0">
+                                <PlayCircle className="h-3 w-3 shrink-0" />
+                                <span className="truncate" title={`Now Playing: ${playingChild.title}`}>Now Playing: {playingChild.title}</span>
+                            </div>
                         ) : item.id === playingItemId && (
                             <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5">
                                 <span className="relative flex h-2 w-2">
@@ -108,12 +90,12 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
                             </span>
                         )}
                         {isFolder && !playingChild && (
-                            <span className="text-[10px] text-muted-foreground opacity-70 ml-6">{item.children?.length} episodes</span>
+                            <span className="text-[10px] text-muted-foreground opacity-70 ml-6 shrink-0">{item.children?.length} episodes</span>
                         )}
 
                         {/* Progress Bar for Folder */}
                         {isFolder && item.children && item.children.some(c => c.progress) && (
-                            <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden">
+                            <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden shrink-0">
                                 {(() => {
                                     const totalProcessed = item.children.filter(c => c.progress && c.duration).length;
                                     const avgProgress = totalProcessed > 0
@@ -126,7 +108,7 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
 
                         {/* Progress Bar for File */}
                         {!isFolder && item.progress && item.duration && (
-                            <div className="mt-1.5 h-1 w-full max-w-[100px] bg-white/10 rounded-full overflow-hidden">
+                            <div className="mt-1.5 h-1 w-full max-w-[100px] bg-white/10 rounded-full overflow-hidden shrink-0">
                                 <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${(item.progress / item.duration) * 100}%` }} />
                             </div>
                         )}
@@ -199,6 +181,9 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
     );
 }
 
+import { MobileRoomLayout } from './mobile-layout';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 function RoomContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -240,6 +225,7 @@ function RoomContent() {
 
     const [playbackRate, setPlaybackRate] = useState(1.0);
     const [isRoomLoading, setIsRoomLoading] = useState(true);
+    const isMobile = useIsMobile();
     // Chat State
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isSynced, setIsSynced] = useState(true);
@@ -982,6 +968,17 @@ function RoomContent() {
         };
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            if (data.type === 'error') {
+                toast({
+                    variant: "destructive",
+                    title: t('error'),
+                    description: data.payload.msg
+                });
+                if (data.payload.msg === 'Room not found') {
+                    router.push('/');
+                }
+                return;
+            }
             if (data.type === 'MEDIA_CHANGE') {
                 const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId } = data.payload;
                 setFileId(remoteFileId || '');
@@ -1224,6 +1221,56 @@ function RoomContent() {
         }
     };
 
+
+    if (isMobile) {
+        return (
+            <>
+                <MobileRoomLayout
+                    roomId={roomId}
+                    videoRef={videoRef}
+                    containerRef={containerRef}
+                    videoSrc={videoSrc}
+                    playlist={playlist}
+                    playingItemId={playingItemId}
+                    messages={messages}
+                    members={members}
+                    chatInput={chatInput}
+                    setChatInput={setChatInput}
+                    sendChatMessage={sendChatMessage}
+                    onPlay={resolveAndPlay}
+                    onRemoveFromPlaylist={removeFromPlaylist}
+                    addToPlaylist={addToPlaylist}
+                    inputValue={inputValue}
+                    setInputValue={setInputValue}
+                    toggleFullscreen={toggleFullscreen}
+                    setIsLibraryOpen={setIsLibraryOpen}
+                    onEnded={playNext}
+                    isResolving={isResolving}
+                    currentUserId={currentUserId}
+                    ownerId={ownerId}
+                    controllerId={controllerId}
+                />
+                <ResourceLibrary
+                    open={isLibraryOpen}
+                    onOpenChange={setIsLibraryOpen}
+                    cookie={roomCookie || undefined}
+                    onAdd={handleAddFileFromLibrary}
+                    onAddSeries={handleAddSeriesFromLibrary}
+                />
+                <QuarkLoginDialog
+                    open={showQuarkLogin}
+                    onOpenChange={setShowQuarkLogin}
+                    onSuccess={(cookie) => {
+                        if (cookie) {
+                            updateRoomCookie(cookie);
+                            toast({ description: t('logged_in_room_updated') });
+                        }
+                    }}
+                />
+            </>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background text-foreground">
             <header className="sticky top-4 z-50 px-4 mb-6 pointer-events-none">
@@ -1413,7 +1460,6 @@ function RoomContent() {
                                 key={videoSrc}
                                 ref={videoRef}
                                 controls
-                                crossOrigin="anonymous"
                                 autoPlay
                                 className="w-full h-full object-contain"
                                 src={videoSrc}

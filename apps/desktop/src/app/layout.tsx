@@ -12,6 +12,16 @@ export const metadata: Metadata = {
   description: "Synchronized Playback Client",
 };
 
+export function generateViewport() {
+  return {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: "cover",
+  };
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,6 +30,20 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              document.addEventListener('touchstart', function(event) {
+                if (event.touches.length > 1) {
+                  event.preventDefault();
+                }
+              }, { passive: false });
+              document.addEventListener('gesturestart', function(event) {
+                event.preventDefault();
+              }, { passive: false });
+            `,
+          }}
+        />
         <div className="contents">
           <I18nProvider>
             {children}

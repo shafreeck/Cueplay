@@ -96,16 +96,14 @@ export class RoomManager {
         return room;
     }
 
-    static async joinRoom(id: string, userId: string, name?: string): Promise<Room> {
+    static async joinRoom(id: string, userId: string, name?: string): Promise<Room | undefined> {
         let room = await this.getRoom(id);
         if (!room) {
-            console.log(`[RoomManager] Room ${id} not found, auto-creating for ${userId}`);
-            room = await this.createRoom(userId);
-            if (name) room.addMember({ userId, name, joinedAt: Date.now() });
-        } else {
-            room.addMember({ userId, name, joinedAt: Date.now() });
+            console.log(`[RoomManager] Room ${id} not found, JOIN denied.`);
+            return undefined;
         }
 
+        room.addMember({ userId, name, joinedAt: Date.now() });
         await this.persist(room);
         console.log(`[RoomManager] User ${userId} (${name}) joined room ${id}`);
         return room;
