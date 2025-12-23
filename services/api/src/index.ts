@@ -15,7 +15,7 @@ const server = fastify({ logger: true });
 
 server.register(cors, {
     origin: true, // Allow all origins (for dev)
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 });
 server.register(websocket);
 server.register(websocketRoutes);

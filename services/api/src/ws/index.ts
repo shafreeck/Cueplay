@@ -1,10 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { JoinRoomEvent, PlayerStateEvent, MediaChangeEvent, EventType } from '@cueplay/protocol';
 import { RoomManager } from '../room/manager';
-import { ConfigStore } from '../config/store';
-
-// Map roomId -> Map<userId, WebSocket>
-const roomConnections = new Map<string, Map<string, any>>();
+import { roomConnections, broadcastRoomUpdate } from './manager';
 
 export async function websocketRoutes(fastify: FastifyInstance) {
     fastify.get('/ws', { websocket: true }, (connection: any, req) => {
@@ -17,34 +14,6 @@ export async function websocketRoutes(fastify: FastifyInstance) {
 
         let currentRoomId: string | null = null;
         let pUserId: string | null = null;
-
-        const broadcastRoomUpdate = async (roomId: string) => {
-            const room = await RoomManager.getRoom(roomId);
-            const clients = roomConnections.get(roomId);
-            if (!room || !clients) return;
-
-            const members = room.members.map((m: any) => ({
-                ...m,
-                isOnline: clients.has(m.userId) && clients.get(m.userId)!.readyState === 1
-            }));
-
-            const event = {
-                type: 'ROOM_UPDATE',
-                payload: {
-                    roomId,
-                    members,
-                    ownerId: room.ownerId,
-                    controllerId: room.controllerId,
-                    quarkCookie: room.quarkCookie,
-                    hasGlobalCookie: !!ConfigStore.getGlobalCookie()
-                }
-            };
-
-            const msg = JSON.stringify(event);
-            for (const client of clients.values()) {
-                if (client.readyState === 1) client.send(msg);
-            }
-        };
 
         socket.on('message', async (message: any) => {
             try {
@@ -106,7 +75,7 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             room.setController(pUserId);
                             await RoomManager.persist(room);
                             fastify.log.info({ msg: 'User took control', roomId: currentRoomId, userId: pUserId });
-                            await broadcastRoomUpdate(currentRoomId);
+                            await broadcastRoomUpdate(currentRoomId, pUserId!);
                         }
                     }
                 } else if (event.type === 'PLAYER_STATE') {
@@ -149,7 +118,7 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                                 currentProgress: payload.time
                             } as any);
                             await RoomManager.persist(room);
-                            await broadcastRoomUpdate(currentRoomId);
+                            await broadcastRoomUpdate(currentRoomId, pUserId!);
                         }
                     }
                 } else if (event.type === 'SET_ROOM_COOKIE') {
@@ -162,7 +131,7 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                                 room.setQuarkCookie(event.payload.cookie);
                                 await RoomManager.persist(room);
                                 fastify.log.info({ msg: 'Room cookie updated via WS', roomId: currentRoomId });
-                                await broadcastRoomUpdate(currentRoomId);
+                                await broadcastRoomUpdate(currentRoomId, pUserId!);
                             }
                         }
                     }

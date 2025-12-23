@@ -401,8 +401,8 @@ export default function Home() {
                     <div className="md:hidden">
                       <RoomItem
                         id={room.id}
-                        title={t('room_title', { id: room.id })}
-                        subtitle={t('members_count', { count: room.members.length })}
+                        title={room.title || t('room_title', { id: room.id })}
+                        subtitle={room.description || t('members_count', { count: room.members.length })}
                         href={`/room?id=${room.id}`}
                         onDelete={() => setDeleteId(room.id)}
                         deleteLabel={t('delete')}
@@ -414,12 +414,12 @@ export default function Home() {
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                       <CardHeader>
                         <CardTitle className="flex justify-between items-center text-lg">
-                          <span>{t('room_title', { id: room.id })}</span>
+                          <span className="truncate" title={room.title || `Room ${room.id}`}>{room.title || t('room_title', { id: room.id })}</span>
                           {room.ownerId === userId && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                               onClick={() => setDeleteId(room.id)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -428,7 +428,9 @@ export default function Home() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4">{t('members_count', { count: room.members.length })}</p>
+                        <p className="text-sm text-muted-foreground mb-4 line-clamp-2 min-h-[40px]">
+                          {room.description || t('members_count', { count: room.members.length })}
+                        </p>
                         <Link href={`/room?id=${room.id}`}>
                           <Button className="w-full bg-primary/20 hover:bg-primary/40 text-primary-foreground border-primary/20" variant="outline">
                             {t('enter_room')}

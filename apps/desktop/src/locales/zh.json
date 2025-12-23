@@ -138,6 +138,15 @@
         "collecting_episodes": "正在扫描剧集...",
         "add_as_series": "添加为系列",
         "connecting_room": "正在连接房间...",
-        "room_not_found": "房间未找到"
+        "room_name": "房间名称",
+        "enter_room_name": "输入房间名称",
+        "room_description": "房间描述",
+        "enter_room_description": "输入房间描述",
+        "only_owner_settings": "只有房主可以更改设置。",
+        "trouble_connecting_desc": "遇到连接问题？重置身份可能会有所帮助。",
+        "confirm_reset_identity": "确定要重置身份吗？这将断开当前会话。",
+        "room_not_found": "房间未找到",
+        "room_settings_saved": "房间设置已保存",
+        "failed_save_settings": "保存设置失败"
     }
 }

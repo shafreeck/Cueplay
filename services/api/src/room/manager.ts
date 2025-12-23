@@ -29,6 +29,8 @@ export class RoomManager {
                 controllerId: room.controllerId,
                 quarkCookie: room.quarkCookie,
                 playlist: JSON.stringify(room.playlist),
+                title: room.title || null,
+                description: room.description || null,
                 members: {
                     create: {
                         userId: ownerId,
@@ -83,6 +85,8 @@ export class RoomManager {
             media: dbRoom.media ? JSON.parse(dbRoom.media) : undefined,
             playlist: dbRoom.playlist ? JSON.parse(dbRoom.playlist) : [],
             quarkCookie: dbRoom.quarkCookie || '',
+            title: dbRoom.title || undefined,
+            description: dbRoom.description || undefined,
             members: dbRoom.members.map(m => ({
                 userId: m.userId,
                 name: m.name || undefined,
@@ -124,6 +128,8 @@ export class RoomManager {
                 media: dr.media ? JSON.parse(dr.media) : undefined,
                 playlist: dr.playlist ? JSON.parse(dr.playlist) : [],
                 quarkCookie: dr.quarkCookie || '',
+                title: dr.title || undefined,
+                description: dr.description || undefined,
                 members: dr.members.map(m => ({
                     userId: m.userId,
                     name: m.name || undefined,
@@ -148,7 +154,14 @@ export class RoomManager {
                 media: json.media ? JSON.stringify(json.media) : null,
                 playlist: JSON.stringify(json.playlist),
                 quarkCookie: json.quarkCookie || '',
+                title: json.title || null,
+                description: json.description || null,
             }
+        });
+
+        console.log(`[RoomManager] Persisted room ${room.id} metadata:`, {
+            title: json.title,
+            description: json.description
         });
 
         // Sync members

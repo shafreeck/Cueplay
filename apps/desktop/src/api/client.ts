@@ -4,6 +4,8 @@ export interface Room {
     id: string;
     ownerId: string;
     members: any[];
+    title?: string;
+    description?: string;
 }
 
 export interface DriveFile {
@@ -46,6 +48,20 @@ export class ApiClient {
         if (!res.ok) throw new Error('Failed to create room');
         const data = await res.json();
         return data.room;
+    }
+
+    static async updateRoom(id: string, userId: string, data: { title?: string, description?: string }): Promise<Room> {
+        const res = await fetch(`${API_BASE}/rooms/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, ...data }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to update room');
+        }
+        const resData = await res.json();
+        return resData.room;
     }
 
     static async deleteRoom(id: string, userId: string): Promise<void> {

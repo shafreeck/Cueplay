@@ -18,6 +18,8 @@ export interface RoomState {
     controllerId: string | null;
     playlist?: any[];
     quarkCookie?: string;
+    title?: string;
+    description?: string;
 }
 
 export class Room {
@@ -51,6 +53,8 @@ export class Room {
     get controllerId() { return this.state.controllerId; }
     get playlist() { return this.state.playlist || []; }
     get quarkCookie() { return this.state.quarkCookie || ''; }
+    get title() { return this.state.title || ''; }
+    get description() { return this.state.description || ''; }
 
     addMember(member: Member) {
         const existingIndex = this.state.members.findIndex(m => m.userId === member.userId);
@@ -80,6 +84,14 @@ export class Room {
 
     setQuarkCookie(cookie: string) {
         this.state.quarkCookie = cookie;
+    }
+
+    setTitle(title: string) {
+        this.state.title = title;
+    }
+
+    setDescription(description: string) {
+        this.state.description = description;
     }
 
     toJSON() {

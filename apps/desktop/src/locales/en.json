@@ -138,6 +138,15 @@
         "collecting_episodes": "Scanning for episodes...",
         "add_as_series": "Add as Series",
         "connecting_room": "Connecting to room...",
-        "room_not_found": "Room not found"
+        "room_name": "Room Name",
+        "enter_room_name": "Enter room name",
+        "room_description": "Room Description",
+        "enter_room_description": "Enter room description",
+        "only_owner_settings": "Only the room owner can change settings.",
+        "trouble_connecting_desc": "Having trouble connecting? Resetting your identity might help.",
+        "confirm_reset_identity": "Are you sure you want to reset your identity? This will disconnect you from current sessions.",
+        "room_not_found": "Room not found",
+        "room_settings_saved": "Room settings saved",
+        "failed_save_settings": "Failed to save settings"
     }
 }

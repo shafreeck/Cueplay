@@ -101,6 +101,22 @@ export function UserProfile({ userId }: { userId: string }) {
                             {userId}
                         </div>
                     </div>
+                    {/* Reset Identity Section */}
+                    <div className="border-t pt-4 mt-2">
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => {
+                                if (window.confirm(t('confirm_reset_identity') || 'Are you sure you want to reset your identity? This will disconnect you from current sessions.')) {
+                                    localStorage.removeItem('cueplay_userid');
+                                    window.location.reload();
+                                }
+                            }}
+                        >
+                            {t('reset_identity') || 'Reset Identity'}
+                        </Button>
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button onClick={handleSave}>{t('save_changes')}</Button>

@@ -154,14 +154,17 @@ function RoomContent() {
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [nickname, setNickname] = useState('');
-    const [resetConfirm, setResetConfirm] = useState(false);
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [showQuarkLogin, setShowQuarkLogin] = useState(false);
     const [showManualInput, setShowManualInput] = useState(false);
 
     const [playbackRate, setPlaybackRate] = useState(1.0);
     const [isRoomLoading, setIsRoomLoading] = useState(true);
-    const isMobile = useIsMobile();
+    const [roomTitle, setRoomTitle] = useState('');
+    const [roomDescription, setRoomDescription] = useState('');
+    const lastSyncedMetadata = useRef({ title: '', description: '' });
+    const metadataInitialized = useRef(false);
+    const isMobile = useIsMobile(); // Removed conditional
 
     // UI State for Mobile/Responsive Layout
     const [activeTab, setActiveTab] = useState('playlist');
@@ -339,6 +342,25 @@ function RoomContent() {
         setNickname(val);
         localStorage.setItem('cueplay_nickname', val);
     };
+
+    // Debounced update for room metadata
+    const updateRoomMetadata = useCallback(async (title: string, desc: string) => {
+        if (!roomId || !currentUserId) return;
+
+        // Dirty checking
+        if (title === lastSyncedMetadata.current.title && desc === lastSyncedMetadata.current.description) {
+            return;
+        }
+
+        try {
+            await ApiClient.updateRoom(roomId, currentUserId, { title, description: desc });
+            lastSyncedMetadata.current = { title, description: desc };
+            toast({ description: t('room_settings_saved'), duration: 1500 });
+        } catch (e) {
+            console.error(e);
+            toast({ variant: 'destructive', title: t('failed_save_settings') });
+        }
+    }, [roomId, currentUserId]);
 
     const updateRoomCookie = (val: string) => {
         setRoomCookie(val);
@@ -984,12 +1006,36 @@ function RoomContent() {
 
             } else if (data.type === 'ROOM_UPDATE') {
                 const { members, ownerId, controllerId, quarkCookie, hasGlobalCookie } = data.payload;
+                const isCurrentOwner = ownerId === userId;
+
                 setMembers(members);
                 setOwnerId(ownerId);
                 setControllerId(controllerId);
                 controllerIdRef.current = controllerId;
                 if (quarkCookie !== undefined) setRoomCookie(quarkCookie);
                 if (hasGlobalCookie !== undefined) setHasGlobalCookie(hasGlobalCookie);
+
+                // Update local state if we receive room metadata
+                // Owners only update on the first match (initial load) to avoid being overwritten while typing
+                const shouldUpdateMetadata = !isCurrentOwner || !metadataInitialized.current;
+
+                if (shouldUpdateMetadata) {
+                    if (data.payload.title !== undefined) {
+                        const t = data.payload.title || '';
+                        setRoomTitle(t);
+                        lastSyncedMetadata.current.title = t;
+                    }
+
+                    if (data.payload.description !== undefined) {
+                        const d = data.payload.description || '';
+                        setRoomDescription(d);
+                        lastSyncedMetadata.current.description = d;
+                    }
+
+                    if (data.payload.title !== undefined || data.payload.description !== undefined) {
+                        metadataInitialized.current = true;
+                    }
+                }
 
                 setIsRoomLoading(false);
 
@@ -1289,7 +1335,11 @@ function RoomContent() {
                         </Button>
                         <div className="h-4 w-px bg-white/10 mx-2 hidden md:block" />
 
-                        <Popover>
+                        <Popover onOpenChange={(open) => {
+                            if (!open && isOwner) {
+                                updateRoomMetadata(roomTitle, roomDescription);
+                            }
+                        }}>
                             <PopoverTrigger asChild>
                                 <Button variant="ghost" size="icon">
                                     <Settings className="h-5 w-5" />
@@ -1304,68 +1354,92 @@ function RoomContent() {
                                         </p>
                                     </div>
                                     <div className="grid gap-2">
-                                        <div className="grid grid-cols-3 items-center gap-4">
-                                            <Label htmlFor="nickname">{t('display_name')}</Label>
-                                            <Input
-                                                id="nickname"
-                                                value={nickname}
-                                                onChange={(e) => saveNickname(e.target.value)}
-                                                placeholder={t('enter_display_name')}
-                                                className="col-span-2 h-8"
-                                            />
-                                        </div>
-                                        {isOwner && (
-                                            <div className="pt-2 mt-2 border-t space-y-3">
-                                                <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('cloud_storage')}</Label>
+                                        {/* Room Metadata Settings (Owner Only) */}
+                                        {isOwner ? (
+                                            <div className="space-y-4">
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="room-title">{t('room_name')}</Label>
+                                                    <Input
+                                                        id="room-title"
+                                                        value={roomTitle}
+                                                        onChange={(e) => {
+                                                            setRoomTitle(e.target.value);
+                                                            // Debounce or save on blur could be better, but simple handler here
+                                                        }}
+                                                        placeholder={t('enter_room_name')}
+                                                        className="h-8"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="room-desc">{t('room_description')}</Label>
+                                                    <Input
+                                                        id="room-desc"
+                                                        value={roomDescription}
+                                                        onChange={(e) => {
+                                                            setRoomDescription(e.target.value);
+                                                        }}
+                                                        placeholder={t('enter_room_description')}
+                                                        className="h-8"
+                                                    />
+                                                </div>
 
-                                                <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={`h-2 w-2 rounded-full ${roomCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-zinc-600')}`} />
-                                                            <span className="text-xs font-medium text-foreground">
-                                                                {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
-                                                            </span>
+                                                <div className="pt-2 mt-2 border-t space-y-3">
+                                                    <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('cloud_storage')}</Label>
+
+                                                    <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`h-2 w-2 rounded-full ${roomCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-zinc-600')}`} />
+                                                                <span className="text-xs font-medium text-foreground">
+                                                                    {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
+                                                                </span>
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-5 w-5 hover:bg-white/10"
+                                                                title={t('manual_cookie_input')}
+                                                                onClick={() => setShowManualInput(!showManualInput)}
+                                                            >
+                                                                <Settings className="h-3 w-3 text-muted-foreground" />
+                                                            </Button>
                                                         </div>
+
                                                         <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-5 w-5 hover:bg-white/10"
-                                                            title={t('manual_cookie_input')}
-                                                            onClick={() => setShowManualInput(!showManualInput)}
+                                                            variant={roomCookie ? "outline" : "default"}
+                                                            size="sm"
+                                                            className="w-full h-8 text-xs gap-2"
+                                                            onClick={() => setShowQuarkLogin(true)}
                                                         >
-                                                            <Settings className="h-3 w-3 text-muted-foreground" />
+                                                            <QrCode className="h-3.5 w-3.5" />
+                                                            {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
                                                         </Button>
+
+                                                        {showManualInput && (
+                                                            <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
+                                                                <Label htmlFor="roomCookie" className="text-[10px] text-muted-foreground mb-1.5 block">{t('manual_cookie_input')}</Label>
+                                                                <Input
+                                                                    id="roomCookie"
+                                                                    value={roomCookie}
+                                                                    onChange={(e) => updateRoomCookie(e.target.value)}
+                                                                    className="h-7 text-xs font-mono bg-muted/20"
+                                                                    placeholder="Paste cookie string..."
+                                                                    type="password"
+                                                                />
+                                                            </div>
+                                                        )}
                                                     </div>
-
-                                                    <Button
-                                                        variant={roomCookie ? "outline" : "default"}
-                                                        size="sm"
-                                                        className="w-full h-8 text-xs gap-2"
-                                                        onClick={() => setShowQuarkLogin(true)}
-                                                    >
-                                                        <QrCode className="h-3.5 w-3.5" />
-                                                        {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
-                                                    </Button>
-
-                                                    {showManualInput && (
-                                                        <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
-                                                            <Label htmlFor="roomCookie" className="text-[10px] text-muted-foreground mb-1.5 block">{t('manual_cookie_input')}</Label>
-                                                            <Input
-                                                                id="roomCookie"
-                                                                value={roomCookie}
-                                                                onChange={(e) => updateRoomCookie(e.target.value)}
-                                                                className="h-7 text-xs font-mono bg-muted/20"
-                                                                placeholder="Paste cookie string..."
-                                                                type="password"
-                                                            />
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
+                                        ) : (
+                                            <div className="py-4 text-center text-sm text-muted-foreground">
+                                                {t('only_owner_settings')}
+                                            </div>
                                         )}
+
                                         <Dialog>
                                             <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm" className="w-full">{t('view_debug_logs')}</Button>
+                                                <Button variant="outline" size="sm" className="w-full mt-2">{t('view_debug_logs')}</Button>
                                             </DialogTrigger>
                                             <DialogContent className="max-w-2xl h-[500px] flex flex-col">
                                                 <DialogHeader>
@@ -1380,23 +1454,6 @@ function RoomContent() {
                                                 </div>
                                             </DialogContent>
                                         </Dialog>
-                                        <Button
-                                            variant={resetConfirm ? "destructive" : "secondary"}
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={() => {
-                                                if (!resetConfirm) {
-                                                    setResetConfirm(true);
-                                                    setTimeout(() => setResetConfirm(false), 3000);
-                                                    return;
-                                                }
-                                                localStorage.removeItem('cueplay_userid');
-                                                toast({ title: t('identity_reset_title'), description: t('identity_reset_desc') });
-                                                setTimeout(() => window.location.reload(), 500);
-                                            }}
-                                        >
-                                            {resetConfirm ? t('click_confirm_reset') : t('reset_identity')}
-                                        </Button>
                                     </div>
                                 </div>
                             </PopoverContent>

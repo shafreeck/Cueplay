@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { RoomManager } from './manager';
+import { broadcastRoomUpdate } from '../ws/manager';
 import { z } from 'zod';
 
 export async function roomRoutes(fastify: FastifyInstance) {
@@ -75,5 +76,35 @@ export async function roomRoutes(fastify: FastifyInstance) {
             }
             return reply.code(500).send({ error: 'Failed to delete room' });
         }
+    });
+
+    fastify.patch('/rooms/:id', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const body = req.body as { userId: string, title?: string, description?: string };
+
+        const room = await RoomManager.getRoom(id);
+        if (!room) {
+            return reply.code(404).send({ error: 'Room not found' });
+        }
+
+        if (room.ownerId !== body.userId) {
+            return reply.code(403).send({ error: 'Only the room owner can update settings.' });
+        }
+
+        if (body.title !== undefined) {
+            room.setTitle(body.title);
+        }
+
+        if (body.description !== undefined) {
+            room.setDescription(body.description);
+        }
+
+        await RoomManager.persist(room);
+        console.log(`[RoomManager] Updated metadata for room ${id}`);
+
+        // Broadcast update to all connected clients except the one who changed it
+        broadcastRoomUpdate(id, body.userId).catch(err => console.error('[RoomController] Failed to broadcast update:', err));
+
+        return { success: true, room: room.toJSON() };
     });
 }
