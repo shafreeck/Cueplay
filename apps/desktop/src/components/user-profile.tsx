@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -15,31 +15,38 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from 'react-i18next';
 
-export function UserProfile({ userId }: { userId: string }) {
+export function UserProfile({ userId, autoOpen = false }: { userId: string; autoOpen?: boolean }) {
     const { t } = useTranslation('common');
     const [open, setOpen] = useState(false);
     const [displayName, setDisplayName] = useState('');
+    const hasAutoOpened = useRef(false);
 
     useEffect(() => {
         if (open) {
             // Load settings when dialog opens
             const storedName = localStorage.getItem('cueplay_nickname') || '';
             setDisplayName(storedName);
-
-            // Onboarding: If no name and userId is available, open dialog (handled by parent/effect logic)
         }
-    }, [open, userId]);
+    }, [open]);
 
-    // Load saved name on mount and handle onboarding
+    // Load saved name on mount
     useEffect(() => {
         const storedName = localStorage.getItem('cueplay_nickname');
         if (storedName) {
             setDisplayName(storedName);
-        } else if (userId) {
-            // Initial check for onboarding if no name set
-            setOpen(true);
         }
-    }, [userId]);
+    }, []);
+
+    // Handle onboarding via prop
+    useEffect(() => {
+        if (autoOpen && userId && !hasAutoOpened.current) {
+            const storedName = localStorage.getItem('cueplay_nickname');
+            if (!storedName) {
+                setOpen(true);
+                hasAutoOpened.current = true;
+            }
+        }
+    }, [autoOpen, userId]);
 
     const handleSave = () => {
         localStorage.setItem('cueplay_nickname', displayName);
@@ -61,8 +68,19 @@ export function UserProfile({ userId }: { userId: string }) {
     // User IDs start with 'U' so they are not useful for initials anyway.
     const initial = (displayName || '?').slice(0, 1).toUpperCase();
 
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+    const handleResetIdentity = () => {
+        localStorage.removeItem('cueplay_userid');
+        localStorage.removeItem('cueplay_nickname');
+        window.location.href = '/'; // Reset to home for fresh start
+    };
+
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(val) => {
+            setOpen(val);
+            if (!val) setShowResetConfirm(false);
+        }}>
             <DialogTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0 overflow-hidden border border-border/50 hover:opacity-80 transition-opacity">
                     <div className={`h-full w-full flex items-center justify-center text-white font-bold ${colorClass}`}>
@@ -106,15 +124,19 @@ export function UserProfile({ userId }: { userId: string }) {
                         <Button
                             variant="destructive"
                             size="sm"
-                            className="w-full"
+                            className="w-full transition-all duration-200"
                             onClick={() => {
-                                if (window.confirm(t('confirm_reset_identity') || 'Are you sure you want to reset your identity? This will disconnect you from current sessions.')) {
-                                    localStorage.removeItem('cueplay_userid');
-                                    window.location.reload();
+                                if (showResetConfirm) {
+                                    handleResetIdentity();
+                                } else {
+                                    setShowResetConfirm(true);
+                                    setTimeout(() => setShowResetConfirm(false), 3000);
                                 }
                             }}
                         >
-                            {t('reset_identity') || 'Reset Identity'}
+                            {showResetConfirm
+                                ? (t('click_confirm_reset') || t('confirm_reset') || 'Click again to confirm')
+                                : (t('reset_identity') || 'Reset Identity')}
                         </Button>
                     </div>
                 </div>

@@ -147,6 +147,7 @@
         "confirm_reset_identity": "Are you sure you want to reset your identity? This will disconnect you from current sessions.",
         "room_not_found": "Room not found",
         "room_settings_saved": "Room settings saved",
-        "failed_save_settings": "Failed to save settings"
+        "failed_save_settings": "Failed to save settings",
+        "confirm_reset": "Reset Now"
     }
 }

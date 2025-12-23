@@ -147,6 +147,7 @@
         "confirm_reset_identity": "确定要重置身份吗？这将断开当前会话。",
         "room_not_found": "房间未找到",
         "room_settings_saved": "房间设置已保存",
-        "failed_save_settings": "保存设置失败"
+        "failed_save_settings": "保存设置失败",
+        "confirm_reset": "立即重置"
     }
 }

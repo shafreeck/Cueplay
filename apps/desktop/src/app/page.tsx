@@ -325,7 +325,7 @@ export default function Home() {
 
               {/* Profile - Circle */}
               <div className="ml-1">
-                <UserProfile userId={userId} />
+                <UserProfile userId={userId} autoOpen={!isInitializing} />
               </div>
             </div>
           </div>
