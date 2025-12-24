@@ -150,6 +150,8 @@ function RoomContent() {
     const playlistRef = useRef(playlist);
     useEffect(() => { playlistRef.current = playlist; }, [playlist]);
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
+    const playingItemIdRef = useRef<string | null>(null);
+    useEffect(() => { playingItemIdRef.current = playingItemId; }, [playingItemId]);
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -1212,7 +1214,7 @@ function RoomContent() {
                         payload: {
                             time: video.currentTime,
                             sentAt: now,
-                            playingItemId: playingItemId || undefined,
+                            playingItemId: playingItemIdRef.current || undefined,
                             duration: video.duration || undefined
                         }
                     }));
@@ -1223,12 +1225,13 @@ function RoomContent() {
                 // We do this every 1s to maintain tight sync.
                 if (controllerIdRef.current === currentUserId) {
                     // Update local playlist progress state so the controller sees their own bar move
-                    if (playingItemId) {
+                    const currentPlayingId = playingItemIdRef.current;
+                    if (currentPlayingId) {
                         setPlaylist(prev => {
                             let updated = false;
                             const update = (list: any[]): any[] => {
                                 return list.map(item => {
-                                    if (item.id === playingItemId) {
+                                    if (item.id === currentPlayingId) {
                                         updated = true;
                                         return { ...item, progress: video.currentTime, duration: video.duration };
                                     }
