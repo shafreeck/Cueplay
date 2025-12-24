@@ -466,8 +466,8 @@ export default function Home() {
                       <div className="md:hidden">
                         <RoomItem
                           id={room.id}
-                          title={t('room_title', { id: room.id })}
-                          subtitle={room.lastVisited ? new Date(room.lastVisited).toLocaleDateString() : t('visited_recently')}
+                          title={room.title || t('room_title', { id: room.id })}
+                          subtitle={room.description || (room.lastVisited ? new Date(room.lastVisited).toLocaleDateString() : t('visited_recently'))}
                           href={`/room?id=${room.id}`}
                           onDelete={() => {
                             RoomHistory.removeVisitedRoom(room.id);
@@ -482,7 +482,7 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <CardHeader>
                           <CardTitle className="flex justify-between items-center text-lg">
-                            <span className="truncate pr-4">{t('room_title', { id: room.id })}</span>
+                            <span className="truncate pr-4" title={room.title || `Room ${room.id}`}>{room.title || t('room_title', { id: room.id })}</span>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -500,7 +500,7 @@ export default function Home() {
                         </CardHeader>
                         <CardContent>
                           <p className="text-sm text-muted-foreground mb-4">
-                            {room.lastVisited ? t('visited_date', { date: new Date(room.lastVisited).toLocaleDateString() }) : t('visited_recently')}
+                            {room.description || (room.lastVisited ? t('visited_date', { date: new Date(room.lastVisited).toLocaleDateString() }) : t('visited_recently'))}
                           </p>
                           <Link href={`/room?id=${room.id}`}>
                             <Button className="w-full bg-white/5 hover:bg-white/10 text-foreground border-white/10" variant="outline">

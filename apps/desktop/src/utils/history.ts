@@ -7,6 +7,8 @@ export interface VisitedRoom {
     ownerId: string;
     lastVisited: number;
     memberCount?: number; // Optional snapshot
+    title?: string;
+    description?: string;
 }
 
 export const RoomHistory = {
@@ -18,7 +20,9 @@ export const RoomHistory = {
             id: room.id,
             ownerId: room.ownerId || 'unknown',
             lastVisited: Date.now(),
-            memberCount: room.members?.length
+            memberCount: room.members?.length,
+            title: room.title,
+            description: room.description
         };
 
         if (existingIndex !== -1) {

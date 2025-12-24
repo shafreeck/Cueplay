@@ -1170,7 +1170,9 @@ function RoomContent() {
                     RoomHistory.addVisitedRoom({
                         id: roomId,
                         ownerId: ownerId,
-                        members: members || []
+                        members: members || [],
+                        title: data.payload.title !== undefined ? data.payload.title : lastSyncedMetadata.current.title,
+                        description: data.payload.description !== undefined ? data.payload.description : lastSyncedMetadata.current.description
                     });
                 }
             } else if (data.type === 'PLAYER_STATE') {
@@ -1568,57 +1570,60 @@ function RoomContent() {
                                         </p>
                                     </div>
                                     <div className="grid gap-2">
-                                        {/* Room Metadata Settings (Owner Only) */}
-                                        {isOwner ? (
-                                            <div className="space-y-4">
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="room-title">{t('room_name')}</Label>
-                                                    <Input
-                                                        id="room-title"
-                                                        value={roomTitle}
-                                                        onChange={(e) => {
-                                                            setRoomTitle(e.target.value);
-                                                            // Debounce or save on blur could be better, but simple handler here
-                                                        }}
-                                                        placeholder={t('enter_room_name')}
-                                                        className="h-8"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="room-desc">{t('room_description')}</Label>
-                                                    <Input
-                                                        id="room-desc"
-                                                        value={roomDescription}
-                                                        onChange={(e) => {
-                                                            setRoomDescription(e.target.value);
-                                                        }}
-                                                        placeholder={t('enter_room_description')}
-                                                        className="h-8"
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                                                    <div className="space-y-0.5">
-                                                        <Label className="text-sm font-medium">
-                                                            {t('lock_control')}
-                                                        </Label>
-                                                        <div className="text-[10px] text-muted-foreground">
-                                                            {t('lock_control_desc')}
-                                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="room-title">{t('room_name')}</Label>
+                                                <Input
+                                                    id="room-title"
+                                                    value={roomTitle}
+                                                    onChange={(e) => {
+                                                        if (isOwner) setRoomTitle(e.target.value);
+                                                    }}
+                                                    placeholder={t('enter_room_name')}
+                                                    className="h-8"
+                                                    disabled={!isOwner}
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="room-desc">{t('room_description')}</Label>
+                                                <Input
+                                                    id="room-desc"
+                                                    value={roomDescription}
+                                                    onChange={(e) => {
+                                                        if (isOwner) setRoomDescription(e.target.value);
+                                                    }}
+                                                    placeholder={t('enter_room_description')}
+                                                    className="h-8"
+                                                    disabled={!isOwner}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-sm font-medium">
+                                                        {t('lock_control')}
+                                                    </Label>
+                                                    <div className="text-[10px] text-muted-foreground">
+                                                        {t('lock_control_desc')}
                                                     </div>
-                                                    <Switch
-                                                        checked={isLocked}
-                                                        onCheckedChange={(checked) => {
-                                                            setIsLocked(checked);
-                                                            if (socketRef.current?.readyState === WebSocket.OPEN) {
-                                                                socketRef.current.send(JSON.stringify({
-                                                                    type: 'UPDATE_ROOM',
-                                                                    payload: { isLocked: checked }
-                                                                }));
-                                                            }
-                                                        }}
-                                                    />
                                                 </div>
+                                                <Switch
+                                                    checked={isLocked}
+                                                    onCheckedChange={(checked) => {
+                                                        if (!isOwner) return;
+                                                        setIsLocked(checked);
+                                                        if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                            socketRef.current.send(JSON.stringify({
+                                                                type: 'UPDATE_ROOM',
+                                                                payload: { isLocked: checked }
+                                                            }));
+                                                        }
+                                                    }}
+                                                    disabled={!isOwner}
+                                                />
+                                            </div>
 
+                                            {/* Cloud Storage Settings (Owner Only) */}
+                                            {isOwner && (
                                                 <div className="pt-2 mt-2 border-t space-y-3">
                                                     <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('cloud_storage')}</Label>
 
@@ -1666,12 +1671,13 @@ function RoomContent() {
                                                         )}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <div className="py-4 text-center text-sm text-muted-foreground">
-                                                {t('only_owner_settings')}
-                                            </div>
-                                        )}
+                                            )}
+                                            {!isOwner && (
+                                                <div className="text-[10px] text-muted-foreground text-center pt-2">
+                                                    {t('only_owner_settings')}
+                                                </div>
+                                            )}
+                                        </div>
 
                                         <Dialog>
                                             <DialogTrigger asChild>
