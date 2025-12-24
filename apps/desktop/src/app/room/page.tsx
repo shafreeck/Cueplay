@@ -1307,7 +1307,7 @@ function RoomContent() {
         };
     }, [roomId]);
 
-    const canControl = controllerId === currentUserId;
+    const canControl = !!currentUserId && controllerId === currentUserId;
     const isOwner = currentUserId && ownerId && currentUserId === ownerId;
 
     // Bind Video Events (Only if authorized to control)
