@@ -197,49 +197,6 @@ function RoomContent() {
         if (isSynced) lastMinAgeRef.current = Number.MAX_SAFE_INTEGER;
     }, [isSynced]);
 
-    // Auto-save progress
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const video = videoRef.current;
-            // only save if we have successfully resumed the current item
-            // This prevents overwriting server progress with 0 on reload
-
-            if (video && video.duration && !video.paused && playingItemId) {
-                if (lastResumedItemIdRef.current !== playingItemId) {
-                    return;
-                }
-                setPlaylist(prev => {
-                    let updated = false;
-                    const updateProgress = (list: PlaylistItem[]): PlaylistItem[] => {
-                        return list.map(item => {
-                            if (item.id === playingItemId) {
-                                if (Math.abs((item.progress || 0) - video.currentTime) > 1) { // Only update if drift > 1s
-                                    updated = true;
-                                    return { ...item, progress: video.currentTime, duration: video.duration };
-                                }
-                                return item;
-                            }
-                            if (item.children) {
-                                const newChildren = updateProgress(item.children);
-                                if (updated) return { ...item, children: newChildren };
-                            }
-                            return item;
-                        });
-                    };
-
-                    const newPlaylist = updateProgress(prev);
-                    if (updated && socketRef.current?.readyState === WebSocket.OPEN) {
-                        socketRef.current.send(JSON.stringify({
-                            type: 'PLAYLIST_UPDATE',
-                            payload: { playlist: newPlaylist }
-                        }));
-                    }
-                    return updated ? newPlaylist : prev;
-                });
-            }
-        }, 5000); // Save every 5s
-        return () => clearInterval(interval);
-    }, [playingItemId]);
 
     const handleTouchStart = (e: React.TouchEvent) => {
         const now = Date.now();
@@ -1076,6 +1033,32 @@ function RoomContent() {
 
                 const { state, time, playbackRate, sentAt } = data.payload;
 
+                // Update local playlist progress based on controller's authoritative time
+                // This keeps the progress bar in the playlist UI smooth for everyone
+                if (playingItemId) {
+                    setPlaylist(prev => {
+                        let updated = false;
+                        const update = (list: any[]): any[] => {
+                            return list.map(item => {
+                                if (item.id === playingItemId) {
+                                    if (item.duration) {
+                                        updated = true;
+                                        return { ...item, progress: time };
+                                    }
+                                    return item;
+                                }
+                                if (item.children) {
+                                    const newChildren = update(item.children);
+                                    if (updated) return { ...item, children: newChildren };
+                                }
+                                return item;
+                            });
+                        };
+                        const newList = update(prev);
+                        return updated ? newList : prev;
+                    });
+                }
+
                 // Latency Compensation
                 let compensatedTime = time;
                 if (sentAt) {
@@ -1203,7 +1186,12 @@ function RoomContent() {
                 if (now - lastProgressSent > 3000) {
                     ws.send(JSON.stringify({
                         type: 'VIDEO_PROGRESS',
-                        payload: { time: video.currentTime, sentAt: now }
+                        payload: {
+                            time: video.currentTime,
+                            sentAt: now,
+                            playingItemId: playingItemId || undefined,
+                            duration: video.duration || undefined
+                        }
                     }));
                     lastProgressSent = now;
                 }

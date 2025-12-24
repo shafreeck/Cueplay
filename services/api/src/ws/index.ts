@@ -88,36 +88,17 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             }
                         }
                     }
-                } else if (event.type === 'PLAYLIST_UPDATE') {
-                    fastify.log.info({ msg: 'Received PLAYLIST_UPDATE', roomId: currentRoomId });
-                    if (currentRoomId && roomConnections.has(currentRoomId)) {
-                        const payload = event.payload;
-
-                        // Update Room State
-                        const room = await RoomManager.getRoom(currentRoomId);
-                        if (room) {
-                            room.setPlaylist(payload.playlist);
-                            await RoomManager.persist(room);
-
-                            const clients = roomConnections.get(currentRoomId)!;
-                            for (const client of clients.values()) {
-                                if (client !== socket && client.readyState === 1) {
-                                    client.send(JSON.stringify({ type: 'PLAYLIST_UPDATE', payload }));
-                                }
-                            }
-                            fastify.log.info({ msg: 'Broadcasted PLAYLIST_UPDATE', roomId: currentRoomId });
-                        }
-                    }
                 } else if (event.type === 'VIDEO_PROGRESS') {
                     if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
-                        const payload = event.payload; // { time: number }
+                        const payload = event.payload; // { time: number, playingItemId?: string, duration?: number }
+
+                        // Update individual progress
+                        await RoomManager.updateMemberProgress(currentRoomId, pUserId, payload.time);
+
+                        // If controller, update room's authoritative progress
                         const room = await RoomManager.getRoom(currentRoomId);
-                        if (room) {
-                            room.addMember({
-                                userId: pUserId,
-                                currentProgress: payload.time
-                            } as any);
-                            await RoomManager.persist(room);
+                        if (room && room.controllerId === pUserId && payload.playingItemId && payload.duration) {
+                            await RoomManager.updateRoomProgress(currentRoomId, payload.playingItemId, payload.time, payload.duration);
                         }
                     }
                 } else if (event.type === 'SET_ROOM_COOKIE') {
@@ -150,14 +131,26 @@ export async function websocketRoutes(fastify: FastifyInstance) {
             }
         });
 
-        socket.on('close', () => {
+        socket.on('close', async () => {
             if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
                 const clients = roomConnections.get(currentRoomId)!;
                 clients.delete(pUserId);
+
+                const room = await RoomManager.getRoom(currentRoomId);
+                if (room) {
+                    // Auto-handoff controller if they left
+                    if (room.controllerId === pUserId) {
+                        const nextUserId = clients.keys().next().value;
+                        room.setController(nextUserId || null);
+                        await RoomManager.persist(room);
+                        fastify.log.info({ msg: 'Controller left, handoff to next', roomId: currentRoomId, nextUserId });
+                    }
+                }
+
                 if (clients.size === 0) {
                     roomConnections.delete(currentRoomId);
                 } else {
-                    broadcastRoomUpdate(currentRoomId);
+                    await broadcastRoomUpdate(currentRoomId);
                 }
             }
         });

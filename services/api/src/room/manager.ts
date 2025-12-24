@@ -159,10 +159,13 @@ export class RoomManager {
             }
         });
 
-        console.log(`[RoomManager] Persisted room ${room.id} metadata:`, {
-            title: json.title,
-            description: json.description
-        });
+        // Silence noisy logging
+        /*
+                console.log(`[RoomManager] Persisted room ${room.id} metadata:`, {
+                    title: json.title,
+                    description: json.description
+                });
+        */
 
         // Sync members
         for (const member of json.members) {
@@ -181,5 +184,40 @@ export class RoomManager {
                 }
             });
         }
+    }
+    static async updateMemberProgress(roomId: string, userId: string, progress: number) {
+        await prisma.member.update({
+            where: { roomId_userId: { roomId, userId } },
+            data: { currentProgress: progress }
+        });
+        // Also update cache if exists
+        const room = cache.get(roomId);
+        if (room) {
+            room.addMember({ userId, currentProgress: progress } as any);
+        }
+    }
+
+    static async updateRoomProgress(roomId: string, playingItemId: string, progress: number, duration: number) {
+        const room = await this.getRoom(roomId);
+        if (!room) return;
+
+        const updatedPlaylist = room.playlist.map(item => {
+            if (item.id === playingItemId) {
+                return { ...item, progress, duration };
+            }
+            if (item.children) {
+                return {
+                    ...item,
+                    children: item.children.map((c: any) => c.id === playingItemId ? { ...c, progress, duration } : c)
+                };
+            }
+            return item;
+        });
+
+        room.setPlaylist(updatedPlaylist);
+        await prisma.room.update({
+            where: { id: roomId },
+            data: { playlist: JSON.stringify(updatedPlaylist) }
+        });
     }
 }

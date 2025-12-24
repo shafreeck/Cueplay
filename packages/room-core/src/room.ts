@@ -74,7 +74,7 @@ export class Room {
         this.state.media = media;
     }
 
-    setController(userId: string) {
+    setController(userId: string | null) {
         this.state.controllerId = userId;
     }
 
