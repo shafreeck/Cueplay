@@ -92,14 +92,22 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                 } else if (event.type === 'VIDEO_PROGRESS') {
                     if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
                         const payload = event.payload; // { time: number, playingItemId?: string, duration?: number, sentAt?: number }
+                        // console.log(`[VIDEO_PROGRESS] User ${pUserId} sent progress ${payload.time} for item ${payload.playingItemId}`);
 
                         // Update individual progress
                         await RoomManager.updateMemberProgress(currentRoomId, pUserId, payload.time);
 
-                        // If controller, update room's authoritative progress
+                        // If sender is controller, update room progress
                         const room = await RoomManager.getRoom(currentRoomId);
-                        if (room && room.controllerId === pUserId && payload.playingItemId && payload.duration) {
-                            await RoomManager.updateRoomProgress(currentRoomId, payload.playingItemId, payload.time, payload.duration);
+                        if (room && room.controllerId === pUserId && payload.playingItemId) {
+                            // console.log(`[VIDEO_PROGRESS] Controller ${pUserId} triggering persistence for ${payload.playingItemId}`);
+                            await RoomManager.updateRoomProgress(currentRoomId, payload.playingItemId, payload.time, payload.duration || 0);
+                        } else if (!room) {
+                            console.log(`[VIDEO_PROGRESS] Room ${currentRoomId} not found`);
+                        } else if (room.controllerId !== pUserId) {
+                            // console.log(`[VIDEO_PROGRESS] User ${pUserId} is not controller (${room.controllerId}), skipping persistence`);
+                        } else if (!payload.playingItemId) {
+                            console.log(`[VIDEO_PROGRESS] Missing playingItemId from controller ${pUserId}`);
                         }
 
                         // Broadcast progress to others so they can update their UI (Member list & Playlist)

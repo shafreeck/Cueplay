@@ -201,34 +201,38 @@ export class RoomManager {
         const room = await this.getRoom(roomId);
         if (!room) return;
 
-        const updateRecursive = (items: any[]): { items: any[], updated: boolean } => {
-            let anyUpdated = false;
-            const newItems = items.map(item => {
-                if (item.id === playingItemId) {
-                    anyUpdated = true;
-                    return { ...item, progress, duration };
-                }
-                if (item.children) {
-                    const { items: newChildren, updated } = updateRecursive(item.children);
-                    if (updated) {
+        let anyUpdated = false;
+        const updatedPlaylist = room.playlist.map(item => {
+            if (item.id === playingItemId) {
+                anyUpdated = true;
+                return { ...item, progress, duration };
+            }
+            if (item.children) {
+                let childUpdated = false;
+                const newChildren = item.children.map((c: any) => {
+                    if (c.id === playingItemId) {
+                        childUpdated = true;
                         anyUpdated = true;
-                        return { ...item, children: newChildren };
+                        return { ...c, progress, duration };
                     }
+                    return c;
+                });
+                if (childUpdated) {
+                    return { ...item, children: newChildren };
                 }
-                return item;
-            });
-            return { items: newItems, updated: anyUpdated };
-        };
+            }
+            return item;
+        });
 
-        const { items: updatedPlaylist, updated } = updateRecursive(room.playlist);
-
-        if (updated) {
-            console.log(`[RoomManager] Updated progress for item ${playingItemId} in room ${roomId}`);
+        if (anyUpdated) {
+            console.log(`[RoomManager] Updated progress for item ${playingItemId} in room ${roomId}. Saving to DB.`);
             room.setPlaylist(updatedPlaylist);
             await prisma.room.update({
                 where: { id: roomId },
                 data: { playlist: JSON.stringify(updatedPlaylist) }
             });
+        } else {
+            console.log(`[RoomManager] Failed to find item ${playingItemId} in playlist of room ${roomId}`);
         }
 
 
