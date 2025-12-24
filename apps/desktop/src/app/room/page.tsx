@@ -180,6 +180,8 @@ function RoomContent() {
     const [chatInput, setChatInput] = useState('');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isImmersiveMode, setIsImmersiveMode] = useState(false);
+    const [showControls, setShowControls] = useState(true);
+    const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const chatListRef = useRef<HTMLDivElement>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -444,6 +446,39 @@ function RoomContent() {
             container.removeEventListener('dblclick', handleDoubleClick);
         };
     }, []);
+
+    // Auto-hide controls in Immersive Mode
+    useEffect(() => {
+        if (!isImmersiveMode) {
+            setShowControls(true);
+            return;
+        }
+
+        const resetTimer = () => {
+            setShowControls(true);
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            controlsTimeoutRef.current = setTimeout(() => {
+                setShowControls(false);
+            }, 3000);
+        };
+
+        resetTimer();
+
+        const handleInteraction = () => resetTimer();
+
+        window.addEventListener('mousemove', handleInteraction);
+        window.addEventListener('touchstart', handleInteraction);
+        window.addEventListener('click', handleInteraction);
+        window.addEventListener('keydown', handleInteraction);
+
+        return () => {
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            window.removeEventListener('mousemove', handleInteraction);
+            window.removeEventListener('touchstart', handleInteraction);
+            window.removeEventListener('click', handleInteraction);
+            window.removeEventListener('keydown', handleInteraction);
+        };
+    }, [isImmersiveMode]);
 
     // Subtitle Hijacking Logic
     useEffect(() => {
@@ -1515,8 +1550,8 @@ function RoomContent() {
 
             {/* Exit Immersive Mode Floating Button */}
             <div className={cn(
-                "fixed top-4 right-8 z-[60] transition-all duration-500",
-                isImmersiveMode ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
+                "fixed top-14 pt-safe right-8 z-[60] transition-all duration-500",
+                isImmersiveMode && showControls ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
             )}>
                 <Button
                     variant="secondary"
