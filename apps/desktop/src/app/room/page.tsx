@@ -265,26 +265,47 @@ function RoomContent() {
         if (!playingItemId || !playlist.length || !videoRef.current || !videoSrc) return;
         if (lastResumedItemIdRef.current === playingItemId) return;
 
-        const video = videoRef.current;
         const item = findPlaylistItem(playlist, playingItemId);
+
+        // OPTIMISTIC RESUME (Yield on Sync):
+        // We always try to resume local progress initially.
+        // If a Controller is active and sending updates, the check inside verifySeek (isRemoteUpdate)
+        // will identify the conflict and ABORT this resume attempt to yield to the controller.
+        addLog(`[Resume Check] Attempting Optimistic Resume (Item: ${playingItemId})`);
+
+        const video = videoRef.current;
         if (!item) return;
+        // Cleanup flag
+        let isCancelled = false;
 
         if (item.progress !== undefined) {
             const doResume = () => {
+                if (isCancelled) return;
                 if (lastResumedItemIdRef.current === playingItemId) return;
 
-                addLog(`[Resume] Attempting seek to ${item.progress!.toFixed(1)}s (ReadyState: ${video.readyState}, Src: ${video.src.slice(-30)})`);
+                addLog(`[Resume] Attempting seek to ${item.progress!.toFixed(1)}s`);
                 video.currentTime = item.progress!;
 
-                // Seek confirmation loop (Retry up to 10 times)
+                // Seek confirmation loop (Retry with Yield)
                 let attempts = 0;
                 const verifySeek = () => {
+                    if (isCancelled) return;
+
+                    // YIELD TO SYNC:
+                    // If a remote sync update occurred while we were trying to resume,
+                    // we assume the Controller has taken over. Abort Resume to prevent fighting.
+                    if (isRemoteUpdate.current) {
+                        addLog(`[Resume] Aborted: Sync detected.`);
+                        lastResumedItemIdRef.current = playingItemId;
+                        return;
+                    }
+
                     attempts++;
                     const drift = Math.abs(video.currentTime - (item.progress || 0));
                     if (drift < 2) {
                         addLog(`[Resume] Confirmed at ${video.currentTime.toFixed(1)}s`);
                         lastResumedItemIdRef.current = playingItemId;
-                    } else if (attempts < 10) {
+                    } else if (attempts < 5) {
                         addLog(`[Resume] Retry ${attempts}... (Current: ${video.currentTime.toFixed(1)}s, Target: ${item.progress}s)`);
                         video.currentTime = item.progress!;
                         setTimeout(verifySeek, 800);
@@ -311,6 +332,10 @@ function RoomContent() {
             addLog(`[Resume] Starting fresh (no saved progress)`);
             lastResumedItemIdRef.current = playingItemId;
         }
+
+        return () => {
+            isCancelled = true;
+        };
     }, [playlist, playingItemId, videoSrc, findPlaylistItem]);
 
 
