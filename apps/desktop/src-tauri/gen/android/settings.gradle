@@ -1,3 +1,4 @@
-include ':app'
+include ':Cueplay'
+project(':Cueplay').projectDir = new File('./app')
 
 apply from: 'tauri.settings.gradle'
