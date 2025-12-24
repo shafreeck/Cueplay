@@ -135,9 +135,9 @@ export function PlaylistItemRenderer({
                         )}
 
                         {/* Progress Bar (File) */}
-                        {!isFolder && item.progress && item.duration && (
+                        {!isFolder && item.progress !== undefined && !!item.duration && (
                             <div className="mt-1.5 h-1 w-full max-w-[100px] bg-white/10 rounded-full overflow-hidden shrink-0">
-                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${(item.progress / item.duration) * 100}%` }} />
+                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${Math.min(100, (item.progress / item.duration) * 100)}%` }} />
                             </div>
                         )}
                     </div>
@@ -188,9 +188,9 @@ export function PlaylistItemRenderer({
                                     <span className="font-mono opacity-40 tabular-nums">{index + 1}.{childIdx + 1}</span>
                                     <div className="flex flex-col min-w-0 flex-1">
                                         <span className="truncate" title={child.title}>{child.title}</span>
-                                        {child.progress && child.duration && (
+                                        {child.progress !== undefined && !!child.duration && (
                                             <div className="mt-1 h-0.5 w-full max-w-[80px] bg-white/10 rounded-full overflow-hidden">
-                                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${(child.progress / child.duration) * 100}%` }} />
+                                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${Math.min(100, (child.progress / child.duration) * 100)}%` }} />
                                             </div>
                                         )}
                                     </div>

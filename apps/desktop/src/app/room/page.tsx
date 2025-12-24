@@ -1042,7 +1042,7 @@ function RoomContent() {
                             return list.map(item => {
                                 if (item.id === playingItemId) {
                                     updated = true;
-                                    return { ...item, progress: time };
+                                    return { ...item, progress: time, duration: video.duration || item.duration };
                                 }
                                 if (item.children) {
                                     const newChildren = update(item.children);
