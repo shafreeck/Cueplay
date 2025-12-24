@@ -75,7 +75,7 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             room.setController(pUserId);
                             await RoomManager.persist(room);
                             fastify.log.info({ msg: 'User took control', roomId: currentRoomId, userId: pUserId });
-                            await broadcastRoomUpdate(currentRoomId, pUserId!);
+                            await broadcastRoomUpdate(currentRoomId);
                         }
                     }
                 } else if (event.type === 'PLAYER_STATE') {
@@ -118,7 +118,6 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                                 currentProgress: payload.time
                             } as any);
                             await RoomManager.persist(room);
-                            await broadcastRoomUpdate(currentRoomId, pUserId!);
                         }
                     }
                 } else if (event.type === 'SET_ROOM_COOKIE') {
@@ -131,7 +130,7 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                                 room.setQuarkCookie(event.payload.cookie);
                                 await RoomManager.persist(room);
                                 fastify.log.info({ msg: 'Room cookie updated via WS', roomId: currentRoomId });
-                                await broadcastRoomUpdate(currentRoomId, pUserId!);
+                                await broadcastRoomUpdate(currentRoomId);
                             }
                         }
                     }

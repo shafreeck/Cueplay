@@ -1263,41 +1263,33 @@ function RoomContent() {
         <div className="min-h-screen flex flex-col bg-black md:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] md:from-indigo-900/20 md:via-background md:to-background text-foreground overflow-hidden md:overflow-auto">
             <style>{styles}</style>
 
-            {/* Mobile Header */}
-            <header className="md:hidden relative z-50 bg-black/80 backdrop-blur-2xl border-b border-white/5 px-4 h-[44px] shrink-0 flex items-center justify-between pt-safe box-content">
-                <div className="flex-1 -ml-1">
-                    <Link href="/" className="flex items-center text-primary active:opacity-50 transition-opacity p-2 -m-2">
-                        <ChevronRight className="w-6 h-6 rotate-180" strokeWidth={2.5} />
-                    </Link>
-                </div>
-                <div className="absolute left-1/2 -translate-x-1/2">
-                    <h1 className="text-[17px] font-bold text-foreground tracking-tight">{roomId}</h1>
-                </div>
-                <div className="flex-1 flex justify-end"></div>
-            </header>
 
-            {/* Desktop Header */}
+
+            {/* Header */}
             <header className={cn(
-                "hidden md:block sticky top-4 z-50 px-4 mb-6 transition-all duration-300",
+                "sticky top-0 md:top-4 z-50 px-0 md:px-4 mb-0 md:mb-6 transition-all duration-300 pt-safe md:pt-0",
                 isImmersiveMode ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
             )}>
-                <div className="container mx-auto h-14 rounded-full flex items-center justify-between gap-4 px-6 bg-black/40 backdrop-blur-2xl border border-white/5 shadow-2xl pointer-events-auto">
+                <div className="container mx-auto h-12 md:h-14 md:rounded-full flex items-center justify-between gap-2 md:gap-4 px-3 md:px-6 bg-black md:bg-black/40 backdrop-blur-2xl border-b md:border border-white/5 shadow-2xl pointer-events-auto">
                     <div className="flex items-center gap-2 overflow-hidden shrink-0">
                         <Link href="/">
-                            <Button variant="ghost" size="sm" className="hidden sm:inline-flex">
-                                <ArrowLeft className="h-4 w-4 mr-1" />
-                                {t('rooms')}
+                            <Button variant="ghost" size="sm" className="h-8 w-auto px-2 md:px-3">
+                                <ArrowLeft className="h-4 w-4 md:mr-1" />
+                                <span className="hidden sm:inline">{t('rooms')}</span>
                             </Button>
                         </Link>
-                        <h1 className="text-xl font-bold truncate">{t('room_title', { id: roomId })}</h1>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                            navigator.clipboard.writeText(roomId || '');
-                            toast({ description: t('room_id_copied') });
-                        }}>
-                            <Copy className="h-3 w-3" />
-                        </Button>
+                        <h1
+                            className="text-sm md:text-xl font-bold truncate cursor-pointer hover:text-primary transition-colors active:opacity-50"
+                            onClick={() => {
+                                navigator.clipboard.writeText(roomId || '');
+                                toast({ description: t('room_id_copied') });
+                            }}
+                            title={t('click_to_copy')}
+                        >
+                            {isMobile ? roomId : t('room_title', { id: roomId })}
+                        </h1>
                         <div
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all duration-300 ${canControl
+                            className={`flex items-center gap-1.5 px-2 md:px-3 py-1 rounded-full text-xs font-bold border transition-all duration-300 ${canControl
                                 ? 'bg-primary/50 text-white border-primary/50 shadow-[0_0_15px_rgba(124,58,237,0.25)] cursor-default'
                                 : 'bg-muted/50 text-muted-foreground border-white/10 hover:bg-muted hover:text-foreground cursor-pointer'
                                 }`}
@@ -1312,12 +1304,12 @@ function RoomContent() {
                             {canControl ? (
                                 <>
                                     <Cast className="h-3.5 w-3.5" />
-                                    <span>{t('controlling')}</span>
+                                    <span className="hidden md:inline">{t('controlling')}</span>
                                 </>
                             ) : (
                                 <>
                                     <Eye className="h-3.5 w-3.5" />
-                                    <span>{t('viewing')}</span>
+                                    <span className="hidden md:inline">{t('viewing')}</span>
                                 </>
                             )}
                         </div>
@@ -1347,12 +1339,12 @@ function RoomContent() {
                             variant="ghost"
                             size="icon"
                             onClick={() => setIsImmersiveMode(true)}
-                            className="hidden md:flex h-8 w-8 text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10"
+                            className="flex h-8 w-8 text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10"
                             title={t('enter_immersive_mode')}
                         >
                             <Maximize className="w-5 h-5" />
                         </Button>
-                        <div className="h-4 w-px bg-white/10 mx-2 hidden md:block" />
+                        <div className="h-4 w-px bg-white/10 mx-1 md:mx-2" />
 
                         <Popover onOpenChange={(open) => {
                             if (!open && isOwner) {
