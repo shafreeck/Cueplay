@@ -122,16 +122,28 @@ export function PlaylistItemRenderer({
                             <span className="text-[10px] text-muted-foreground opacity-70 ml-6 shrink-0">{item.children?.length} episodes</span>
                         )}
 
-                        {/* Progress Bar (Folder) */}
-                        {isFolder && item.children && item.children.some(c => c.progress) && (
-                            <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden shrink-0">
-                                {(() => {
-                                    const total = item.children.length;
-                                    const currentSum = item.children.reduce((acc, c) => acc + (c.progress && c.duration ? (c.progress / c.duration) : 0), 0);
-                                    const avg = total > 0 ? (currentSum / total) * 100 : 0;
-                                    return <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${avg}%` }} />;
-                                })()}
-                            </div>
+                        {/* Progress Bar (Folder) - shows active episode progress */}
+                        {isFolder && item.children && (
+                            (() => {
+                                // Find the active child: currently playing OR last played OR first child
+                                const activeChild = item.children.find(c => c.id === playingItemId) ||
+                                    item.children.find(c => c.id === item.lastPlayedId) ||
+                                    item.children[0];
+
+                                // Only show if we found a child with valid progress
+                                if (!activeChild?.progress || !activeChild?.duration) return null;
+
+                                const percentage = Math.min(100, (activeChild.progress / activeChild.duration) * 100);
+
+                                return (
+                                    <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden shrink-0">
+                                        <div
+                                            className="h-full bg-primary/60 transition-all duration-300"
+                                            style={{ width: `${percentage}%` }}
+                                        />
+                                    </div>
+                                );
+                            })()
                         )}
 
                         {/* Progress Bar (File) */}
