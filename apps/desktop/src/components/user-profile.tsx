@@ -19,6 +19,7 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
     const { t } = useTranslation('common');
     const [open, setOpen] = useState(false);
     const [displayName, setDisplayName] = useState('');
+    const [isNewUser, setIsNewUser] = useState(false);
     const hasAutoOpened = useRef(false);
 
     useEffect(() => {
@@ -26,6 +27,7 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
             // Load settings when dialog opens
             const storedName = localStorage.getItem('cueplay_nickname') || '';
             setDisplayName(storedName);
+            setIsNewUser(!storedName);
         }
     }, [open]);
 
@@ -120,25 +122,27 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
                         </div>
                     </div>
                     {/* Reset Identity Section */}
-                    <div className="border-t pt-4 mt-2">
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            className="w-full transition-all duration-200"
-                            onClick={() => {
-                                if (showResetConfirm) {
-                                    handleResetIdentity();
-                                } else {
-                                    setShowResetConfirm(true);
-                                    setTimeout(() => setShowResetConfirm(false), 3000);
-                                }
-                            }}
-                        >
-                            {showResetConfirm
-                                ? (t('click_confirm_reset') || t('confirm_reset') || 'Click again to confirm')
-                                : (t('reset_identity') || 'Reset Identity')}
-                        </Button>
-                    </div>
+                    {!isNewUser && (
+                        <div className="border-t pt-4 mt-2">
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                className="w-full transition-all duration-200"
+                                onClick={() => {
+                                    if (showResetConfirm) {
+                                        handleResetIdentity();
+                                    } else {
+                                        setShowResetConfirm(true);
+                                        setTimeout(() => setShowResetConfirm(false), 3000);
+                                    }
+                                }}
+                            >
+                                {showResetConfirm
+                                    ? (t('click_confirm_reset') || t('confirm_reset') || 'Click again to confirm')
+                                    : (t('reset_identity') || 'Reset Identity')}
+                            </Button>
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
                     <Button onClick={handleSave}>{t('save_changes')}</Button>
