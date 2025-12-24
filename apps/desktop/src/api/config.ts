@@ -68,8 +68,15 @@ export const getProxyBase = async (): Promise<string> => {
     return dynamicProxyBasePromise;
 }
 
-export const resetProxyCache = () => {
+export const resetProxyCache = async () => {
     console.log("[Config] Resetting proxy cache...");
     dynamicProxyPort = null;
     dynamicProxyBasePromise = null;
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('restart_proxy');
+        console.log("[Config] Requested proxy restart.");
+    } catch (e) {
+        console.error("[Config] Failed to restart proxy:", e);
+    }
 }

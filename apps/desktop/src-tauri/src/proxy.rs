@@ -12,7 +12,10 @@ use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
 use tauri::{AppHandle, Manager, Emitter};
 
-pub async fn start_proxy_server(app_handle: AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn start_proxy_server<F>(app_handle: AppHandle, shutdown_signal: F) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
     // Attempt to bind to port 3001 first, then fallback to 0 (random)
     // Actually, for consistency with local dev, we might want to try 3001.
     // But in packaged app, 3001 might be taken or we want robustness.
@@ -34,6 +37,8 @@ pub async fn start_proxy_server(app_handle: AppHandle) -> Result<(), Box<dyn std
         .no_proxy()
         .build()?;
 
+    let app_handle_state = app_handle.clone();
+
     let app = Router::new()
         .route("/ping", get(|| async { "pong" }))
         .route("/api/stream/proxy", get(proxy_handler).options(proxy_options))
@@ -49,9 +54,11 @@ pub async fn start_proxy_server(app_handle: AppHandle) -> Result<(), Box<dyn std
                     axum::http::header::ACCEPT_RANGES,
                 ]),
         )
-        .with_state(client);
+        .with_state((client, app_handle_state));
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal)
+        .await?;
     Ok(())
 }
 
@@ -65,13 +72,14 @@ struct ProxyParams {
 async fn proxy_handler(
     Query(params): Query<ProxyParams>,
     headers: HeaderMap,
-    axum::extract::State(client): axum::extract::State<Client>,
+    axum::extract::State((client, app)): axum::extract::State<(Client, AppHandle)>,
 ) -> impl IntoResponse {
     let url = params.url;
     let cookie = params.cookie;
     let referer = params.referer.unwrap_or_else(|| "https://pan.quark.cn/".to_string());
 
-    println!("[Proxy] Requesting: {}...", &url.chars().take(50).collect::<String>());
+    let safe_url = url.chars().take(50).collect::<String>();
+    println!("[Proxy] Requesting: {}...", safe_url);
 
     let user_agent = headers
         .get("user-agent")
