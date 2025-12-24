@@ -1356,8 +1356,12 @@ function RoomContent() {
                             duration: video.duration || undefined
                         }
                     }));
+
                     lastProgressSent = now;
                 }
+
+                // Update local member progress every 1s (independent of network throttle)
+                setMembers(prev => prev.map(m => m.userId === currentUserId ? { ...m, currentProgress: video.currentTime } : m));
 
                 // 2. If Controller, broadcast authoritative state for Active Sync
                 // We do this every 1s to maintain tight sync.
