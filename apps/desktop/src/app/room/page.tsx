@@ -196,6 +196,7 @@ function RoomContent() {
     const isSyncedRef = useRef(isSynced);
     const lastMinAgeRef = useRef<number>(Number.MAX_SAFE_INTEGER);
     const lastResumedItemIdRef = useRef<string | null>(null);
+    const isBuffering = useRef(false);
 
     // Sync Ref with State
     useEffect(() => {
@@ -483,6 +484,36 @@ function RoomContent() {
             window.removeEventListener('keydown', handleInteraction);
         };
     }, [isImmersiveMode]);
+
+    // Trace Buffering State
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        const onWaiting = () => {
+            isBuffering.current = true;
+            addLog('[Buffer] Waiting...');
+        };
+        const onPlaying = () => {
+            if (isBuffering.current) {
+                isBuffering.current = false;
+                addLog('[Buffer] Resumed playing');
+            }
+        };
+        const onPause = () => {
+            isBuffering.current = false;
+        };
+
+        video.addEventListener('waiting', onWaiting);
+        video.addEventListener('playing', onPlaying);
+        video.addEventListener('pause', onPause);
+
+        return () => {
+            video.removeEventListener('waiting', onWaiting);
+            video.removeEventListener('playing', onPlaying);
+            video.removeEventListener('pause', onPause);
+        };
+    }, [videoSrc]);
 
     // Subtitle Hijacking Logic
     useEffect(() => {
@@ -1170,11 +1201,13 @@ function RoomContent() {
 
                 // 1. Hard Sync: State Mismatch or Very Large Drift (> 3.0s)
                 // We use a larger threshold (3s) to avoid frequent seeking, which causes buffering/stuttering.
-                const isStateMismatch = (state === 'playing' && video.paused) || (state === 'paused' && !video.paused);
+                // Ignore mismatch if we are buffering (we might be "paused" waiting for data while controller is playing)
+                const isStateMismatch = !isBuffering.current && ((state === 'playing' && video.paused) || (state === 'paused' && !video.paused));
 
-                if (Math.abs(drift) > 3.0 || isStateMismatch) {
-                    // console.log("Hard Sync", { drift, state });
+                if (Math.abs(drift) > 2.0 || isStateMismatch) {
+                    addLog(`[Sync] Hard Sync: Drift=${drift.toFixed(3)}s, StateMismatch=${isStateMismatch}`);
                     if (Math.abs(drift) > 0.5) { // Minimum seek threshold
+                        addLog(`[Sync] Seeking to ${compensatedTime.toFixed(2)}s`);
                         video.currentTime = compensatedTime;
                     }
                     if (state === 'playing') video.play().catch(() => { });
@@ -1185,34 +1218,18 @@ function RoomContent() {
                         video.playbackRate = playbackRate;
                     }
                 }
-                // 2. Soft Sync: Small/Medium Drift (Speed Adjustment)
-                // We prefer this over Hard Sync to maintain smoothness.
-                else if (state === 'playing' && Math.abs(drift) > 0.1) {
-                    const targetRate = playbackRate || 1.0;
-                    if (drift > 0) {
-                        // We are ahead -> Slow down
-                        // 0.1 - 0.5s drift: -0.05 speed
-                        // 0.5s - 3.0s drift: -0.15 speed
-                        const factor = drift > 0.5 ? 0.15 : 0.05;
-                        video.playbackRate = Math.max(0.25, targetRate - factor);
-                    } else {
-                        // We are behind -> Speed up
-                        // 0.1 - 0.5s drift: +0.05 speed
-                        // 0.5s - 3.0s drift: +0.15 speed
-                        const factor = drift < -0.5 ? 0.15 : 0.05;
-                        video.playbackRate = Math.min(4.0, targetRate + factor);
-                    }
-                }
-                // 3. Stabilize
+                // 2. Soft Sync: Drift Adjustment (Tiered)
                 else {
-                    if (playbackRate && Math.abs(video.playbackRate - playbackRate) > 0.01) {
-                        video.playbackRate = playbackRate;
+                    // Soft Sync DISABLED - Just reset rate
+                    const targetRate = playbackRate || 1.0;
+                    if (Math.abs(video.playbackRate - targetRate) > 0.01) {
+                        video.playbackRate = targetRate;
+                        addLog(`[Sync] Reset Rate -> ${targetRate}`);
                     }
+
                 }
 
                 // Debounce the remote update flag
-                // We use a shorter timeout because soft sync (rate change) doesn't trigger 'seeked' but might trigger 'ratechange'
-                // The 'seeked' event is the dangerous one for loops.
                 setTimeout(() => { isRemoteUpdate.current = false; }, 500);
             } else if (data.type === 'PLAYLIST_UPDATE') {
                 const { playlist: newPlaylist } = data.payload;
