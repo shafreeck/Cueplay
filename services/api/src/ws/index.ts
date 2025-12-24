@@ -100,6 +100,24 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                         if (room && room.controllerId === pUserId && payload.playingItemId && payload.duration) {
                             await RoomManager.updateRoomProgress(currentRoomId, payload.playingItemId, payload.time, payload.duration);
                         }
+
+                        // Broadcast progress to others so they can update their UI (Member list & Playlist)
+                        const clients = roomConnections.get(currentRoomId);
+                        if (clients) {
+                            const progMsg = JSON.stringify({
+                                type: 'MEMBER_PROGRESS',
+                                payload: {
+                                    userId: pUserId,
+                                    time: payload.time,
+                                    playingItemId: payload.playingItemId
+                                }
+                            });
+                            for (const [uid, client] of clients.entries()) {
+                                if (uid !== pUserId && client.readyState === 1) {
+                                    client.send(progMsg);
+                                }
+                            }
+                        }
                     }
                 } else if (event.type === 'SET_ROOM_COOKIE') {
                     if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {

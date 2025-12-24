@@ -1041,11 +1041,8 @@ function RoomContent() {
                         const update = (list: any[]): any[] => {
                             return list.map(item => {
                                 if (item.id === playingItemId) {
-                                    if (item.duration) {
-                                        updated = true;
-                                        return { ...item, progress: time };
-                                    }
-                                    return item;
+                                    updated = true;
+                                    return { ...item, progress: time };
                                 }
                                 if (item.children) {
                                     const newChildren = update(item.children);
@@ -1140,6 +1137,32 @@ function RoomContent() {
                     if (prev.some(m => m.id === message.id)) return prev;
                     return [...prev, message];
                 });
+            } else if (data.type === 'MEMBER_PROGRESS') {
+                const { userId, time, playingItemId: memberPlayingItemId } = data.payload;
+                // Update members list progress
+                setMembers(prev => prev.map(m => m.userId === userId ? { ...m, currentProgress: time } : m));
+
+                // Update playlist progress if this is the controller (providing authoritative progress)
+                if (memberPlayingItemId && userId === controllerIdRef.current) {
+                    setPlaylist(prev => {
+                        let updated = false;
+                        const update = (list: any[]): any[] => {
+                            return list.map(item => {
+                                if (item.id === memberPlayingItemId) {
+                                    updated = true;
+                                    return { ...item, progress: time };
+                                }
+                                if (item.children) {
+                                    const newChildren = update(item.children);
+                                    if (updated) return { ...item, children: newChildren };
+                                }
+                                return item;
+                            });
+                        };
+                        const newList = update(prev);
+                        return updated ? newList : prev;
+                    });
+                }
             }
         };
 
@@ -1199,6 +1222,28 @@ function RoomContent() {
                 // 2. If Controller, broadcast authoritative state for Active Sync
                 // We do this every 1s to maintain tight sync.
                 if (controllerIdRef.current === currentUserId) {
+                    // Update local playlist progress state so the controller sees their own bar move
+                    if (playingItemId) {
+                        setPlaylist(prev => {
+                            let updated = false;
+                            const update = (list: any[]): any[] => {
+                                return list.map(item => {
+                                    if (item.id === playingItemId) {
+                                        updated = true;
+                                        return { ...item, progress: video.currentTime };
+                                    }
+                                    if (item.children) {
+                                        const newChildren = update(item.children);
+                                        if (updated) return { ...item, children: newChildren };
+                                    }
+                                    return item;
+                                });
+                            };
+                            const newList = update(prev);
+                            return updated ? newList : prev;
+                        });
+                    }
+
                     ws.send(JSON.stringify({
                         type: 'PLAYER_STATE',
                         payload: {
