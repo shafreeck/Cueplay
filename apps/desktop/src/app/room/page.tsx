@@ -58,6 +58,7 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
     };
 
     return (
+        // eslint-disable-next-line react/forbid-dom-props
         <div ref={setNodeRef} style={style} className={`${isDragging ? 'opacity-50' : ''}`}>
             <PlaylistItemRenderer
                 item={item}
@@ -1810,20 +1811,13 @@ function RoomContent() {
 
                         {currentSubtitle && (
                             <div
-                                className="absolute bottom-20 left-0 right-0 pointer-events-none z-20"
-                                style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                                className="absolute bottom-20 left-0 right-0 pointer-events-none z-20 flex justify-center items-center"
                             >
                                 <div
-                                    className="bg-black/50 text-white px-6 py-2 rounded-lg text-lg lg:text-3xl shadow-2xl border border-white/10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
-                                    style={{
-                                        textAlign: 'center',
-                                        display: 'inline-block',
-                                        maxWidth: '90%',
-                                        wordWrap: 'break-word'
-                                    }}
+                                    className="bg-black/50 text-white px-6 py-2 rounded-lg text-lg lg:text-3xl shadow-2xl border border-white/10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center inline-block max-w-[90%] break-words"
                                 >
                                     {currentSubtitle.split('\n').map((line, i) => (
-                                        <div key={i} style={{ textAlign: 'center' }}>{line}</div>
+                                        <div key={i} className="text-center">{line}</div>
                                     ))}
                                 </div>
                             </div>
