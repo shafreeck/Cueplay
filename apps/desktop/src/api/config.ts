@@ -67,3 +67,9 @@ export const getProxyBase = async (): Promise<string> => {
 
     return dynamicProxyBasePromise;
 }
+
+export const resetProxyCache = () => {
+    console.log("[Config] Resetting proxy cache...");
+    dynamicProxyPort = null;
+    dynamicProxyBasePromise = null;
+}

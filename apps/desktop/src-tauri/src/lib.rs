@@ -54,7 +54,14 @@ pub fn run() {
           // To make it simple: pass the State to start_proxy_server? No, State is tauri managed.
           // Let's pass the Arc<Mutex<u16>>?
           
-          proxy::start_proxy_server(app_handle).await;
+          loop {
+            if let Err(e) = proxy::start_proxy_server(app_handle.clone()).await {
+                eprintln!("Proxy server failed: {}", e);
+            }
+            // If it returns, it means it stopped or crashed. Wait a bit and restart.
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            println!("Restarting proxy server...");
+          }
       });
 
       Ok(())

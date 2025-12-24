@@ -12,14 +12,14 @@ use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
 use tauri::{AppHandle, Manager, Emitter};
 
-pub async fn start_proxy_server(app_handle: AppHandle) {
+pub async fn start_proxy_server(app_handle: AppHandle) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Attempt to bind to port 3001 first, then fallback to 0 (random)
     // Actually, for consistency with local dev, we might want to try 3001.
     // But in packaged app, 3001 might be taken or we want robustness.
     // Let's try to bind to 0 to get a random port, and then tell frontend.
     
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;
+    let port = listener.local_addr()?.port();
     
     println!("Proxy server listening on port: {}", port);
 
@@ -32,8 +32,7 @@ pub async fn start_proxy_server(app_handle: AppHandle) {
 
     let client = Client::builder()
         .no_proxy()
-        .build()
-        .unwrap();
+        .build()?;
 
     let app = Router::new()
         .route("/ping", get(|| async { "pong" }))
@@ -52,7 +51,8 @@ pub async fn start_proxy_server(app_handle: AppHandle) {
         )
         .with_state(client);
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await?;
+    Ok(())
 }
 
 #[derive(serde::Deserialize)]

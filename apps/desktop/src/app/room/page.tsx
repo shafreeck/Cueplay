@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from 
 import { useToast } from "@/components/ui/use-toast";
 import { useTranslation } from 'react-i18next';
 import { ApiClient, DriveFile } from '@/api/client';
-import { WS_BASE, getProxyBase } from '@/api/config';
+import { WS_BASE, getProxyBase, resetProxyCache } from '@/api/config';
 import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
@@ -166,6 +166,7 @@ function RoomContent() {
     const [roomDescription, setRoomDescription] = useState('');
     const lastSyncedMetadata = useRef({ title: '', description: '' });
     const metadataInitialized = useRef(false);
+    const retryCount = useRef(0); // Auto-retry counter
     const isMobile = useIsMobile(); // Removed conditional
 
     // UI State for Mobile/Responsive Layout
@@ -1565,8 +1566,36 @@ function RoomContent() {
                                 onWaiting={() => addLog(`[Video Event] Waiting`)}
                                 onError={(e) => {
                                     const err = e.currentTarget.error;
-                                    addLog(`[Video Error] Code: ${err?.code}, Msg: ${err?.message}`);
+                                    const code = err?.code;
+                                    const msg = err?.message;
+                                    addLog(`[Video Error] Code: ${code}, Msg: ${msg}`);
                                     console.error("[Video Error]", err);
+
+                                    // Auto-retry logic for network/source errors (Proxy restart or Expiry)
+                                    if (code === 2 || code === 4) { // MEDIA_ERR_NETWORK (2) or MEDIA_ERR_SRC_NOT_SUPPORTED (4)
+                                        if (retryCount.current < 3) {
+                                            retryCount.current += 1;
+                                            addLog(`[Retry] Attempt ${retryCount.current}/3... Resetting Proxy Cache.`);
+
+                                            // 1. Force new proxy port discovery
+                                            resetProxyCache();
+
+                                            // 2. Retry playback (re-resolve URL)
+                                            // Use setTimeout to avoid rapid loops if error is persistent
+                                            setTimeout(() => {
+                                                if (fileId) {
+                                                    resolveAndPlay(fileId, playingItemId || undefined);
+                                                }
+                                            }, 1000);
+                                        } else {
+                                            addLog(`[Retry] Max retries exceeded.`);
+                                            toast({
+                                                variant: "destructive",
+                                                title: t('playback_error'),
+                                                description: t('playback_error_desc')
+                                            });
+                                        }
+                                    }
                                 }}
                             >
                                 Your browser does not support video playback.
