@@ -24,6 +24,7 @@ export async function broadcastRoomUpdate(roomId: string, excludeUserId?: string
             quarkCookie: room.quarkCookie,
             title: room.title,
             description: room.description,
+            isLocked: room.isLocked,
             hasGlobalCookie: !!ConfigStore.getGlobalCookie()
         }
     };

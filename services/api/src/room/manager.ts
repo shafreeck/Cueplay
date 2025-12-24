@@ -87,6 +87,7 @@ export class RoomManager {
             quarkCookie: dbRoom.quarkCookie || '',
             title: dbRoom.title || undefined,
             description: dbRoom.description || undefined,
+            isLocked: dbRoom.isLocked,
             members: dbRoom.members.map(m => ({
                 userId: m.userId,
                 name: m.name || undefined,
@@ -156,6 +157,7 @@ export class RoomManager {
                 quarkCookie: json.quarkCookie || '',
                 title: json.title || null,
                 description: json.description || null,
+                isLocked: json.isLocked || false,
             }
         });
 

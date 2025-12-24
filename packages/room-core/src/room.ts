@@ -20,6 +20,7 @@ export interface RoomState {
     quarkCookie?: string;
     title?: string;
     description?: string;
+    isLocked?: boolean;
 }
 
 export class Room {
@@ -33,6 +34,7 @@ export class Room {
             controllerId: ownerId, // Owner starts as controller
             playlist: [], // Initialize empty playlist
             quarkCookie: '', // Explicitly initialize
+            isLocked: false,
             ...initialState
         };
         // Add owner as member only if members list is empty
@@ -55,6 +57,7 @@ export class Room {
     get quarkCookie() { return this.state.quarkCookie || ''; }
     get title() { return this.state.title || ''; }
     get description() { return this.state.description || ''; }
+    get isLocked() { return this.state.isLocked || false; }
 
     addMember(member: Member) {
         const existingIndex = this.state.members.findIndex(m => m.userId === member.userId);
@@ -92,6 +95,10 @@ export class Room {
 
     setDescription(description: string) {
         this.state.description = description;
+    }
+
+    setIsLocked(isLocked: boolean) {
+        this.state.isLocked = isLocked;
     }
 
     toJSON() {

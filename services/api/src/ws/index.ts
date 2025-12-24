@@ -72,9 +72,32 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                     if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
                         const room = await RoomManager.getRoom(currentRoomId);
                         if (room) {
+                            // Lock Check: Only owner can take control if room is locked
+                            if (room.isLocked && room.ownerId !== pUserId) {
+                                socket.send(JSON.stringify({ type: 'error', payload: { msg: 'Control is locked by owner' } }));
+                                return;
+                            }
                             room.setController(pUserId);
                             await RoomManager.persist(room);
                             fastify.log.info({ msg: 'User took control', roomId: currentRoomId, userId: pUserId });
+                            await broadcastRoomUpdate(currentRoomId);
+                        }
+                    }
+                } else if (event.type === 'UPDATE_ROOM') {
+                    if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
+                        const room = await RoomManager.getRoom(currentRoomId);
+                        if (room) {
+                            if (room.ownerId !== pUserId) {
+                                socket.send(JSON.stringify({ type: 'error', payload: { msg: 'Only owner can update room settings' } }));
+                                return;
+                            }
+                            const { title, description, isLocked } = event.payload;
+                            if (title !== undefined) room.setTitle(title);
+                            if (description !== undefined) room.setDescription(description);
+                            if (isLocked !== undefined) room.setIsLocked(isLocked);
+
+                            await RoomManager.persist(room);
+                            fastify.log.info({ msg: 'Room settings updated', roomId: currentRoomId, userId: pUserId });
                             await broadcastRoomUpdate(currentRoomId);
                         }
                     }
@@ -187,13 +210,16 @@ export async function websocketRoutes(fastify: FastifyInstance) {
 
                 const room = await RoomManager.getRoom(currentRoomId);
                 if (room) {
-                    // Auto-handoff controller if they left
+                    // Auto-handoff removed: Keep controllerId persisted to allow reconnection.
+                    // If the user is gone forever, others can explicitly Take Control.
+                    /*
                     if (room.controllerId === pUserId) {
                         const nextUserId = clients.keys().next().value;
                         room.setController(nextUserId || null);
                         await RoomManager.persist(room);
                         fastify.log.info({ msg: 'Controller left, handoff to next', roomId: currentRoomId, nextUserId });
                     }
+                    */
                 }
 
                 if (clients.size === 0) {

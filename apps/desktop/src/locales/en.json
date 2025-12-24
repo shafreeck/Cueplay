@@ -148,6 +148,11 @@
         "room_not_found": "Room not found",
         "room_settings_saved": "Room settings saved",
         "failed_save_settings": "Failed to save settings",
-        "confirm_reset": "Reset Now"
+        "confirm_reset": "Reset Now",
+        "lock_control": "Lock Control",
+        "lock_control_desc": "Prevent others from taking control",
+        "control_locked": "Control Locked",
+        "control_locked_desc": "Control is locked by owner",
+        "locked": "Locked"
     }
 }

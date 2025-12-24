@@ -148,6 +148,11 @@
         "room_not_found": "房间未找到",
         "room_settings_saved": "房间设置已保存",
         "failed_save_settings": "保存设置失败",
-        "confirm_reset": "立即重置"
+        "confirm_reset": "立即重置",
+        "lock_control": "锁定控制",
+        "lock_control_desc": "防止他人获取控制权",
+        "control_locked": "控制权已锁定",
+        "control_locked_desc": "房主已锁定控制权",
+        "locked": "已锁定"
     }
 }

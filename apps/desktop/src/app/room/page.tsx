@@ -18,7 +18,8 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock } from 'lucide-react';
+import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -164,7 +165,8 @@ function RoomContent() {
     const [isRoomLoading, setIsRoomLoading] = useState(true);
     const [roomTitle, setRoomTitle] = useState('');
     const [roomDescription, setRoomDescription] = useState('');
-    const lastSyncedMetadata = useRef({ title: '', description: '' });
+    const [isLocked, setIsLocked] = useState(false);
+    const lastSyncedMetadata = useRef({ title: '', description: '', isLocked: false });
     const metadataInitialized = useRef(false);
     const retryCount = useRef(0); // Auto-retry counter
     const isMobile = useIsMobile(); // Removed conditional
@@ -334,7 +336,7 @@ function RoomContent() {
 
         try {
             await ApiClient.updateRoom(roomId, currentUserId, { title, description: desc });
-            lastSyncedMetadata.current = { title, description: desc };
+            lastSyncedMetadata.current = { title, description: desc, isLocked: lastSyncedMetadata.current.isLocked };
             toast({ description: t('room_settings_saved'), duration: 1500 });
         } catch (e) {
             console.error(e);
@@ -605,6 +607,16 @@ function RoomContent() {
     }
 
     const resolveAndPlay = async (targetFileId: string, itemId?: string) => {
+        // Permission Check: Viewers in Sync Mode cannot change video
+        if (!canControl && isSynced) {
+            toast({
+                title: t('view_only_title'),
+                description: t('view_only_desc'),
+                variant: "destructive"
+            });
+            return;
+        }
+
         if (!targetFileId) return;
         let fid = targetFileId;
         const urlMatch = targetFileId.match(/video\/([a-zA-Z0-9]+)/);
@@ -643,8 +655,8 @@ function RoomContent() {
                 setDuration(source.meta.duration);
             }
 
-            // Sync with others
-            if (socketRef.current?.readyState === WebSocket.OPEN) {
+            // Sync with others (Only if Controller)
+            if (canControl && socketRef.current?.readyState === WebSocket.OPEN) {
                 socketRef.current.send(JSON.stringify({
                     type: 'MEDIA_CHANGE',
                     payload: {
@@ -690,6 +702,14 @@ function RoomContent() {
     // Playlist Logic
     // Playlist Logic
     const addToPlaylist = async () => {
+        if (!canControl) {
+            toast({
+                title: t('view_only_title'),
+                description: t('view_only_desc'),
+                variant: "destructive"
+            });
+            return;
+        }
         if (!inputValue || isResolving) return;
         setIsResolving(true);
         let fid = inputValue;
@@ -735,6 +755,15 @@ function RoomContent() {
     };
 
     const removeFromPlaylist = (id: string) => {
+        if (!canControl) {
+            toast({
+                title: t('view_only_title'),
+                description: t('view_only_desc'),
+                variant: "destructive"
+            });
+            return;
+        }
+
         const removeById = (list: PlaylistItem[]): PlaylistItem[] => {
             return list.reduce((acc: PlaylistItem[], item) => {
                 if (item.id === id) return acc;
@@ -773,6 +802,14 @@ function RoomContent() {
     };
 
     const handleAddFileFromLibrary = async (file: DriveFile) => {
+        if (!canControl) {
+            toast({
+                title: t('view_only_title'),
+                description: t('view_only_desc'),
+                variant: "destructive"
+            });
+            return;
+        }
         setIsResolving(true);
         try {
             const { source } = await ApiClient.resolveVideo(file.id, roomId || '');
@@ -814,6 +851,14 @@ function RoomContent() {
     };
 
     const handleAddSeriesFromLibrary = (folder: DriveFile, files: DriveFile[]) => {
+        if (!canControl) {
+            toast({
+                title: t('view_only_title'),
+                description: t('view_only_desc'),
+                variant: "destructive"
+            });
+            return;
+        }
         const children: PlaylistItem[] = files.map(f => ({
             id: Math.random().toString(36).slice(2),
             fileId: f.id,
@@ -848,6 +893,9 @@ function RoomContent() {
     };
 
     const playNext = () => {
+        // Viewers in Sync Mode should not auto-advance; they wait for controller
+        if (!canControl && isSynced) return;
+
         if (playlist.length === 0) return;
 
         const findNext = (list: PlaylistItem[]): PlaylistItem | null => {
@@ -1048,7 +1096,12 @@ function RoomContent() {
                         lastSyncedMetadata.current.description = d;
                     }
 
-                    if (data.payload.title !== undefined || data.payload.description !== undefined) {
+                    if (data.payload.isLocked !== undefined) {
+                        setIsLocked(data.payload.isLocked);
+                        lastSyncedMetadata.current.isLocked = data.payload.isLocked;
+                    }
+
+                    if (data.payload.title !== undefined || data.payload.description !== undefined || data.payload.isLocked !== undefined) {
                         metadataInitialized.current = true;
                     }
                 }
@@ -1211,7 +1264,7 @@ function RoomContent() {
         };
     }, [roomId]);
 
-    const canControl = !controllerId || controllerId === currentUserId;
+    const canControl = controllerId === currentUserId;
     const isOwner = currentUserId && ownerId && currentUserId === ownerId;
 
     // Bind Video Events (Only if authorized to control)
@@ -1317,6 +1370,7 @@ function RoomContent() {
     );
 
     const handleDragEnd = (event: DragEndEvent) => {
+        if (!canControl) return;
         const { active, over } = event;
 
         if (active.id !== over?.id) {
@@ -1375,7 +1429,18 @@ function RoomContent() {
                                 : 'bg-muted/50 text-muted-foreground border-white/10 hover:bg-muted hover:text-foreground cursor-pointer'
                                 }`}
                             onClick={() => {
-                                if (!canControl && socketRef.current?.readyState === WebSocket.OPEN) {
+                                if (canControl) return;
+
+                                if (isLocked && !isOwner) {
+                                    toast({
+                                        title: t('control_locked'),
+                                        description: t('control_locked_desc'),
+                                        variant: "destructive"
+                                    });
+                                    return;
+                                }
+
+                                if (socketRef.current?.readyState === WebSocket.OPEN) {
                                     socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId: roomId || '' } }));
                                     toast({ title: t('control_requested_title'), description: t('control_requested_desc') });
                                 }
@@ -1386,6 +1451,11 @@ function RoomContent() {
                                 <>
                                     <Cast className="h-3.5 w-3.5" />
                                     <span className="hidden md:inline">{t('controlling')}</span>
+                                </>
+                            ) : isLocked && !isOwner ? (
+                                <>
+                                    <Lock className="h-3.5 w-3.5" />
+                                    <span className="hidden md:inline">{t('locked')}</span>
                                 </>
                             ) : (
                                 <>
@@ -1472,6 +1542,28 @@ function RoomContent() {
                                                         }}
                                                         placeholder={t('enter_room_description')}
                                                         className="h-8"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                                    <div className="space-y-0.5">
+                                                        <Label className="text-sm font-medium">
+                                                            {t('lock_control')}
+                                                        </Label>
+                                                        <div className="text-[10px] text-muted-foreground">
+                                                            {t('lock_control_desc')}
+                                                        </div>
+                                                    </div>
+                                                    <Switch
+                                                        checked={isLocked}
+                                                        onCheckedChange={(checked) => {
+                                                            setIsLocked(checked);
+                                                            if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                                socketRef.current.send(JSON.stringify({
+                                                                    type: 'UPDATE_ROOM',
+                                                                    payload: { isLocked: checked }
+                                                                }));
+                                                            }
+                                                        }}
                                                     />
                                                 </div>
 

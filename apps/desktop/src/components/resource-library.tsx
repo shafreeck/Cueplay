@@ -66,7 +66,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd, onAddSeries
 
     const handleAdd = (file: DriveFile) => {
         onAdd(file);
-        toast({ title: t('added_to_queue_title'), description: file.name });
+        // Toast is handled by parent (RoomContent) to ensure permission checks are respected
     };
 
     const [isCollecting, setIsCollecting] = useState(false);
@@ -105,7 +105,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd, onAddSeries
             }
 
             onAddSeries(folder, allVideos);
-            toast({ title: t('added_to_queue_title'), description: `${folder.name} (${allVideos.length} ${t('episodes')})` });
+            // Toast is handled by parent
         } catch (e: any) {
             console.error(e);
             toast({

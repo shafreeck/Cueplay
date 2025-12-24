@@ -3,7 +3,16 @@ export interface BaseEvent {
     payload: any;
 }
 
-export type EventType = 'JOIN_ROOM' | 'LEAVE_ROOM' | 'SYNC_TIME' | 'PLAYER_STATE' | 'MEDIA_CHANGE' | 'ROOM_UPDATE' | 'TAKE_CONTROL' | 'VIDEO_PROGRESS' | 'PLAYLIST_UPDATE' | 'CHAT_MESSAGE' | 'SET_ROOM_COOKIE' | 'MEMBER_PROGRESS';
+export type EventType = 'JOIN_ROOM' | 'LEAVE_ROOM' | 'SYNC_TIME' | 'PLAYER_STATE' | 'MEDIA_CHANGE' | 'ROOM_UPDATE' | 'TAKE_CONTROL' | 'VIDEO_PROGRESS' | 'PLAYLIST_UPDATE' | 'CHAT_MESSAGE' | 'SET_ROOM_COOKIE' | 'MEMBER_PROGRESS' | 'UPDATE_ROOM';
+
+export interface UpdateRoomEvent extends BaseEvent {
+    type: 'UPDATE_ROOM';
+    payload: {
+        title?: string;
+        description?: string;
+        isLocked?: boolean;
+    };
+}
 
 export interface RoomUpdateEvent extends BaseEvent {
     type: 'ROOM_UPDATE';
@@ -14,6 +23,9 @@ export interface RoomUpdateEvent extends BaseEvent {
         controllerId: string | null;
         quarkCookie?: string;
         hasGlobalCookie?: boolean;
+        title?: string;
+        description?: string;
+        isLocked?: boolean;
     };
 }
 
