@@ -83,6 +83,9 @@ jobs:
             - name: Initialize Android Libs
               run: pnpm --filter @cueplay/desktop tauri android init
 
+            - name: Place Android keystore
+              run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > apps/desktop/src-tauri/release.keystore
+
             - name: Build Android APK
               run: pnpm --filter @cueplay/desktop tauri android build --apk true
               env:
