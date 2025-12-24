@@ -1306,7 +1306,11 @@ function RoomContent() {
 
 
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
@@ -1337,7 +1341,7 @@ function RoomContent() {
 
 
     return (
-        <div className="min-h-screen flex flex-col bg-black md:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] md:from-indigo-900/20 md:via-background md:to-background text-foreground overflow-hidden md:overflow-auto">
+        <div className="h-[100dvh] md:min-h-screen flex flex-col bg-black md:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] md:from-indigo-900/20 md:via-background md:to-background text-foreground overflow-hidden md:overflow-auto">
             <style>{styles}</style>
 
 
@@ -1735,7 +1739,7 @@ function RoomContent() {
                                         </Button>
                                     </div>
 
-                                    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                    <div className={cn("flex-1 overflow-y-auto p-2 space-y-2", isMobile ? "pb-32" : "")}>
                                         {isRoomLoading ? (
                                             <div className="space-y-2 p-2">
                                                 {[1, 2, 3, 4].map((i) => (
