@@ -88,9 +88,10 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             }
                         }
                     }
+
                 } else if (event.type === 'VIDEO_PROGRESS') {
                     if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
-                        const payload = event.payload; // { time: number, playingItemId?: string, duration?: number }
+                        const payload = event.payload; // { time: number, playingItemId?: string, duration?: number, sentAt?: number }
 
                         // Update individual progress
                         await RoomManager.updateMemberProgress(currentRoomId, pUserId, payload.time);
@@ -109,7 +110,8 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                                 payload: {
                                     userId: pUserId,
                                     time: payload.time,
-                                    playingItemId: payload.playingItemId
+                                    playingItemId: payload.playingItemId,
+                                    duration: payload.duration
                                 }
                             });
                             for (const [uid, client] of clients.entries()) {
@@ -117,6 +119,26 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                                     client.send(progMsg);
                                 }
                             }
+                        }
+                    }
+                } else if (event.type === 'PLAYLIST_UPDATE') {
+                    fastify.log.info({ msg: 'Received PLAYLIST_UPDATE', roomId: currentRoomId });
+                    if (currentRoomId && roomConnections.has(currentRoomId)) {
+                        const payload = event.payload;
+
+                        // Update Room State
+                        const room = await RoomManager.getRoom(currentRoomId);
+                        if (room) {
+                            room.setPlaylist(payload.playlist);
+                            await RoomManager.persist(room);
+
+                            const clients = roomConnections.get(currentRoomId)!;
+                            for (const client of clients.values()) {
+                                if (client !== socket && client.readyState === 1) {
+                                    client.send(JSON.stringify({ type: 'PLAYLIST_UPDATE', payload }));
+                                }
+                            }
+                            fastify.log.info({ msg: 'Broadcasted PLAYLIST_UPDATE', roomId: currentRoomId });
                         }
                     }
                 } else if (event.type === 'SET_ROOM_COOKIE') {

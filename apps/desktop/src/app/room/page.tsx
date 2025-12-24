@@ -1138,7 +1138,7 @@ function RoomContent() {
                     return [...prev, message];
                 });
             } else if (data.type === 'MEMBER_PROGRESS') {
-                const { userId, time, playingItemId: memberPlayingItemId } = data.payload;
+                const { userId, time, playingItemId: memberPlayingItemId, duration } = data.payload;
                 // Update members list progress
                 setMembers(prev => prev.map(m => m.userId === userId ? { ...m, currentProgress: time } : m));
 
@@ -1150,7 +1150,7 @@ function RoomContent() {
                             return list.map(item => {
                                 if (item.id === memberPlayingItemId) {
                                     updated = true;
-                                    return { ...item, progress: time };
+                                    return { ...item, progress: time, duration: duration || item.duration };
                                 }
                                 if (item.children) {
                                     const newChildren = update(item.children);
@@ -1230,7 +1230,7 @@ function RoomContent() {
                                 return list.map(item => {
                                     if (item.id === playingItemId) {
                                         updated = true;
-                                        return { ...item, progress: video.currentTime };
+                                        return { ...item, progress: video.currentTime, duration: video.duration };
                                     }
                                     if (item.children) {
                                         const newChildren = update(item.children);
