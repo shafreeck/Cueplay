@@ -153,6 +153,11 @@
         "lock_control_desc": "Prevent others from taking control",
         "control_locked": "Control Locked",
         "control_locked_desc": "Control is locked by owner",
-        "locked": "Locked"
+        "locked": "Locked",
+        "failed_to_load": "Failed to load",
+        "failed_to_load_rooms": "Failed to list rooms",
+        "failed_to_load_rooms_timeout": "Failed to load rooms: timeout",
+        "failed_init_user": "Failed to initialize user identity.",
+        "retry": "Retry"
     }
 }

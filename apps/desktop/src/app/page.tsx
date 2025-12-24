@@ -170,7 +170,7 @@ export default function Home() {
     if (currentId) {
       const timeoutId = setTimeout(() => {
         console.error('loadRooms timeout after 10s');
-        setError('Failed to load rooms: timeout');
+        setError(t('failed_to_load_rooms_timeout'));
         setIsInitializing(false);
       }, 10000);
 
@@ -180,7 +180,7 @@ export default function Home() {
           setIsInitializing(false);
         });
     } else {
-      setError("Failed to initialize user identity.");
+      setError(t('failed_init_user'));
       setIsInitializing(false);
     }
   }, []);
@@ -197,7 +197,7 @@ export default function Home() {
       setRooms(list);
     } catch (e: any) {
       console.error(e);
-      setError(e.message || "Failed to load rooms");
+      setError(t('failed_to_load_rooms'));
     } finally {
       setIsLoadingRooms(false);
     }

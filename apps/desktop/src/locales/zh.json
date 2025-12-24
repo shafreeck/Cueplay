@@ -153,6 +153,11 @@
         "lock_control_desc": "防止他人获取控制权",
         "control_locked": "控制权已锁定",
         "control_locked_desc": "房主已锁定控制权",
-        "locked": "已锁定"
+        "locked": "已锁定",
+        "failed_to_load": "加载失败",
+        "failed_to_load_rooms": "获取房间列表失败",
+        "failed_to_load_rooms_timeout": "获取房间列表超时",
+        "failed_init_user": "初始化用户身份失败",
+        "retry": "重试"
     }
 }
