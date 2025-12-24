@@ -201,23 +201,36 @@ export class RoomManager {
         const room = await this.getRoom(roomId);
         if (!room) return;
 
-        const updatedPlaylist = room.playlist.map(item => {
-            if (item.id === playingItemId) {
-                return { ...item, progress, duration };
-            }
-            if (item.children) {
-                return {
-                    ...item,
-                    children: item.children.map((c: any) => c.id === playingItemId ? { ...c, progress, duration } : c)
-                };
-            }
-            return item;
-        });
+        const updateRecursive = (items: any[]): { items: any[], updated: boolean } => {
+            let anyUpdated = false;
+            const newItems = items.map(item => {
+                if (item.id === playingItemId) {
+                    anyUpdated = true;
+                    return { ...item, progress, duration };
+                }
+                if (item.children) {
+                    const { items: newChildren, updated } = updateRecursive(item.children);
+                    if (updated) {
+                        anyUpdated = true;
+                        return { ...item, children: newChildren };
+                    }
+                }
+                return item;
+            });
+            return { items: newItems, updated: anyUpdated };
+        };
 
-        room.setPlaylist(updatedPlaylist);
-        await prisma.room.update({
-            where: { id: roomId },
-            data: { playlist: JSON.stringify(updatedPlaylist) }
-        });
+        const { items: updatedPlaylist, updated } = updateRecursive(room.playlist);
+
+        if (updated) {
+            console.log(`[RoomManager] Updated progress for item ${playingItemId} in room ${roomId}`);
+            room.setPlaylist(updatedPlaylist);
+            await prisma.room.update({
+                where: { id: roomId },
+                data: { playlist: JSON.stringify(updatedPlaylist) }
+            });
+        }
+
+
     }
 }
