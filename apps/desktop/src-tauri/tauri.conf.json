@@ -31,7 +31,8 @@
     "windows": {
       "wix": {
         "language": [
-          "en-US"
+          "en-US",
+          "zh-CN"
         ],
         "upgradeCode": "9E1BDEC5-E4EE-42F6-B14C-F5C85709D084"
       }
