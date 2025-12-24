@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
+import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -275,6 +275,22 @@ function RoomContent() {
             }
         }
         return null;
+    }, []);
+
+    // Check proxy health
+    useEffect(() => {
+        const checkProxy = async () => {
+            try {
+                const proxyBase = await getProxyBase();
+                if (!proxyBase) return;
+                const resp = await fetch(`${proxyBase}/ping`);
+                const text = await resp.text();
+                addLog(`[Proxy] Health check: ${text} (Base: ${proxyBase})`);
+            } catch (e: any) {
+                addLog(`[Proxy] Health check failed: ${e.message}`);
+            }
+        };
+        checkProxy();
     }, []);
 
     // Resume progress when playlist is loaded/updated or video source changes
@@ -580,12 +596,14 @@ function RoomContent() {
             }
 
             // If the source is different or it's a new play, set it
+            addLog(`[Sync] Final URL: ${finalUrl} (ProxyBase: ${await getProxyBase()})`);
             setVideoSrc(finalUrl);
             if (itemId) {
                 addLog(`Resolving synced video: ${fid} (item: ${itemId})`);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("resolveAndPlayWithoutSync error:", e);
+            addLog(`[Sync] Error: ${e.message}`);
         }
     }
 
@@ -658,6 +676,7 @@ function RoomContent() {
             }
 
             setVideoSrc(finalUrl);
+            addLog(`Setting Video Src: ${finalUrl.slice(0, 50)}... (Proxy: ${finalUrl.includes('127.0.0.1')})`);
         } catch (e: any) {
             console.error(e);
             toast({
@@ -1504,9 +1523,20 @@ function RoomContent() {
                                 ref={videoRef}
                                 controls
                                 autoPlay
+                                playsInline
                                 className="w-full h-full object-contain"
                                 src={videoSrc}
                                 onEnded={playNext}
+                                onLoadStart={() => addLog(`[Video Event] LoadStart: ${videoSrc.slice(0, 50)}...`)}
+                                onLoadedMetadata={() => addLog(`[Video Event] LoadedMetadata: Duration ${videoRef.current?.duration}`)}
+                                onCanPlay={() => addLog(`[Video Event] CanPlay`)}
+                                onStalled={() => addLog(`[Video Event] Stalled`)}
+                                onWaiting={() => addLog(`[Video Event] Waiting`)}
+                                onError={(e) => {
+                                    const err = e.currentTarget.error;
+                                    addLog(`[Video Error] Code: ${err?.code}, Msg: ${err?.message}`);
+                                    console.error("[Video Error]", err);
+                                }}
                             >
                                 Your browser does not support video playback.
                             </video>
@@ -1776,7 +1806,8 @@ function RoomContent() {
                     }}
                 />
             </main >
-        </div >
+
+        </div>
     );
 }
 
@@ -1788,5 +1819,3 @@ export default function RoomPage() {
         </Suspense>
     );
 }
-
-

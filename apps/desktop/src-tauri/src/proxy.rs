@@ -18,7 +18,7 @@ pub async fn start_proxy_server(app_handle: AppHandle) {
     // But in packaged app, 3001 might be taken or we want robustness.
     // Let's try to bind to 0 to get a random port, and then tell frontend.
     
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     
     println!("Proxy server listening on port: {}", port);
@@ -30,9 +30,13 @@ pub async fn start_proxy_server(app_handle: AppHandle) {
 
     let _ = app_handle.emit("proxy-server-started", port);
 
-    let client = Client::new();
+    let client = Client::builder()
+        .no_proxy()
+        .build()
+        .unwrap();
 
     let app = Router::new()
+        .route("/ping", get(|| async { "pong" }))
         .route("/api/stream/proxy", get(proxy_handler).options(proxy_options))
         .layer(
             CorsLayer::new()

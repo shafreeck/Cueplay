@@ -11,12 +11,14 @@ const isProd = process.env.NODE_ENV === 'production';
 
 // 后端 API 地址
 export const API_BASE = isProd
-    ? 'https://cueplay-api.zeabur.app'
+    //? 'https://cueplay-api.zeabur.app'
+    ? 'https://cueplay.preview.huawei-zeabur.cn'
     : 'http://localhost:3000';
 
 // WebSocket 地址
 export const WS_BASE = isProd
-    ? 'wss://cueplay-api.zeabur.app'
+    //? 'wss://cueplay-api.zeabur.app'
+    ? 'wss://cueplay.preview.huawei-zeabur.cn'
     : 'ws://localhost:3000';
 
 // 客户端本地代理地址 (始终指向客户端自己的 HTTP 服务)
@@ -40,7 +42,7 @@ export const getProxyBase = async (): Promise<string> => {
 
     // 2. We are in Tauri (Dev or Prod). Prefer the Rust-side local proxy.
     if (dynamicProxyPort) {
-        return `http://localhost:${dynamicProxyPort}`;
+        return `http://127.0.0.1:${dynamicProxyPort}`;
     }
 
     if (!dynamicProxyBasePromise) {
@@ -52,7 +54,7 @@ export const getProxyBase = async (): Promise<string> => {
                 if (port > 0) {
                     dynamicProxyPort = port;
                     console.log(`[Config] Using Rust Proxy on port: ${port}`);
-                    return `http://localhost:${port}`;
+                    return `http://127.0.0.1:${port}`;
                 } else {
                     console.warn("[Config] Rust Proxy returned port 0.");
                 }
