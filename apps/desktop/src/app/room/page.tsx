@@ -1274,7 +1274,12 @@ function RoomContent() {
         const video = videoRef.current;
         const syncEvents = ['play', 'pause', 'seeked', 'ratechange'];
         const handleSync = (e: Event) => {
-            if (e.isTrusted && !isRemoteUpdate.current && !isLoadingSource.current) {
+            if (!isRemoteUpdate.current && !isLoadingSource.current) {
+                // Persist playback rate if changed locally
+                if (e.type === 'ratechange' && videoRef.current) {
+                    setPlaybackRate(videoRef.current.playbackRate);
+                    addLog(`[Rate] Saved local rate: ${videoRef.current.playbackRate}`);
+                }
                 sendState();
             }
         };
@@ -1694,7 +1699,13 @@ function RoomContent() {
                                 onEnded={playNext}
                                 onLoadStart={() => addLog(`[Video Event] LoadStart: ${videoSrc.slice(0, 50)}...`)}
                                 onLoadedMetadata={() => addLog(`[Video Event] LoadedMetadata: Duration ${videoRef.current?.duration}`)}
-                                onCanPlay={() => addLog(`[Video Event] CanPlay`)}
+                                onCanPlay={() => {
+                                    addLog(`[Video Event] CanPlay`);
+                                    if (videoRef.current && Math.abs(videoRef.current.playbackRate - playbackRate) > 0.01) {
+                                        addLog(`[Rate] Restoring rate to ${playbackRate}`);
+                                        videoRef.current.playbackRate = playbackRate;
+                                    }
+                                }}
                                 onStalled={() => addLog(`[Video Event] Stalled`)}
                                 onWaiting={() => addLog(`[Video Event] Waiting`)}
                                 onError={(e) => {
