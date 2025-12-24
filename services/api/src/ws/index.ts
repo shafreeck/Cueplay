@@ -149,6 +149,7 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             fastify.log.info({ msg: 'Broadcasted PLAYLIST_UPDATE', roomId: currentRoomId });
                         }
                     }
+
                 } else if (event.type === 'SET_ROOM_COOKIE') {
                     if (currentRoomId && pUserId && roomConnections.has(currentRoomId)) {
                         const room = await RoomManager.getRoom(currentRoomId);
