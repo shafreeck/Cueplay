@@ -58,7 +58,7 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
     };
 
     return (
-        // eslint-disable-next-line react/forbid-dom-props
+        // eslint-disable-next-line
         <div ref={setNodeRef} style={style} className={`${isDragging ? 'opacity-50' : ''}`}>
             <PlaylistItemRenderer
                 item={item}

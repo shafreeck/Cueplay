@@ -2,7 +2,7 @@ mod proxy;
 
 use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
-use tauri::{State, Manager, Emitter};
+use tauri::Manager;
 
 struct ProxyState {
     port: Mutex<u16>,

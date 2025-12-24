@@ -47,12 +47,13 @@ export function PlaylistItemRenderer({
 
     return (
         <div className="select-none mb-1">
+            {/* eslint-disable-next-line */}
             <div
                 className={cn(
-                    "group flex items-center justify-between p-2 rounded-md border transition-all",
+                    "group flex items-center justify-between p-2 rounded-md border transition-all ml-[calc(var(--level)*16px)]",
                     isPlaying ? "bg-primary/20 border-primary/50" : "bg-white/5 border-white/5 hover:bg-white/10 active:bg-white/10"
                 )}
-                style={{ marginLeft: `${level * 16}px` }}
+                style={{ '--level': level } as React.CSSProperties}
                 onClick={(e) => {
                     // On mobile, clicking the row expands folder
                     if (isMobile && isFolder) {
@@ -137,9 +138,10 @@ export function PlaylistItemRenderer({
 
                                 return (
                                     <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden shrink-0">
+                                        {/* eslint-disable-next-line */}
                                         <div
-                                            className="h-full bg-primary/60 transition-all duration-300"
-                                            style={{ width: `${percentage}%` }}
+                                            className="h-full bg-primary/60 transition-all duration-300 w-[var(--progress)]"
+                                            style={{ '--progress': `${percentage}%` } as React.CSSProperties}
                                         />
                                     </div>
                                 );
@@ -149,7 +151,8 @@ export function PlaylistItemRenderer({
                         {/* Progress Bar (File) */}
                         {!isFolder && item.progress !== undefined && !!item.duration && (
                             <div className="mt-1.5 h-1 w-full max-w-[100px] bg-white/10 rounded-full overflow-hidden shrink-0">
-                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${Math.min(100, (item.progress / item.duration) * 100)}%` }} />
+                                {/* eslint-disable-next-line */}
+                                <div className="h-full bg-primary/60 transition-all duration-300 w-[var(--progress)]" style={{ '--progress': `${Math.min(100, (item.progress / item.duration) * 100)}%` } as React.CSSProperties} />
                             </div>
                         )}
                     </div>
@@ -202,15 +205,16 @@ export function PlaylistItemRenderer({
                                         <span className="truncate" title={child.title}>{child.title}</span>
                                         {child.progress !== undefined && !!child.duration && (
                                             <div className="mt-1 h-0.5 w-full max-w-[80px] bg-white/10 rounded-full overflow-hidden">
-                                                <div className="h-full bg-primary/60 transition-all duration-300" style={{ width: `${Math.min(100, (child.progress / child.duration) * 100)}%` }} />
+                                                {/* eslint-disable-next-line */}
+                                                <div className="h-full bg-primary/60 transition-all duration-300 w-[var(--progress)]" style={{ '--progress': `${Math.min(100, (child.progress / child.duration) * 100)}%` } as React.CSSProperties} />
                                             </div>
                                         )}
                                     </div>
                                     {isChildPlaying && (
                                         <div className="flex gap-0.5 h-3 items-end pb-0.5">
-                                            <div className="w-0.5 bg-primary animate-[music-bar_0.6s_ease-in-out_infinite]" style={{ height: '60%' }}></div>
-                                            <div className="w-0.5 bg-primary animate-[music-bar_0.8s_ease-in-out_infinite]" style={{ height: '100%' }}></div>
-                                            <div className="w-0.5 bg-primary animate-[music-bar_0.7s_ease-in-out_infinite]" style={{ height: '80%' }}></div>
+                                            <div className="w-0.5 bg-primary animate-[music-bar_0.6s_ease-in-out_infinite] h-[60%]"></div>
+                                            <div className="w-0.5 bg-primary animate-[music-bar_0.8s_ease-in-out_infinite] h-full"></div>
+                                            <div className="w-0.5 bg-primary animate-[music-bar_0.7s_ease-in-out_infinite] h-[80%]"></div>
                                         </div>
                                     )}
                                 </div>

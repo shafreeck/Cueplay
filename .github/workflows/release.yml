@@ -1,111 +1,109 @@
 name: Release
 on:
-    push:
-        tags:
-            - "v*"
-    workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 jobs:
-    release:
-        permissions:
-            contents: write
-        strategy:
-            fail-fast: false
-            matrix:
-                platform: [macos-latest, windows-latest]
-        runs-on: ${{ matrix.platform }}
-        steps:
-            - uses: actions/checkout@v4
-            - uses: pnpm/action-setup@v2
-              with:
-                  version: 9
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-                  cache: "pnpm"
-            - name: install Rust stable
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-            - name: Install dependencies (ubuntu only)
-              if: matrix.platform == 'ubuntu-22.04'
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
 
-            - name: Install frontend dependencies
-              run: pnpm install
+      - name: Install frontend dependencies
+        run: pnpm install
 
-            - name: Build and Upload
-              uses: tauri-apps/tauri-action@v0
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  tagName: ${{ github.ref_name }}
-                  releaseName: "App v__VERSION__"
-                  releaseBody: "See the assets to download this version and install."
-                  releaseDraft: true
-                  prerelease: false
-                  projectPath: ./apps/desktop
+      - name: Build and Upload
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "App v__VERSION__"
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: true
+          prerelease: false
+          projectPath: ./apps/desktop
 
-    release-android:
-        runs-on: ubuntu-latest
-        permissions:
-            contents: write
-        steps:
-            - uses: actions/checkout@v4
-            - uses: pnpm/action-setup@v2
-              with:
-                  version: 9
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-                  cache: "pnpm"
+  release-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
 
-            - name: Setup Java
-              uses: actions/setup-java@v4
-              with:
-                  distribution: "zulu"
-                  java-version: "17"
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "17"
 
-            - name: Setup Android SDK
-              uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-            - name: Install Rust stable
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
-            - name: Install frontend dependencies
-              run: pnpm install
+      - name: Install frontend dependencies
+        run: pnpm install
 
-            - name: Initialize Android Libs
-              run: pnpm --filter @cueplay/desktop tauri android init
+      - name: Initialize Android Libs
+        run: pnpm --filter @cueplay/desktop tauri android init
 
-            - name: Place Android keystore
-              run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > apps/desktop/src-tauri/release.keystore
+      - name: Place Android keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > apps/desktop/src-tauri/release.keystore
 
-            - name: Build Android APK
-              run: pnpm --filter @cueplay/desktop tauri android build --apk true
-              env:
-                  NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+      - name: Build Android APK
+        run: NDK_HOME=$ANDROID_NDK_HOME pnpm --filter @cueplay/desktop tauri android build --apk true
 
-            - name: Sign Android Release
-              uses: r0adkll/sign-android-release@v1
-              id: sign_app
-              with:
-                  releaseDirectory: apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release
-                  signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-                  alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-                  keyStorePassword: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
-                  keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-              env:
-                  BUILD_TOOLS_VERSION: "34.0.0"
+      - name: Sign Android Release
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: apps/desktop/src-tauri/gen/android/app/build/outputs/apk/universal/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
 
-            - name: Upload Artifacts
-              uses: softprops/action-gh-release@v1
-              if: startsWith(github.ref, 'refs/tags/')
-              with:
-                  files: |
-                      ${{ steps.sign_app.outputs.signedReleaseFile }}
+      - name: Upload Artifacts
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ steps.sign_app.outputs.signedReleaseFile }}

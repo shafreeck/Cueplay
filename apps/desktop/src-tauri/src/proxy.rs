@@ -1,14 +1,12 @@
 use axum::{
     extract::{Query},
-    http::{HeaderMap, HeaderValue, Method, StatusCode},
+    http::{HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, options, post},
+    routing::get,
     Router,
     body::Body,
 };
 use reqwest::Client;
-use std::net::SocketAddr;
-use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
 use tauri::{AppHandle, Manager, Emitter};
 
@@ -72,7 +70,7 @@ struct ProxyParams {
 async fn proxy_handler(
     Query(params): Query<ProxyParams>,
     headers: HeaderMap,
-    axum::extract::State((client, app)): axum::extract::State<(Client, AppHandle)>,
+    axum::extract::State((client, _app)): axum::extract::State<(Client, AppHandle)>,
 ) -> impl IntoResponse {
     let url = params.url;
     let cookie = params.cookie;
