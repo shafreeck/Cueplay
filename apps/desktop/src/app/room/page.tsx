@@ -103,22 +103,7 @@ function MobilePlaylistItemWrapper({ item, index, playingItemId, onPlay, onRemov
 
 import { useIsMobile } from '@/hooks/use-mobile';
 
-// Helper to check if playlist structure changed (ignoring progress/metadata updates)
-const isPlaylistStructureDifferent = (a: PlaylistItem[], b: PlaylistItem[]): boolean => {
-    if (a.length !== b.length) return true;
-    for (let i = 0; i < a.length; i++) {
-        if (a[i].id !== b[i].id) return true;
 
-        // Check children recursively for folders
-        if (a[i].children && b[i].children) {
-            if (isPlaylistStructureDifferent(a[i].children as PlaylistItem[], b[i].children as PlaylistItem[])) return true;
-        } else if (!!a[i].children !== !!b[i].children) {
-            // One has children, the other doesn't
-            return true;
-        }
-    }
-    return false;
-}
 
 function RoomContent() {
     const searchParams = useSearchParams();
@@ -467,9 +452,14 @@ function RoomContent() {
     const resetTimer = useCallback(() => {
         setShowControls(true);
         if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-        controlsTimeoutRef.current = setTimeout(() => {
-            setShowControls(false);
-        }, 3000);
+
+        const video = videoRef.current;
+        // Only auto-hide if playing AND not buffering
+        if (video && !video.paused && !isBuffering.current) {
+            controlsTimeoutRef.current = setTimeout(() => {
+                setShowControls(false);
+            }, 3000);
+        }
     }, []);
 
     const handleContainerClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -482,6 +472,10 @@ function RoomContent() {
 
         if (isMobile) {
             if (showControls) {
+                // If strictly playing, hide immediately. 
+                // If paused/buffering, we logically shouldn't hide (since resetTimer won't re-show). 
+                // But user override (click) should probably allow hiding even if paused? 
+                // User requirement: "Toggle". So yes, user can force hide.
                 setShowControls(false);
                 if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
             } else {
@@ -492,15 +486,47 @@ function RoomContent() {
         }
     }, [isMobile, showControls, resetTimer]);
 
+    // Sync visibility with playback events and buffering state
     useEffect(() => {
+        const video = videoRef.current;
         const container = containerRef.current;
         const handleInteraction = () => resetTimer();
+
+        // Consolidated video event handler to prevent race conditions
+        const handleVideoEvent = (e: Event) => {
+            const type = e.type;
+
+            // Synchronously update buffering state first
+            if (type === 'waiting' || type === 'loadstart') {
+                isBuffering.current = true;
+                addLog(`[Buffer] ${type}...`);
+            } else if (type === 'playing') {
+                if (isBuffering.current) {
+                    isBuffering.current = false;
+                    addLog('[Buffer] Resumed playing');
+                }
+            } else if (type === 'pause') {
+                isBuffering.current = false;
+            }
+
+            // Then check visibility logic based on new state
+            resetTimer();
+        };
 
         if (container) {
             // Use mousemove for Rule 1 (3s hide after move)
             container.addEventListener('mousemove', handleInteraction);
         }
         window.addEventListener('keydown', handleInteraction);
+
+        // Sync with video state
+        if (video) {
+            video.addEventListener('play', handleVideoEvent);
+            video.addEventListener('pause', handleVideoEvent);
+            video.addEventListener('playing', handleVideoEvent);
+            video.addEventListener('waiting', handleVideoEvent);
+            video.addEventListener('loadstart', handleVideoEvent);
+        }
 
         // Initial setup
         resetTimer();
@@ -511,67 +537,15 @@ function RoomContent() {
                 container.removeEventListener('mousemove', handleInteraction);
             }
             window.removeEventListener('keydown', handleInteraction);
-        };
-    }, [resetTimer]);
-
-    const handleTouchStart = (e: React.TouchEvent) => {
-        // Rule: Any touch resets activity timer
-        resetTimer();
-
-        const now = Date.now();
-        const DOUBLE_TAP_DELAY = 300;
-        if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
-            // Double tap detected
-            e.preventDefault();
-            toggleFullscreen();
-            lastTapRef.current = 0; // Reset
-        } else {
-            lastTapRef.current = now;
-        }
-    };
-
-    const handleMouseEnter = () => {
-        resetTimer();
-    };
-
-    const handleMouseLeave = () => {
-        if (!isMobile) {
-            setShowControls(false);
-            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-        }
-    };
-
-
-
-    // Trace Buffering State
-    useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
-
-        const onWaiting = () => {
-            isBuffering.current = true;
-            addLog('[Buffer] Waiting...');
-        };
-        const onPlaying = () => {
-            if (isBuffering.current) {
-                isBuffering.current = false;
-                addLog('[Buffer] Resumed playing');
+            if (video) {
+                video.removeEventListener('play', handleVideoEvent);
+                video.removeEventListener('pause', handleVideoEvent);
+                video.removeEventListener('playing', handleVideoEvent);
+                video.removeEventListener('waiting', handleVideoEvent);
+                video.removeEventListener('loadstart', handleVideoEvent);
             }
         };
-        const onPause = () => {
-            isBuffering.current = false;
-        };
-
-        video.addEventListener('waiting', onWaiting);
-        video.addEventListener('playing', onPlaying);
-        video.addEventListener('pause', onPause);
-
-        return () => {
-            video.removeEventListener('waiting', onWaiting);
-            video.removeEventListener('playing', onPlaying);
-            video.removeEventListener('pause', onPause);
-        };
-    }, [videoSrc]);
+    }, [resetTimer, videoSrc]); // Re-bind when video source changes
 
     // Subtitle Hijacking Logic
     useEffect(() => {
@@ -587,18 +561,11 @@ function RoomContent() {
             const isNativeFullscreen = document.fullscreenElement === video;
             const tracks = video.textTracks;
 
+
             for (let i = 0; i < tracks.length; i++) {
                 const track = tracks[i];
-                if (track.mode === 'disabled') continue;
-
-                // If native fullscreen: Force SHOWING
-                // If not native fullscreen (Windowed or Container FS): Force HIDDEN (so we use overlay)
-                const shouldBeShowing = isNativeFullscreen;
-
-                if (shouldBeShowing) {
-                    if (track.mode === 'hidden') track.mode = 'showing';
-                } else {
-                    if (track.mode === 'showing') track.mode = 'hidden';
+                if (track.mode === 'showing') {
+                    track.mode = 'hidden'; // Hide browser native subtitles
                 }
             }
         };
@@ -644,23 +611,57 @@ function RoomContent() {
             }
         };
 
-        video.textTracks.onchange = handleTrackChange;
-        video.addEventListener('loadedmetadata', handleTrackChange);
         video.addEventListener('timeupdate', updateCurrentSubtitle);
-        // Also listen to document fullscreen changes to toggle modes
+        // Also listen for cuechange events on tracks
+        for (let i = 0; i < video.textTracks.length; i++) {
+            video.textTracks[i].addEventListener('cuechange', updateCurrentSubtitle);
+        }
+
+        // Listen for track changes to hijack new tracks
+        video.textTracks.addEventListener('addtrack', handleTrackChange);
+        video.textTracks.addEventListener('change', handleTrackChange);
         document.addEventListener('fullscreenchange', handleFullscreenChange);
 
+        // Initial check
         handleTrackChange();
-        const interval = setInterval(handleTrackChange, 2000);
 
         return () => {
-            video.textTracks.onchange = null;
-            video.removeEventListener('loadedmetadata', handleTrackChange);
             video.removeEventListener('timeupdate', updateCurrentSubtitle);
+            for (let i = 0; i < video.textTracks.length; i++) {
+                video.textTracks[i].removeEventListener('cuechange', updateCurrentSubtitle);
+            }
+            video.textTracks.removeEventListener('addtrack', handleTrackChange);
+            video.textTracks.removeEventListener('change', handleTrackChange);
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
-            clearInterval(interval);
         };
-    }, [videoSrc]); // Re-run when video source changes
+    }, [currentSubtitle]);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        // Rule: Any touch resets activity timer
+        resetTimer();
+
+        const now = Date.now();
+        const DOUBLE_TAP_DELAY = 300;
+        if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+            // Double tap detected
+            e.preventDefault();
+            toggleFullscreen();
+            lastTapRef.current = 0; // Reset
+        } else {
+            lastTapRef.current = now;
+        }
+    };
+
+    const handleMouseEnter = () => {
+        resetTimer();
+    };
+
+    const handleMouseLeave = () => {
+        if (!isMobile) {
+            setShowControls(false);
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+        }
+    };
 
     const resolveAndPlayWithoutSync = async (fid: string, itemId?: string) => {
         if (itemId) {
@@ -1317,11 +1318,7 @@ function RoomContent() {
                 const { playlist: newPlaylist } = data.payload;
                 addLog(`Received Playlist Update: ${newPlaylist ? newPlaylist.length : 'Invalid'} items (playing: ${playingItemId})`);
                 if (newPlaylist) {
-                    const isStructureChanged = isPlaylistStructureDifferent(playlistRef.current, newPlaylist);
                     setPlaylist(newPlaylist);
-                    if (isStructureChanged) {
-                        toast({ description: t('playlist_updated') });
-                    }
                 }
             } else if (data.type === 'CHAT_MESSAGE') {
                 const message = data.payload;

@@ -44,7 +44,6 @@
         "added_to_queue_title": "已添加到队列",
         "added_to_queue_desc": "视频 {{title}} 已添加到播放列表。",
         "invalid_video_title": "无效视频",
-        "playlist_updated": "播放列表已更新",
         "auto_play_blocked_title": "自动播放被阻止",
         "auto_play_blocked_desc": "请手动点击播放。",
         "view_only_title": "仅观看模式",

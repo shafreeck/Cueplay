@@ -44,7 +44,6 @@
         "added_to_queue_title": "Added to Queue",
         "added_to_queue_desc": "Video {{title}} added to playlist.",
         "invalid_video_title": "Invalid Video",
-        "playlist_updated": "Playlist updated",
         "auto_play_blocked_title": "Auto-play Blocked",
         "auto_play_blocked_desc": "Please click play manually.",
         "view_only_title": "View Only Mode",
