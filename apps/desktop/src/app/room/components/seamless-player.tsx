@@ -25,13 +25,16 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
         // Track which player is currently "Active" (visible and playing)
         const [activePlayerId, setActivePlayerId] = useState<'A' | 'B'>('A');
 
+        // Critical: Use a Ref for the ID as well, so the Proxy can read the LATEST ID synchronously
+        const activePlayerIdRef = useRef<'A' | 'B'>('A');
+
         // Track internal src state for each player
         const [stateA, setStateA] = useState<PlayerState>({ id: 'A', src: (src as string) || undefined, isActive: true });
         const [stateB, setStateB] = useState<PlayerState>({ id: 'B', src: undefined, isActive: false });
 
         // Helper to get refs
-        const getActiveRef = () => activePlayerId === 'A' ? videoRefA : videoRefB;
-        const getInactiveRef = () => activePlayerId === 'A' ? videoRefB : videoRefA;
+        const getActiveRef = () => activePlayerIdRef.current === 'A' ? videoRefA : videoRefB;
+        const getInactiveRef = () => activePlayerIdRef.current === 'A' ? videoRefB : videoRefA;
 
         // Sync Source Logic
         useEffect(() => {
@@ -49,6 +52,8 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     videoRefB.current?.play().catch(() => { });
 
                     setActivePlayerId('B');
+                    activePlayerIdRef.current = 'B'; // Sync Ref immediately
+
                     setStateB(prev => ({ ...prev, isActive: true }));
                     // Don't clear A immediately, keeps memory warm and prevents layout thrashing
                     setStateA(prev => ({ ...prev, isActive: false }));
@@ -64,6 +69,8 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     videoRefA.current?.play().catch(() => { });
 
                     setActivePlayerId('A');
+                    activePlayerIdRef.current = 'A'; // Sync Ref immediately
+
                     setStateA(prev => ({ ...prev, isActive: true }));
                     // Don't clear B immediately
                     setStateB(prev => ({ ...prev, isActive: false }));

@@ -143,6 +143,10 @@ function RoomContent() {
     const playingItemIdRef = useRef<string | null>(null);
     useEffect(() => { playingItemIdRef.current = playingItemId; }, [playingItemId]);
 
+
+    // Swipe Gesture Refs
+    const touchStartYRef = useRef<number | null>(null);
+
     // Seamless Switching State
     const [nextVideoSrc, setNextVideoSrc] = useState<string>('');
     const [nextVideoId, setNextVideoId] = useState<string | null>(null);
@@ -163,6 +167,10 @@ function RoomContent() {
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+    // Permissions (Moved here for scope visibility)
+    const canControl = !!currentUserId && controllerId === currentUserId;
+    const isOwner = currentUserId && ownerId && currentUserId === ownerId;
     const [nickname, setNickname] = useState('');
     const [isLibraryOpen, setIsLibraryOpen] = useState(false);
     const [showQuarkLogin, setShowQuarkLogin] = useState(false);
@@ -532,11 +540,18 @@ function RoomContent() {
             resetTimer();
         };
 
+        // Bind keydown to window for general interaction reset (hiding controls)
+        window.addEventListener('keydown', handleInteraction);
+
+        // Auto-focus container when entering Immersive Mode
+        if (isImmersiveMode && container) {
+            container.focus();
+        }
+
         if (container) {
             // Use mousemove for Rule 1 (3s hide after move)
             container.addEventListener('mousemove', handleInteraction);
         }
-        window.addEventListener('keydown', handleInteraction);
 
         // Sync with video state
         if (video) {
@@ -564,7 +579,7 @@ function RoomContent() {
                 video.removeEventListener('loadstart', handleVideoEvent);
             }
         };
-    }, [resetTimer, videoSrc]); // Re-bind when video source changes
+    }, [resetTimer, videoSrc, isImmersiveMode]); // Re-bind when video source changes
 
     // Subtitle Hijacking Logic
     useEffect(() => {
@@ -662,21 +677,7 @@ function RoomContent() {
         };
     }, [videoSrc]);
 
-    const handleTouchStart = (e: React.TouchEvent) => {
-        // Rule: Any touch resets activity timer
-        resetTimer();
 
-        const now = Date.now();
-        const DOUBLE_TAP_DELAY = 300;
-        if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
-            // Double tap detected
-            e.preventDefault();
-            toggleFullscreen();
-            lastTapRef.current = 0; // Reset
-        } else {
-            lastTapRef.current = now;
-        }
-    };
 
     const handleMouseEnter = () => {
         resetTimer();
@@ -1190,6 +1191,24 @@ function RoomContent() {
         }
     };
 
+
+    const playPrevious = () => {
+        // Viewers in Sync Mode check
+        if (!canControl && isSynced) return;
+        if (playlist.length === 0) return;
+
+        const allItems = getAllItems(playlist);
+        const currentIndex = allItems.findIndex(i => i.id === playingItemId);
+
+        if (currentIndex > 0) {
+            const prevItem = allItems[currentIndex - 1];
+            if (prevItem.type === 'file') {
+                addLog(`Auto-playing previous: ${prevItem.title || prevItem.fileId}`);
+                resolveAndPlay(prevItem.fileId, prevItem.id);
+            }
+        }
+    };
+
     // Auto-play when source changes
     useEffect(() => {
         if (videoSrc && videoRef.current) {
@@ -1363,6 +1382,9 @@ function RoomContent() {
 
                 setIsRoomLoading(false);
 
+
+
+
                 // Add to visited history
                 if (roomId && ownerId) {
                     RoomHistory.addVisitedRoom({
@@ -1503,8 +1525,7 @@ function RoomContent() {
         };
     }, [roomId]);
 
-    const canControl = !!currentUserId && controllerId === currentUserId;
-    const isOwner = currentUserId && ownerId && currentUserId === ownerId;
+
 
     // Bind Video Events (Only if authorized to control)
     useEffect(() => {
@@ -1636,6 +1657,69 @@ function RoomContent() {
                 }
                 return newItems;
             });
+        }
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        // Record Touch Start Y for swipe detection
+        if (e.touches && e.touches.length > 0) {
+            touchStartYRef.current = e.touches[0].clientY;
+        }
+
+        // Rule: Any touch resets activity timer
+        resetTimer();
+
+        const now = Date.now();
+        const DOUBLE_TAP_DELAY = 300;
+        if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+            // Double tap detected
+            e.preventDefault();
+            toggleFullscreen();
+            lastTapRef.current = 0; // Reset
+        } else {
+            lastTapRef.current = now;
+        }
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        if (touchStartYRef.current === null) return;
+
+        const touchEndY = e.changedTouches[0].clientY;
+        const deltaY = touchEndY - touchStartYRef.current;
+        touchStartYRef.current = null; // Reset
+
+        // Verify we are in an appropriate mode for swipes (Mobile or Immersive)
+        if (!isMobile && !isImmersiveMode) return;
+
+        const SWIPE_THRESHOLD = 50;
+
+        // Swipe Up -> Next Video
+        if (deltaY < -SWIPE_THRESHOLD) {
+            addLog("[Gesture] Swipe Up Detected -> Next");
+            playNext();
+        }
+        // Swipe Down -> Previous Video
+        else if (deltaY > SWIPE_THRESHOLD) {
+            addLog("[Gesture] Swipe Down Detected -> Previous");
+            playPrevious();
+        }
+    };
+
+
+
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        // Only trigger switch in Immersive Mode
+        if (!isImmersiveMode) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            addLog("[Keyboard] Arrow Down -> Next");
+            playNext();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            addLog("[Keyboard] Arrow Up -> Previous");
+            playPrevious();
         }
     };
 
@@ -1973,14 +2057,17 @@ function RoomContent() {
                         className={cn(
                             "bg-black overflow-hidden shadow-xl group transition-all duration-500 ease-in-out touch-manipulation",
                             (isImmersiveMode || isLandscapeMobile)
-                                ? "fixed inset-0 z-10 w-screen h-screen rounded-none"
-                                : "relative w-full aspect-video md:rounded-xl md:shadow-2xl md:border border-white/10 ring-0 md:ring-1 ring-white/5"
+                                ? "fixed inset-0 z-10 w-screen h-screen rounded-none outline-none"
+                                : "relative w-full aspect-video md:rounded-xl md:shadow-2xl md:border border-white/10 ring-0 md:ring-1 ring-white/5 outline-none"
                         )}
+                        tabIndex={0}
+                        onKeyDown={handleKeyDown}
                         onTouchStart={handleTouchStart}
                         onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
                         onDoubleClick={handleDoubleClick}
                         onClick={handleContainerClick}
+                        onTouchEnd={handleTouchEnd}
                     >
                         {/* Landscape Mobile Top Overlay */}
                         {isLandscapeMobile && (
@@ -2625,6 +2712,11 @@ function RoomContent() {
         </div>
     );
 }
+
+
+
+
+
 
 export default function RoomPage() {
     const { t } = useTranslation('common');
