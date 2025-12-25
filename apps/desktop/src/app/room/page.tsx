@@ -482,31 +482,41 @@ function RoomContent() {
         };
     }, []);
 
-    // Auto-hide controls in Immersive, Fullscreen, or Mobile Mode
+    // Auto-hide controls logic (mimics system behavior)
     useEffect(() => {
-        // On desktop, we only auto-hide in immersive or fullscreen mode. 
-        // On mobile, we auto-hide always to keep the player clean.
-        if (!isImmersiveMode && !isFullscreen && !isMobile) {
-            setShowControls(true);
-            return;
-        }
-
+        const video = videoRef.current;
         const resetTimer = () => {
             setShowControls(true);
             if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-            controlsTimeoutRef.current = setTimeout(() => {
-                setShowControls(false);
-            }, 3000);
+
+            // Only hide after delay if video is playing
+            if (video && !video.paused) {
+                controlsTimeoutRef.current = setTimeout(() => {
+                    setShowControls(false);
+                }, 3000);
+            }
         };
 
-        resetTimer();
-
-        const handleInteraction = () => resetTimer();
+        // Native video events to sync visibility
+        const handlePlay = () => resetTimer();
+        const handlePause = () => setShowControls(true); // Always show when paused
 
         window.addEventListener('mousemove', handleInteraction);
         window.addEventListener('touchstart', handleInteraction);
         window.addEventListener('click', handleInteraction);
         window.addEventListener('keydown', handleInteraction);
+
+        if (video) {
+            video.addEventListener('play', handlePlay);
+            video.addEventListener('pause', handlePause);
+        }
+
+        // Initial check
+        resetTimer();
+
+        function handleInteraction() {
+            resetTimer();
+        }
 
         return () => {
             if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -514,8 +524,24 @@ function RoomContent() {
             window.removeEventListener('touchstart', handleInteraction);
             window.removeEventListener('click', handleInteraction);
             window.removeEventListener('keydown', handleInteraction);
+            if (video) {
+                video.removeEventListener('play', handlePlay);
+                video.removeEventListener('pause', handlePause);
+            }
         };
-    }, [isImmersiveMode, isFullscreen]);
+    }, [isMobile]); // Minimize dependencies to avoid timer resets on mode changes, but keep isMobile since it affects layout
+
+    const handleMouseEnter = () => {
+        if (!isMobile) {
+            setShowControls(true);
+        }
+    };
+
+    const handleMouseLeave = () => {
+        if (!isMobile) {
+            setShowControls(false);
+        }
+    };
 
     // Trace Buffering State
     useEffect(() => {
@@ -1797,6 +1823,8 @@ function RoomContent() {
                                 : "relative w-full aspect-video md:rounded-xl md:shadow-2xl md:border border-white/10 ring-0 md:ring-1 ring-white/5"
                         )}
                         onTouchStart={handleTouchStart}
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
                     >
                         {videoSrc ? (
                             <video
