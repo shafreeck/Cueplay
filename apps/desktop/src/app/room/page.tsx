@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -50,7 +50,7 @@ function SortablePlaylistItem({ item, index, playingItemId, onPlay, onRemove }: 
         isDragging
     } = useSortable({ id: item.id });
 
-    const isMobile = useIsMobile();
+    const { isMobile } = useIsMobile();
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
@@ -172,7 +172,7 @@ function RoomContent() {
     const lastSyncedMetadata = useRef({ title: '', description: '', isLocked: false });
     const metadataInitialized = useRef(false);
     const retryCount = useRef(0); // Auto-retry counter
-    const isMobile = useIsMobile(); // Removed conditional
+    const { isMobile, isLandscapeMobile } = useIsMobile();
 
     // UI State for Mobile/Responsive Layout
     const [activeTab, setActiveTab] = useState('playlist');
@@ -187,6 +187,7 @@ function RoomContent() {
     const [isImmersiveMode, setIsImmersiveMode] = useState(false);
     const [showControls, setShowControls] = useState(true);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const chatListRef = useRef<HTMLDivElement>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -1540,7 +1541,7 @@ function RoomContent() {
             {/* Header */}
             <header className={cn(
                 "sticky top-0 md:top-4 z-50 px-0 md:px-4 mb-0 md:mb-6 transition-all duration-300 pt-safe md:pt-0",
-                isImmersiveMode || isFullscreen ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
+                ((isImmersiveMode || isFullscreen) || isLandscapeMobile) ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
             )}>
                 <div className="container mx-auto h-12 md:h-14 md:rounded-full flex items-center justify-between gap-2 md:gap-4 px-3 md:px-6 bg-black md:bg-black/40 backdrop-blur-2xl border-b md:border border-white/5 shadow-2xl pointer-events-auto">
                     <div className="flex items-center gap-2 overflow-hidden shrink-0">
@@ -1634,155 +1635,168 @@ function RoomContent() {
                         </Button>
                         <div className="h-4 w-px bg-white/10 mx-1 md:mx-2" />
 
-                        <Popover onOpenChange={(open) => {
-                            if (!open && isOwner) {
-                                updateRoomMetadata(roomTitle, roomDescription);
-                            }
-                        }}>
-                            <PopoverTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                    <Settings className="h-5 w-5" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80">
-                                <div className="grid gap-4">
-                                    <div className="space-y-2">
-                                        <h4 className="font-medium leading-none">{t('settings')}</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                            {t('configure_playback')}
-                                        </p>
-                                    </div>
-                                    <div className="grid gap-2">
-                                        <div className="space-y-4">
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="room-title">{t('room_name')}</Label>
-                                                <Input
-                                                    id="room-title"
-                                                    value={roomTitle}
-                                                    onChange={(e) => {
-                                                        if (isOwner) setRoomTitle(e.target.value);
-                                                    }}
-                                                    placeholder={t('enter_room_name')}
-                                                    className="h-8"
-                                                    disabled={!isOwner}
-                                                />
-                                            </div>
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="room-desc">{t('room_description')}</Label>
-                                                <Input
-                                                    id="room-desc"
-                                                    value={roomDescription}
-                                                    onChange={(e) => {
-                                                        if (isOwner) setRoomDescription(e.target.value);
-                                                    }}
-                                                    placeholder={t('enter_room_description')}
-                                                    className="h-8"
-                                                    disabled={!isOwner}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                                                <div className="space-y-0.5">
-                                                    <Label className="text-sm font-medium">
-                                                        {t('lock_control')}
-                                                    </Label>
-                                                    <div className="text-[10px] text-muted-foreground">
-                                                        {t('lock_control_desc')}
-                                                    </div>
-                                                </div>
-                                                <Switch
-                                                    checked={isLocked}
-                                                    onCheckedChange={(checked) => {
-                                                        if (!isOwner) return;
-                                                        setIsLocked(checked);
-                                                        if (socketRef.current?.readyState === WebSocket.OPEN) {
-                                                            socketRef.current.send(JSON.stringify({
-                                                                type: 'UPDATE_ROOM',
-                                                                payload: { isLocked: checked }
-                                                            }));
-                                                        }
-                                                    }}
-                                                    disabled={!isOwner}
-                                                />
-                                            </div>
-
-                                            {/* Cloud Storage Settings (Owner Only) */}
-                                            {isOwner && (
-                                                <div className="pt-2 mt-2 border-t space-y-3">
-                                                    <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('cloud_storage')}</Label>
-
-                                                    <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className={`h-2 w-2 rounded-full ${roomCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-zinc-600')}`} />
-                                                                <span className="text-xs font-medium text-foreground">
-                                                                    {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
-                                                                </span>
-                                                            </div>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-5 w-5 hover:bg-white/10"
-                                                                title={t('manual_cookie_input')}
-                                                                onClick={() => setShowManualInput(!showManualInput)}
-                                                            >
-                                                                <Settings className="h-3 w-3 text-muted-foreground" />
-                                                            </Button>
-                                                        </div>
-
-                                                        <Button
-                                                            variant={roomCookie ? "outline" : "default"}
-                                                            size="sm"
-                                                            className="w-full h-8 text-xs gap-2"
-                                                            onClick={() => setShowQuarkLogin(true)}
-                                                        >
-                                                            <QrCode className="h-3.5 w-3.5" />
-                                                            {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
-                                                        </Button>
-
-                                                        {showManualInput && (
-                                                            <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
-                                                                <Label htmlFor="roomCookie" className="text-[10px] text-muted-foreground mb-1.5 block">{t('manual_cookie_input')}</Label>
-                                                                <Input
-                                                                    id="roomCookie"
-                                                                    value={roomCookie}
-                                                                    onChange={(e) => updateRoomCookie(e.target.value)}
-                                                                    className="h-7 text-xs font-mono bg-muted/20"
-                                                                    placeholder="Paste cookie string..."
-                                                                    type="password"
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {!isOwner && (
-                                                <div className="text-[10px] text-muted-foreground text-center pt-2">
-                                                    {t('only_owner_settings')}
-                                                </div>
-                                            )}
+                        {isLandscapeMobile ? (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                    setIsDrawerOpen(true);
+                                    setActiveTab('settings');
+                                }}
+                            >
+                                <Settings className="h-5 w-5" />
+                            </Button>
+                        ) : (
+                            <Popover onOpenChange={(open) => {
+                                if (!open && isOwner) {
+                                    updateRoomMetadata(roomTitle, roomDescription);
+                                }
+                            }}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                        <Settings className="h-5 w-5" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80">
+                                    <div className="grid gap-4">
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium leading-none">{t('settings')}</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                {t('configure_playback')}
+                                            </p>
                                         </div>
-
-                                        <Dialog>
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline" size="sm" className="w-full mt-2">{t('view_debug_logs')}</Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-2xl h-[500px] flex flex-col">
-                                                <DialogHeader>
-                                                    <DialogTitle>{t('view_debug_logs')}</DialogTitle>
-                                                </DialogHeader>
-                                                <div className="flex-1 overflow-y-auto p-4 bg-zinc-950 font-mono text-xs rounded-md border">
-                                                    {logs.map((log, i) => (
-                                                        <div key={i} className="text-emerald-400 border-b border-white/5 pb-1 mb-1">
-                                                            {log}
-                                                        </div>
-                                                    ))}
+                                        <div className="grid gap-2">
+                                            <div className="space-y-4">
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="room-title">{t('room_name')}</Label>
+                                                    <Input
+                                                        id="room-title"
+                                                        value={roomTitle}
+                                                        onChange={(e) => {
+                                                            if (isOwner) setRoomTitle(e.target.value);
+                                                        }}
+                                                        placeholder={t('enter_room_name')}
+                                                        className="h-8"
+                                                        disabled={!isOwner}
+                                                    />
                                                 </div>
-                                            </DialogContent>
-                                        </Dialog>
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="room-desc">{t('room_description')}</Label>
+                                                    <Input
+                                                        id="room-desc"
+                                                        value={roomDescription}
+                                                        onChange={(e) => {
+                                                            if (isOwner) setRoomDescription(e.target.value);
+                                                        }}
+                                                        placeholder={t('enter_room_description')}
+                                                        className="h-8"
+                                                        disabled={!isOwner}
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                                    <div className="space-y-0.5">
+                                                        <Label className="text-sm font-medium">
+                                                            {t('lock_control')}
+                                                        </Label>
+                                                        <div className="text-[10px] text-muted-foreground">
+                                                            {t('lock_control_desc')}
+                                                        </div>
+                                                    </div>
+                                                    <Switch
+                                                        checked={isLocked}
+                                                        onCheckedChange={(checked) => {
+                                                            if (!isOwner) return;
+                                                            setIsLocked(checked);
+                                                            if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                                socketRef.current.send(JSON.stringify({
+                                                                    type: 'UPDATE_ROOM',
+                                                                    payload: { isLocked: checked }
+                                                                }));
+                                                            }
+                                                        }}
+                                                        disabled={!isOwner}
+                                                    />
+                                                </div>
+
+                                                {/* Cloud Storage Settings (Owner Only) */}
+                                                {isOwner && (
+                                                    <div className="pt-2 mt-2 border-t space-y-3">
+                                                        <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('cloud_storage')}</Label>
+
+                                                        <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`h-2 w-2 rounded-full ${roomCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-zinc-600')}`} />
+                                                                    <span className="text-xs font-medium text-foreground">
+                                                                        {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
+                                                                    </span>
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-5 w-5 hover:bg-white/10"
+                                                                    title={t('manual_cookie_input')}
+                                                                    onClick={() => setShowManualInput(!showManualInput)}
+                                                                >
+                                                                    <Settings className="h-3 w-3 text-muted-foreground" />
+                                                                </Button>
+                                                            </div>
+
+                                                            <Button
+                                                                variant={roomCookie ? "outline" : "default"}
+                                                                size="sm"
+                                                                className="w-full h-8 text-xs gap-2"
+                                                                onClick={() => setShowQuarkLogin(true)}
+                                                            >
+                                                                <QrCode className="h-3.5 w-3.5" />
+                                                                {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
+                                                            </Button>
+
+                                                            {showManualInput && (
+                                                                <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
+                                                                    <Label htmlFor="roomCookie" className="text-[10px] text-muted-foreground mb-1.5 block">{t('manual_cookie_input')}</Label>
+                                                                    <Input
+                                                                        id="roomCookie"
+                                                                        value={roomCookie}
+                                                                        onChange={(e) => updateRoomCookie(e.target.value)}
+                                                                        className="h-7 text-xs font-mono bg-muted/20"
+                                                                        placeholder="Paste cookie string..."
+                                                                        type="password"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {!isOwner && (
+                                                    <div className="text-[10px] text-muted-foreground text-center pt-2">
+                                                        {t('only_owner_settings')}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <Dialog>
+                                                <DialogTrigger asChild>
+                                                    <Button variant="outline" size="sm" className="w-full mt-2">{t('view_debug_logs')}</Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-2xl h-[500px] flex flex-col">
+                                                    <DialogHeader>
+                                                        <DialogTitle>{t('view_debug_logs')}</DialogTitle>
+                                                    </DialogHeader>
+                                                    <div className="flex-1 overflow-y-auto p-4 bg-zinc-950 font-mono text-xs rounded-md border">
+                                                        {logs.map((log, i) => (
+                                                            <div key={i} className="text-emerald-400 border-b border-white/5 pb-1 mb-1">
+                                                                {log}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </DialogContent>
+                                            </Dialog>
+                                        </div>
                                     </div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
+                                </PopoverContent>
+                            </Popover>
+                        )}
                     </div>
                 </div>
             </header>
@@ -1792,7 +1806,7 @@ function RoomContent() {
             <main className={cn(
                 "flex-1 flex flex-col min-h-0 animate-fade-in",
                 "md:container md:mx-auto md:grid md:gap-6 transition-all duration-300 ease-in-out",
-                isImmersiveMode ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : "md:p-6 md:grid-cols-4"
+                (isImmersiveMode || isLandscapeMobile) ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : "md:p-6 md:grid-cols-4"
             )}>
                 {/* Video Section */}
                 <div className={cn(
@@ -1803,8 +1817,8 @@ function RoomContent() {
                         ref={containerRef}
                         className={cn(
                             "bg-black overflow-hidden shadow-xl group transition-all duration-500 ease-in-out touch-manipulation",
-                            isImmersiveMode
-                                ? "fixed inset-0 z-50 w-screen h-screen rounded-none"
+                            (isImmersiveMode || isLandscapeMobile)
+                                ? "fixed inset-0 z-10 w-screen h-screen rounded-none"
                                 : "relative w-full aspect-video md:rounded-xl md:shadow-2xl md:border border-white/10 ring-0 md:ring-1 ring-white/5"
                         )}
                         onTouchStart={handleTouchStart}
@@ -1813,20 +1827,82 @@ function RoomContent() {
                         onDoubleClick={handleDoubleClick}
                         onClick={handleContainerClick}
                     >
-                        {/* Exit Immersive Mode Floating Button */}
+                        {/* Landscape Mobile Top Overlay */}
+                        {isLandscapeMobile && (
+                            <div className={cn(
+                                "absolute top-0 left-0 right-0 px-8 pt-4 pt-safe flex items-start justify-between z-[60] bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 pointer-events-none",
+                                showControls ? "opacity-100" : "opacity-0"
+                            )}>
+                                <div className="flex items-center gap-3 pointer-events-auto">
+                                    <Link href="/">
+                                        <Button variant="ghost" size="icon" className="h-10 w-10 text-white hover:bg-white/10 rounded-full">
+                                            <ArrowLeft className="h-6 w-6" />
+                                        </Button>
+                                    </Link>
+                                    <h1 className="text-sm font-medium text-white shadow-black drop-shadow-md truncate max-w-[200px]" onClick={() => {
+                                        navigator.clipboard.writeText(roomId || '');
+                                        toast({ description: t('room_id_copied') });
+                                    }}>
+                                        {roomTitle || t('room_title', { id: roomId })}
+                                    </h1>
+                                </div>
+
+                                <div className="flex items-center gap-2 pointer-events-auto">
+                                    {/* Control Status Indicator */}
+                                    <div
+                                        className={`flex items-center justify-center h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 ${canControl
+                                            ? 'text-primary border-primary/50 shadow-[0_0_10px_rgba(124,58,237,0.3)]'
+                                            : 'text-white/70'
+                                            }`}
+                                        onClick={(e) => {
+                                            if (canControl) return;
+                                            if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId: roomId || '' } }));
+                                                toast({ title: t('control_requested_title'), description: t('control_requested_desc') });
+                                            }
+                                        }}
+                                    >
+                                        {canControl ? <Cast className="h-5 w-5" /> : (isLocked ? <Lock className="h-5 w-5" /> : <Eye className="h-5 w-5" />)}
+                                    </div>
+
+                                    {/* Settings / Menu */}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                            setIsDrawerOpen(true);
+                                            setActiveTab('settings');
+                                        }}
+                                        className="h-10 w-10 text-white hover:bg-white/10 rounded-full bg-black/40 backdrop-blur-md border border-white/10"
+                                    >
+                                        <Settings className="h-6 w-6" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Exit Immersive Mode / Sidebar Trigger Floating Buttons */}
                         <div className={cn(
-                            "fixed top-14 pt-safe right-8 z-[60] transition-all duration-500",
-                            isImmersiveMode && showControls ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
+                            "fixed pt-safe right-8 z-20 flex flex-col gap-3 transition-all duration-500",
+                            isLandscapeMobile ? "top-20" : "top-14",
+                            (isImmersiveMode || isLandscapeMobile) && showControls ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
                         )}>
                             <Button
                                 variant="secondary"
                                 size="icon"
-                                onClick={() => setIsImmersiveMode(false)}
-                                className="h-10 w-10 rounded-full shadow-2xl bg-black/50 backdrop-blur-xl border border-white/10 hover:bg-black/70 text-white"
+                                onClick={() => {
+                                    if (isImmersiveMode) setIsImmersiveMode(false);
+                                }}
+                                className={cn(
+                                    "h-10 w-10 rounded-full shadow-2xl bg-black/50 backdrop-blur-xl border border-white/10 hover:bg-black/70 text-white",
+                                    isLandscapeMobile && !isImmersiveMode ? "hidden" : ""
+                                )}
                                 title={t('exit_immersive_mode')}
                             >
                                 <Minimize className="w-5 h-5" />
                             </Button>
+
+                            {/* Open Sidebar/Drawer in Landscape Mobile - REMOVED per user feedback (only use header button) */}
                         </div>
                         {videoSrc ? (
                             <video
@@ -1968,7 +2044,7 @@ function RoomContent() {
                     "flex-1 flex flex-col min-h-0 overflow-hidden md:overflow-visible w-full transition-all duration-300 ease-in-out",
                     // Desktop Logic
                     "md:block md:space-y-6",
-                    !isImmersiveMode && !isFullscreen ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
+                    (!isImmersiveMode && !isFullscreen && !isLandscapeMobile) ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
                 )}>
                     <Card className="flex-1 flex flex-col md:h-[calc(100vh-12rem)] shadow-none md:shadow-2xl overflow-hidden bg-transparent md:glass border-0 md:border-white/5 rounded-none md:rounded-xl">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 relative">
@@ -2189,6 +2265,210 @@ function RoomContent() {
                 />
             </main >
 
+            {/* Mobile Horizontal Drawer Overlay */}
+            {isLandscapeMobile && (
+                <div className={cn(
+                    "fixed inset-0 z-40 transition-all duration-300 ease-in-out pointer-events-none",
+                    isDrawerOpen ? "bg-black/60 pointer-events-auto" : "bg-transparent"
+                )} onClick={() => setIsDrawerOpen(false)}>
+                    <div
+                        className={cn(
+                            "absolute top-0 right-0 h-full w-[320px] bg-zinc-950 border-l border-white/10 shadow-2xl transition-transform duration-300 ease-out pointer-events-auto flex flex-col pt-safe",
+                            isDrawerOpen ? "translate-x-0" : "translate-x-full"
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-4 border-b border-white/5">
+                            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                <TabsList className="grid w-full grid-cols-4 bg-white/5 h-9 p-0.5 rounded-full border border-white/10">
+                                    <TabsTrigger value="playlist" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('playlist')}</TabsTrigger>
+                                    <TabsTrigger value="chat" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('chat')}</TabsTrigger>
+                                    <TabsTrigger value="members" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('members')}</TabsTrigger>
+                                    <TabsTrigger value="settings" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('settings')}</TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 ml-2 shrink-0" onClick={() => setIsDrawerOpen(false)}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        <div className="flex-1 overflow-hidden">
+                            {activeTab === 'playlist' && (
+                                <div className="flex flex-col h-full">
+                                    <div className="p-3 border-b border-white/5 flex gap-2">
+                                        <Button
+                                            onClick={() => setIsLibraryOpen(true)}
+                                            size="icon"
+                                            variant="outline"
+                                            className="h-8 w-8 shrink-0 border-dashed border-white/10 hover:border-primary/50"
+                                            title={t('resource_library')}
+                                        >
+                                            <FolderSearch className="h-4 w-4" />
+                                        </Button>
+                                        <Input
+                                            placeholder={t('quark_url_or_id')}
+                                            value={inputValue}
+                                            onChange={(e) => setInputValue(e.target.value)}
+                                            className="h-8 flex-1 text-xs"
+                                        />
+                                        <Button onClick={addToPlaylist} disabled={isResolving} size="icon" variant="secondary" className="h-8 w-8 shrink-0">
+                                            {isResolving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                                        </Button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-2 space-y-2 no-scrollbar">
+                                        {playlist.map((item, i) => (
+                                            <SortablePlaylistItem
+                                                key={item.id}
+                                                item={item}
+                                                index={i}
+                                                playingItemId={playingItemId}
+                                                onPlay={resolveAndPlay}
+                                                onRemove={removeFromPlaylist}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {activeTab === 'chat' && (
+                                <div className="flex flex-col h-full">
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                                        {messages.map((msg) => (
+                                            <ChatMessageItem key={msg.id} message={msg} currentUserId={currentUserId} />
+                                        ))}
+                                    </div>
+                                    <div className="p-3 border-t border-white/5 bg-zinc-900/50 pb-safe">
+                                        <form onSubmit={sendChatMessage} className={cn(
+                                            "flex gap-2",
+                                            isMobile ? "" : "max-w-4xl mx-auto"
+                                        )}>
+                                            <Input
+                                                value={chatInput}
+                                                onChange={(e) => setChatInput(e.target.value)}
+                                                placeholder={t('type_message')}
+                                                className="h-8 text-xs bg-black/50 border-white/10 rounded-full pl-3"
+                                            />
+                                            <Button type="submit" size="icon" className="h-8 w-8 rounded-full bg-primary" disabled={!chatInput.trim()}>
+                                                <ArrowRightIcon className="w-4 h-4" />
+                                            </Button>
+                                        </form>
+                                    </div>
+                                </div>
+                            )}
+                            {activeTab === 'members' && (
+                                <div className="flex-1 overflow-y-auto p-2 space-y-1 no-scrollbar">
+                                    {members.map((m: any) => (
+                                        <MemberItem
+                                            key={m.userId}
+                                            member={m}
+                                            currentUserId={currentUserId}
+                                            controllerId={controllerId}
+                                            ownerId={ownerId}
+                                            videoDuration={videoRef.current?.duration || 1}
+                                            controllerProgress={members.find((mem: any) => mem.userId === controllerId)?.currentProgress}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            {activeTab === 'settings' && (
+                                <div className="flex-1 overflow-y-auto p-4 no-scrollbar origin-top scale-90 -mt-2 h-[110%] w-[110%] -ml-[5%]">
+                                    <div className="space-y-6 pb-safe origin-top scale-90 w-[110%] -ml-[5%]">
+                                        <div className="space-y-4">
+                                            <div className="grid gap-2">
+                                                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('room_settings')}</Label>
+                                                <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-4">
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="room-title-mobile" className="text-xs">{t('room_name')}</Label>
+                                                        <Input
+                                                            id="room-title-mobile"
+                                                            value={roomTitle}
+                                                            onChange={(e) => isOwner && setRoomTitle(e.target.value)}
+                                                            className="h-9 bg-black/40 border-white/10 rounded-xl text-sm"
+                                                            disabled={!isOwner}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="room-desc-mobile" className="text-xs">{t('room_description')}</Label>
+                                                        <Input
+                                                            id="room-desc-mobile"
+                                                            value={roomDescription}
+                                                            onChange={(e) => isOwner && setRoomDescription(e.target.value)}
+                                                            className="h-9 bg-black/40 border-white/10 rounded-xl text-sm"
+                                                            disabled={!isOwner}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between pt-2">
+                                                        <div className="space-y-0.5">
+                                                            <Label className="text-sm font-medium">{t('lock_control')}</Label>
+                                                            <p className="text-[10px] text-muted-foreground">{t('lock_control_desc')}</p>
+                                                        </div>
+                                                        <Switch
+                                                            checked={isLocked}
+                                                            onCheckedChange={(checked) => {
+                                                                if (!isOwner) return;
+                                                                setIsLocked(checked);
+                                                                if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                                    socketRef.current.send(JSON.stringify({
+                                                                        type: 'UPDATE_ROOM',
+                                                                        payload: { isLocked: checked }
+                                                                    }));
+                                                                }
+                                                            }}
+                                                            disabled={!isOwner}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {isOwner && (
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('cloud_storage')}</Label>
+                                                    <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`h-2.5 w-2.5 rounded-full ${roomCookie ? 'bg-green-500' : (hasGlobalCookie ? 'bg-amber-500' : 'bg-zinc-600')}`} />
+                                                                <span className="text-sm font-medium">
+                                                                    {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-sm gap-2"
+                                                            onClick={() => setShowQuarkLogin(true)}
+                                                        >
+                                                            <QrCode className="h-4 w-4" />
+                                                            {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
+                                                        </Button>
+
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="w-full text-[10px] text-muted-foreground h-6"
+                                                            onClick={() => setShowManualInput(!showManualInput)}
+                                                        >
+                                                            {showManualInput ? t('hide_manual_input') : t('manual_cookie_input')}
+                                                        </Button>
+
+                                                        {showManualInput && (
+                                                            <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
+                                                                <Input
+                                                                    value={roomCookie}
+                                                                    onChange={(e) => updateRoomCookie(e.target.value)}
+                                                                    className="h-8 text-[10px] font-mono bg-black/40 border-white/10 rounded-lg"
+                                                                    placeholder="Cookie string..."
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
