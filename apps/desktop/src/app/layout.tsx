@@ -30,6 +30,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
+        <div data-tauri-drag-region className="fixed left-0 top-0 h-8 w-full z-50 bg-transparent" />
+
         <script
           dangerouslySetInnerHTML={{
             __html: `
