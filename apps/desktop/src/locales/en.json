@@ -158,6 +158,12 @@
         "failed_to_load_rooms": "Failed to list rooms",
         "failed_to_load_rooms_timeout": "Failed to load rooms: timeout",
         "failed_init_user": "Failed to initialize user identity.",
-        "retry": "Retry"
+        "retry": "Retry",
+        "original_quality": "Original",
+        "quality": "Quality",
+        "res_4k": "4K",
+        "res_super": "Super",
+        "res_high": "High",
+        "res_low": "Low"
     }
 }

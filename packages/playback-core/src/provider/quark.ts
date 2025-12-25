@@ -78,21 +78,32 @@ export class QuarkProvider implements PlayableProvider {
         // Let's look for a likely candidate.
 
         let playUrl = data.data?.url;
+        let resolutions: Array<{ id: string; name: string; url: string; width?: number; height?: number }> = [];
 
         // Handle video_list response (new format)
-        if (!playUrl && data.data?.video_list && Array.isArray(data.data.video_list)) {
+        if (data.data?.video_list && Array.isArray(data.data.video_list)) {
             const list = data.data.video_list;
 
-            // Strategy: Find first with channels=2. If not found, fallback to first.
-            const stereoStream = list.find((v: any) => v.video_info?.audio?.channels === 2 && v.video_info?.url);
+            // Map resolutions
+            resolutions = list
+                .filter((v: any) => v.video_info?.url)
+                .map((v: any) => ({
+                    id: v.resolution || v.video_info?.resolution || 'unknown',
+                    name: v.resolution || v.video_info?.resolution || 'Unknown',
+                    url: v.video_info.url,
+                    width: v.video_info.width,
+                    height: v.video_info.height
+                }));
 
-            if (stereoStream) {
-                playUrl = stereoStream.video_info.url;
-            } else {
-                // Fallback to the first available URL
-                const target = list.find((v: any) => v.video_info?.url);
-                if (target) {
-                    playUrl = target.video_info.url;
+            // Strategy: Find first with channels=2. If not found, fallback to first.
+            if (!playUrl) {
+                const stereoStream = list.find((v: any) => v.video_info?.audio?.channels === 2 && v.video_info?.url);
+
+                if (stereoStream) {
+                    playUrl = stereoStream.video_info.url;
+                } else if (resolutions.length > 0) {
+                    // Fallback to the first available URL (usually the highest quality or first in list)
+                    playUrl = resolutions[0].url;
                 }
             }
         }
@@ -110,7 +121,8 @@ export class QuarkProvider implements PlayableProvider {
                 'Referer': 'https://pan.quark.cn/',
                 'Cookie': newCookies ? `${headers.Cookie}; ${newCookies}` : headers.Cookie
             },
-            meta: data.data // Keep full data for debug/refresh
+            meta: data.data, // Keep full data for debug/refresh
+            resolutions
         };
     }
 

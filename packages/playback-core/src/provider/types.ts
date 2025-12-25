@@ -5,6 +5,13 @@ export interface PlayableSource {
     headers?: Record<string, string>; // Headers required for playback (e.g. Cookie, User-Agent)
     expiresAt?: number; // Timestamp when the URL might expire
     meta?: any; // any extra provider-specific metadata
+    resolutions?: Array<{
+        id: string; // e.g. "1080p", "720p" or ID
+        name: string; // e.g. "1080p"
+        url: string;
+        width?: number;
+        height?: number;
+    }>;
 }
 
 export interface PlayableProvider {

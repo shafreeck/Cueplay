@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -142,6 +142,8 @@ function RoomContent() {
     const controllerIdRef = useRef<string | null>(null);
     const [videoSrc, setVideoSrc] = useState<string>('');
     const [rawUrl, setRawUrl] = useState<string>('');
+    const [resolutions, setResolutions] = useState<Array<{ id: string, name: string, url: string }>>([]);
+    const [currentResolution, setCurrentResolution] = useState<string>('Original');
     const [duration, setDuration] = useState<number>(3600);
     const [fileId, setFileId] = useState('');
     const [inputValue, setInputValue] = useState('');
@@ -198,6 +200,8 @@ function RoomContent() {
     const lastMinAgeRef = useRef<number>(Number.MAX_SAFE_INTEGER);
     const lastResumedItemIdRef = useRef<string | null>(null);
     const isBuffering = useRef(false);
+    const lastVideoCookieRef = useRef<string>('');
+    const pendingSeekTimeRef = useRef<number | null>(null);
 
     // Sync Ref with State
     useEffect(() => {
@@ -638,7 +642,18 @@ function RoomContent() {
 
         try {
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
+            lastVideoCookieRef.current = cookie;
             setRawUrl(source.url);
+
+            if (source.resolutions && Array.isArray(source.resolutions)) {
+                setResolutions(source.resolutions);
+                const match = source.resolutions.find((r: any) => r.url === source.url);
+                setCurrentResolution(match ? match.id : 'Original');
+            } else {
+                setResolutions([]);
+                setCurrentResolution('Original');
+            }
+
             if (source.meta?.duration) {
                 setDuration(source.meta.duration);
             }
@@ -705,9 +720,20 @@ function RoomContent() {
         addLog(`Resolving video ${fid}...`);
         try {
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
+            lastVideoCookieRef.current = cookie;
             console.log("Resolve result:", { hasSource: !!source, cookieLen: cookie?.length });
 
             setRawUrl(source.url); // Use raw URL for sharing
+
+            if (source.resolutions && Array.isArray(source.resolutions)) {
+                setResolutions(source.resolutions);
+                const match = source.resolutions.find((r: any) => r.url === source.url);
+                setCurrentResolution(match ? match.id : 'Original');
+            } else {
+                setResolutions([]);
+                setCurrentResolution('Original');
+            }
+
             if (source.meta?.duration) {
                 setDuration(source.meta.duration);
             }
@@ -1445,6 +1471,36 @@ function RoomContent() {
         }
     };
 
+    const changeResolution = async (res: { id: string, name: string, url: string }) => {
+        if (res.id === currentResolution) return;
+
+        const currentTime = videoRef.current ? videoRef.current.currentTime : 0;
+        pendingSeekTimeRef.current = currentTime;
+
+        // Optimistic update
+        setCurrentResolution(res.id);
+
+        let finalUrl = res.url;
+        try {
+            if (lastVideoCookieRef.current && lastVideoCookieRef.current.trim()) {
+                const proxyBase = await getProxyBase();
+                finalUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(res.url)}&cookie=${encodeURIComponent(lastVideoCookieRef.current)}`;
+            }
+        } catch (e) {
+            console.error("Failed to get proxy base", e);
+        }
+
+        addLog(`[Resolution] Switching to ${res.name} (${currentTime.toFixed(1)}s)`);
+        setVideoSrc(finalUrl);
+    };
+
+    const getResolutionLabel = useCallback((name: string) => {
+        if (name === 'Original') return t('original_quality');
+        const key = `res_${name.toLowerCase()}`;
+        const translated = t(key);
+        return translated === key ? name : translated;
+    }, [t]);
+
 
 
 
@@ -1742,21 +1798,36 @@ function RoomContent() {
                     >
                         {videoSrc ? (
                             <video
-                                key={videoSrc}
                                 ref={videoRef}
                                 controls
                                 autoPlay
                                 playsInline
+                                webkit-playsinline="true"
                                 className="w-full h-full object-contain"
                                 src={videoSrc}
                                 onEnded={playNext}
                                 onLoadStart={() => addLog(`[Video Event] LoadStart: ${videoSrc.slice(0, 50)}...`)}
-                                onLoadedMetadata={() => addLog(`[Video Event] LoadedMetadata: Duration ${videoRef.current?.duration}`)}
+                                onLoadedMetadata={() => {
+                                    addLog(`[Video Event] LoadedMetadata: Duration ${videoRef.current?.duration}`);
+
+                                    // RESTORE TIME (Resolution Switch) - Execute as early as possible
+                                    if (videoRef.current && pendingSeekTimeRef.current !== null) {
+                                        addLog(`[Resolution] Restoring time to ${pendingSeekTimeRef.current.toFixed(1)}s`);
+                                        videoRef.current.currentTime = pendingSeekTimeRef.current;
+                                        pendingSeekTimeRef.current = null;
+                                        // Ensure it plays if it was playing, or if autoPlay is meant to be on
+                                        // For resolution switch, we generally want to resume.
+                                        videoRef.current.play().catch(e => console.warn("Auto-resume failed", e));
+                                    }
+                                }}
                                 onCanPlay={() => {
                                     addLog(`[Video Event] CanPlay`);
-                                    if (videoRef.current && Math.abs(videoRef.current.playbackRate - playbackRate) > 0.01) {
-                                        addLog(`[Rate] Restoring rate to ${playbackRate}`);
-                                        videoRef.current.playbackRate = playbackRate;
+                                    if (videoRef.current) {
+                                        // Restore Rate
+                                        if (Math.abs(videoRef.current.playbackRate - playbackRate) > 0.01) {
+                                            addLog(`[Rate] Restoring rate to ${playbackRate}`);
+                                            videoRef.current.playbackRate = playbackRate;
+                                        }
                                     }
                                 }}
                                 onStalled={() => addLog(`[Video Event] Stalled`)}
@@ -1824,6 +1895,37 @@ function RoomContent() {
                                 >
                                     {currentSubtitle.split('\n').map((line, i) => (
                                         <div key={i} className="text-center">{line}</div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {/* Resolution Switcher Overlay - Vertical List on Right */}
+                        {resolutions.length > 0 && (
+                            <div className={cn(
+                                "absolute right-6 top-1/2 -translate-y-1/2 z-[99999] transition-all duration-300",
+                                // On touch devices, we rely on showControls. On desktop, we use hover + showControls.
+                                (isMobile || showControls) ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none",
+                                // Refine for desktop: only show on hover if not in immersive mode
+                                !isMobile && !isImmersiveMode && "lg:opacity-0 lg:translate-x-4 lg:group-hover:opacity-100 lg:group-hover:translate-x-0 lg:group-hover:pointer-events-auto"
+                            )}>
+                                <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl pointer-events-auto">
+                                    {resolutions.map((res) => (
+                                        <button
+                                            key={res.id}
+                                            className={cn(
+                                                "w-12 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 active:scale-90",
+                                                currentResolution === res.id
+                                                    ? "bg-white/20 text-white shadow-sm"
+                                                    : "text-zinc-400 hover:text-white hover:bg-white/10"
+                                            )}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                addLog(`[Resolution] User selected ${res.name}`);
+                                                changeResolution(res);
+                                            }}
+                                        >
+                                            {getResolutionLabel(res.name)}
+                                        </button>
                                     ))}
                                 </div>
                             </div>
