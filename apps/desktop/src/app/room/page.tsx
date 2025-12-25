@@ -148,6 +148,7 @@ function RoomContent() {
     const touchStartYRef = useRef<number | null>(null);
 
     // Seamless Switching State
+    const isSeamlessSwitchingRef = useRef(false);
     const [nextVideoSrc, setNextVideoSrc] = useState<string>('');
     const [nextVideoId, setNextVideoId] = useState<string | null>(null);
     const [nextVideoStartTime, setNextVideoStartTime] = useState<number>(0);
@@ -198,6 +199,8 @@ function RoomContent() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isImmersiveMode, setIsImmersiveMode] = useState(false);
     const [showControls, setShowControls] = useState(true);
+    const showControlsRef = useRef(showControls);
+    useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const chatListRef = useRef<HTMLDivElement>(null);
@@ -290,7 +293,15 @@ function RoomContent() {
                 if (isCancelled) return;
                 if (lastResumedItemIdRef.current === playingItemId) return;
 
-                addLog(`[Resume] Attempting seek to ${item.progress!.toFixed(1)}s`);
+                const timeLeft = (item.duration || duration) - item.progress!;
+                // User Feedback: specific threshold of 5s to prevent "finished" videos from resuming at the end
+                if (timeLeft < 5) {
+                    addLog(`[Resume] Ignored: Video near end (${timeLeft.toFixed(1)}s left). Starting from 0.`);
+                    lastResumedItemIdRef.current = playingItemId;
+                    return;
+                }
+
+                addLog(`[Resume] Attempting seek to ${item.progress!.toFixed(1)}s (Duration: ${item.duration})`);
                 video.currentTime = item.progress!;
 
                 // Seek confirmation loop (Retry with Yield)
@@ -476,7 +487,17 @@ function RoomContent() {
     // 1. Hide after 3s when hovered/interacting
     // 2. Hide immediately when mouse leaves
     // 3. Mobile: Tap to toggle visibility
-    const resetTimer = useCallback(() => {
+    // Central Gatekeeper for Control Visibility
+    // Central Gatekeeper for Control Visibility
+    const resetTimer = useCallback((reason: string = 'Unknown') => {
+        // Explicit Seamless Suppression:
+        // If we are in seamless switching mode, we block ALL auto-wakeups (playing, mousemove, etc.)
+        // UNLESS the user explicitly breaks the spell (handled by clearing the ref in interaction handlers).
+        if (isSeamlessSwitchingRef.current) {
+            // console.log(`[Controls] Suppressed (Seamless Mode). Reason: ${reason}`);
+            return;
+        }
+
         setShowControls(true);
         if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
 
@@ -490,26 +511,25 @@ function RoomContent() {
     }, []);
 
     const handleContainerClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        // User Interaction explicitly breaks Seamless Mode
+        isSeamlessSwitchingRef.current = false;
+
         // If clicking on a control element, just reset the timer and don't toggle
         const target = e.target as HTMLElement;
         if (target.closest('button, [role="button"], a, input, select, textarea')) {
-            resetTimer();
+            resetTimer('Click (Controls)');
             return;
         }
 
         if (isMobile) {
             if (showControls) {
-                // If strictly playing, hide immediately. 
-                // If paused/buffering, we logically shouldn't hide (since resetTimer won't re-show). 
-                // But user override (click) should probably allow hiding even if paused? 
-                // User requirement: "Toggle". So yes, user can force hide.
                 setShowControls(false);
                 if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
             } else {
-                resetTimer();
+                resetTimer('Mobile Toggle');
             }
         } else {
-            resetTimer();
+            resetTimer('Click (Container)');
         }
     }, [isMobile, showControls, resetTimer]);
 
@@ -517,11 +537,29 @@ function RoomContent() {
     useEffect(() => {
         const video = videoRef.current;
         const container = containerRef.current;
-        const handleInteraction = () => resetTimer();
+
+        // Generic interaction (Keyboard) sets controls to visible AND breaks Seamless Mode
+        const handleInteraction = (e: Event) => {
+            // Filter out navigation keys in Immersive Mode to allow seamless switching
+            if (isImmersiveMode) {
+                const k = (e as KeyboardEvent).key;
+                if (k === 'ArrowUp' || k === 'ArrowDown') return;
+            }
+
+            isSeamlessSwitchingRef.current = false;
+            resetTimer('Interaction (Key)');
+        };
+
+        // MouseMove: Ignore synthetic events (0 movement) caused by layout shifts (e.g. video swap)
+        const handleMouseMove = (e: MouseEvent) => {
+            if (Math.abs(e.movementX) <= 1 && Math.abs(e.movementY) <= 1) return;
+            resetTimer('Interaction (Mouse)');
+        };
 
         // Consolidated video event handler to prevent race conditions
         const handleVideoEvent = (e: Event) => {
             const type = e.type;
+            console.log(`[Video Event] ${type}. showControls=${showControls}`);
 
             // Synchronously update buffering state first
             if (type === 'waiting' || type === 'loadstart') {
@@ -537,7 +575,16 @@ function RoomContent() {
             }
 
             // Then check visibility logic based on new state
-            resetTimer();
+            // Persistence: Only wake up controls for USER events (pause) or if already visible
+            if (type === 'pause') {
+                resetTimer(`Event: ${type}`);
+            } else {
+                // For playing/waiting/loadstart, we only Reset (Keep Alive) if ALREADY visible
+                if (showControls) {
+                    resetTimer(`Event: ${type}`);
+                }
+                // If hidden, we STAY hidden (Persistence).
+            }
         };
 
         // Bind keydown to window for general interaction reset (hiding controls)
@@ -550,7 +597,7 @@ function RoomContent() {
 
         if (container) {
             // Use mousemove for Rule 1 (3s hide after move)
-            container.addEventListener('mousemove', handleInteraction);
+            container.addEventListener('mousemove', handleMouseMove);
         }
 
         // Sync with video state
@@ -562,13 +609,14 @@ function RoomContent() {
             video.addEventListener('loadstart', handleVideoEvent);
         }
 
-        // Initial setup
-        resetTimer();
+        // Initial setup: Restore persistence
+        // Only wake up if already visible
+        if (showControls) resetTimer('Initial (Persisted)');
 
         return () => {
             if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
             if (container) {
-                container.removeEventListener('mousemove', handleInteraction);
+                container.removeEventListener('mousemove', handleMouseMove);
             }
             window.removeEventListener('keydown', handleInteraction);
             if (video) {
@@ -579,7 +627,7 @@ function RoomContent() {
                 video.removeEventListener('loadstart', handleVideoEvent);
             }
         };
-    }, [resetTimer, videoSrc, isImmersiveMode]); // Re-bind when video source changes
+    }, [resetTimer, videoSrc, isImmersiveMode, showControls]); // Re-bind when video source changes
 
     // Subtitle Hijacking Logic
     useEffect(() => {
@@ -2063,7 +2111,6 @@ function RoomContent() {
                         tabIndex={0}
                         onKeyDown={handleKeyDown}
                         onTouchStart={handleTouchStart}
-                        onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
                         onDoubleClick={handleDoubleClick}
                         onClick={handleContainerClick}
@@ -2149,7 +2196,12 @@ function RoomContent() {
                         {videoSrc ? (
                             <SeamlessVideoPlayer
                                 ref={videoRef}
-                                controls
+                                controls={showControls}
+                                onSeamlessStart={() => {
+                                    console.log("[Player] Seamless start. Hiding controls and locking.");
+                                    isSeamlessSwitchingRef.current = true;
+                                    setShowControls(false);
+                                }}
                                 autoPlay
                                 className="w-full h-full object-contain"
                                 src={videoSrc}

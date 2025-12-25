@@ -5,6 +5,7 @@ export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTML
     nextSrc?: string;
     nextStartTime?: number;
     isPreloadEnabled?: boolean;
+    onSeamlessStart?: () => void;
 }
 
 interface PlayerState {
@@ -15,7 +16,7 @@ interface PlayerState {
 }
 
 export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPlayerProps>(
-    ({ className, src, nextSrc, nextStartTime, isPreloadEnabled = false,
+    ({ className, src, nextSrc, nextStartTime, isPreloadEnabled = false, onSeamlessStart,
         onTimeUpdate, onEnded, onCanPlay, onLoadedMetadata,
         onError, onWaiting, onStalled, onLoadStart, onPlay, onPause,
         ...props }, ref) => {
@@ -27,6 +28,11 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
 
         // Critical: Use a Ref for the ID as well, so the Proxy can read the LATEST ID synchronously
         const activePlayerIdRef = useRef<'A' | 'B'>('A');
+
+        // Temp Hide Controls (Fix "Flash" issue): Force hide controls internally during the swap frame
+        const [tempHideControls, setTempHideControls] = useState(false);
+
+        // Track internal src state for each player
 
         // Track internal src state for each player
         const [stateA, setStateA] = useState<PlayerState>({ id: 'A', src: (src as string) || undefined, isActive: true });
@@ -47,6 +53,10 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     // HIT! Swap immediately
                     console.log("[Seamless] HIT! Swapping from A to B (Preloaded)");
 
+                    // Notify parent to hide controls temporarily for smooth transition
+                    onSeamlessStart?.();
+                    setTempHideControls(true); // Internal override (Sync)
+
                     // Optimistic Play: Start playing B immediately before state update commits
                     // This reduces the "gap" between visibility 100% and playback start.
                     videoRefB.current?.play().catch(() => { });
@@ -64,6 +74,10 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     // HIT! Swap immediately
                     const rs = videoRefA.current?.readyState;
                     console.log(`[Seamless] HIT! Swapping from B to A (Preloaded). ReadyState: ${rs}`);
+
+                    // Notify parent to hide controls temporarily for smooth transition
+                    onSeamlessStart?.();
+                    setTempHideControls(true); // Internal override (Sync)
 
                     // Optimistic Play
                     videoRefA.current?.play().catch(() => { });
@@ -132,7 +146,23 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 // Resetting time here causes the "fading out" video to jump to start, creating a visual glitch.
                 // The time will be reset automatically when src changes later.
             }
+            // The time will be reset automatically when src changes later.
         }, [activePlayerId]);
+
+        // Reset Temp Hide when parent props update
+        useEffect(() => {
+            if (!props.controls && tempHideControls) {
+                // If parent has acknowledged hide, we can unmask (though prop is false anyway)
+                setTempHideControls(false);
+            } else if (props.controls && tempHideControls) {
+                // Failsafe: if parent implies controls should be ON, but we are hiding?
+                // Parent logic sets false on start. So props.controls should be false eventually.
+                // If props.controls stays true (e.g. parent failed), timeout resets.
+                const t = setTimeout(() => setTempHideControls(false), 500);
+                return () => clearTimeout(t);
+            }
+        }, [props.controls, tempHideControls]);
+
 
 
         // Proxy Ref Implementation
@@ -170,8 +200,9 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             playsInline: true,
             'webkit-playsinline': 'true',
             preload: 'auto',
-            // Filter out autoplay/preload from spread props to handle manually
-            ...Object.fromEntries(Object.entries(props).filter(([k]) => !['autoPlay', 'preload', 'src'].includes(k)))
+            controls: props.controls && !tempHideControls, // Override logic
+            // Filter out autoplay/preload/controls/src from spread props to handle manually
+            ...Object.fromEntries(Object.entries(props).filter(([k]) => !['autoPlay', 'preload', 'src', 'controls'].includes(k)))
         };
 
         // Event Wrappers
