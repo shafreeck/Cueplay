@@ -211,18 +211,7 @@ function RoomContent() {
     }, [isSynced]);
 
 
-    const handleTouchStart = (e: React.TouchEvent) => {
-        const now = Date.now();
-        const DOUBLE_TAP_DELAY = 300;
-        if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
-            // Double tap detected
-            e.preventDefault();
-            toggleFullscreen();
-            lastTapRef.current = 0; // Reset
-        } else {
-            lastTapRef.current = now;
-        }
-    };
+
 
     const styles = `
     .pb-safe {
@@ -464,90 +453,94 @@ function RoomContent() {
         };
     }, [videoSrc]);
 
-    // Double-click to toggle fullscreen
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        // Prevent accidental text selection or other default behaviors
+        e.preventDefault();
+        toggleFullscreen();
+    };
 
-        const handleDoubleClick = (e: MouseEvent) => {
-            // Prevent double-click text selection
-            e.preventDefault();
-            toggleFullscreen();
-        };
-
-        container.addEventListener('dblclick', handleDoubleClick);
-
-        return () => {
-            container.removeEventListener('dblclick', handleDoubleClick);
-        };
+    // Simplified auto-hide logic:
+    // 1. Hide after 3s when hovered/interacting
+    // 2. Hide immediately when mouse leaves
+    // 3. Mobile: Tap to toggle visibility
+    const resetTimer = useCallback(() => {
+        setShowControls(true);
+        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = setTimeout(() => {
+            setShowControls(false);
+        }, 3000);
     }, []);
 
-    // Auto-hide controls logic (mimics system behavior)
-    useEffect(() => {
-        const video = videoRef.current;
-        const container = containerRef.current;
+    const handleContainerClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        // If clicking on a control element, just reset the timer and don't toggle
+        const target = e.target as HTMLElement;
+        if (target.closest('button, [role="button"], a, input, select, textarea')) {
+            resetTimer();
+            return;
+        }
 
-        const resetTimer = () => {
-            setShowControls(true);
-            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-
-            // Only hide after delay if video is playing
-            if (video && !video.paused) {
-                controlsTimeoutRef.current = setTimeout(() => {
-                    setShowControls(false);
-                }, 3000);
+        if (isMobile) {
+            if (showControls) {
+                setShowControls(false);
+                if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+            } else {
+                resetTimer();
             }
-        };
+        } else {
+            resetTimer();
+        }
+    }, [isMobile, showControls, resetTimer]);
 
-        // Native video events to sync visibility
-        const handlePlay = () => resetTimer();
-        const handlePause = () => setShowControls(true); // Always show when paused
+    useEffect(() => {
+        const container = containerRef.current;
         const handleInteraction = () => resetTimer();
 
-        // Interaction listeners on container only to avoid resets when mouse is outside
         if (container) {
+            // Use mousemove for Rule 1 (3s hide after move)
             container.addEventListener('mousemove', handleInteraction);
-            container.addEventListener('touchstart', handleInteraction);
-            container.addEventListener('click', handleInteraction);
         }
-
-        // Keep keyboard listening globally
         window.addEventListener('keydown', handleInteraction);
 
-        if (video) {
-            video.addEventListener('play', handlePlay);
-            video.addEventListener('pause', handlePause);
-        }
-
-        // Initial check
+        // Initial setup
         resetTimer();
 
         return () => {
             if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
             if (container) {
                 container.removeEventListener('mousemove', handleInteraction);
-                container.removeEventListener('touchstart', handleInteraction);
-                container.removeEventListener('click', handleInteraction);
             }
             window.removeEventListener('keydown', handleInteraction);
-            if (video) {
-                video.removeEventListener('play', handlePlay);
-                video.removeEventListener('pause', handlePause);
-            }
         };
-    }, [isMobile]); // Re-init if container changes visibility or mobile state changes
+    }, [resetTimer]);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        // Rule: Any touch resets activity timer
+        resetTimer();
+
+        const now = Date.now();
+        const DOUBLE_TAP_DELAY = 300;
+        if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+            // Double tap detected
+            e.preventDefault();
+            toggleFullscreen();
+            lastTapRef.current = 0; // Reset
+        } else {
+            lastTapRef.current = now;
+        }
+    };
 
     const handleMouseEnter = () => {
-        if (!isMobile) {
-            setShowControls(true);
-        }
+        resetTimer();
     };
 
     const handleMouseLeave = () => {
         if (!isMobile) {
             setShowControls(false);
+            if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
         }
     };
+
+
 
     // Trace Buffering State
     useEffect(() => {
@@ -1794,21 +1787,7 @@ function RoomContent() {
                 </div>
             </header>
 
-            {/* Exit Immersive Mode Floating Button */}
-            <div className={cn(
-                "fixed top-14 pt-safe right-8 z-[60] transition-all duration-500",
-                isImmersiveMode && showControls ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
-            )}>
-                <Button
-                    variant="secondary"
-                    size="icon"
-                    onClick={() => setIsImmersiveMode(false)}
-                    className="h-10 w-10 rounded-full shadow-2xl bg-black/50 backdrop-blur-xl border border-white/10 hover:bg-black/70 text-white"
-                    title={t('exit_immersive_mode')}
-                >
-                    <Minimize className="w-5 h-5" />
-                </Button>
-            </div>
+
 
             <main className={cn(
                 "flex-1 flex flex-col min-h-0 animate-fade-in",
@@ -1831,7 +1810,24 @@ function RoomContent() {
                         onTouchStart={handleTouchStart}
                         onMouseEnter={handleMouseEnter}
                         onMouseLeave={handleMouseLeave}
+                        onDoubleClick={handleDoubleClick}
+                        onClick={handleContainerClick}
                     >
+                        {/* Exit Immersive Mode Floating Button */}
+                        <div className={cn(
+                            "fixed top-14 pt-safe right-8 z-[60] transition-all duration-500",
+                            isImmersiveMode && showControls ? "translate-y-0 opacity-100" : "-translate-y-24 opacity-0 pointer-events-none"
+                        )}>
+                            <Button
+                                variant="secondary"
+                                size="icon"
+                                onClick={() => setIsImmersiveMode(false)}
+                                className="h-10 w-10 rounded-full shadow-2xl bg-black/50 backdrop-blur-xl border border-white/10 hover:bg-black/70 text-white"
+                                title={t('exit_immersive_mode')}
+                            >
+                                <Minimize className="w-5 h-5" />
+                            </Button>
+                        </div>
                         {videoSrc ? (
                             <video
                                 ref={videoRef}
