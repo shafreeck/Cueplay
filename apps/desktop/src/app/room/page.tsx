@@ -1764,10 +1764,10 @@ function RoomContent() {
 
             {/* Header */}
             <header className={cn(
-                "sticky top-0 md:top-4 z-50 px-0 md:px-4 mb-0 md:mb-6 transition-all duration-300 pt-safe md:pt-0",
+                "sticky top-0 md:top-8 z-50 px-0 md:px-4 mb-0 md:mb-6 transition-all duration-300 pt-safe md:pt-0 md:mt-8",
                 ((isImmersiveMode || isFullscreen) || isLandscapeMobile) ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
             )}>
-                <div className="container mx-auto h-12 md:h-14 md:rounded-full flex items-center justify-between gap-2 md:gap-4 px-3 md:px-6 bg-black md:bg-black/40 backdrop-blur-2xl border-b md:border border-white/5 shadow-2xl pointer-events-auto">
+                <div data-tauri-drag-region className="container mx-auto h-14 md:h-16 md:rounded-full flex items-center justify-between gap-2 md:gap-4 px-3 md:px-6 bg-black md:bg-black/40 backdrop-blur-2xl border-b md:border border-white/5 shadow-2xl pointer-events-auto select-none">
                     <div className="flex items-center gap-2 overflow-hidden shrink-0">
                         <Link href="/">
                             <Button variant="ghost" size="sm" className="h-8 w-auto px-2 md:px-3">
