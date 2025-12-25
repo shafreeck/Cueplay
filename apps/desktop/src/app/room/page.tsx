@@ -485,6 +485,8 @@ function RoomContent() {
     // Auto-hide controls logic (mimics system behavior)
     useEffect(() => {
         const video = videoRef.current;
+        const container = containerRef.current;
+
         const resetTimer = () => {
             setShowControls(true);
             if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -500,10 +502,16 @@ function RoomContent() {
         // Native video events to sync visibility
         const handlePlay = () => resetTimer();
         const handlePause = () => setShowControls(true); // Always show when paused
+        const handleInteraction = () => resetTimer();
 
-        window.addEventListener('mousemove', handleInteraction);
-        window.addEventListener('touchstart', handleInteraction);
-        window.addEventListener('click', handleInteraction);
+        // Interaction listeners on container only to avoid resets when mouse is outside
+        if (container) {
+            container.addEventListener('mousemove', handleInteraction);
+            container.addEventListener('touchstart', handleInteraction);
+            container.addEventListener('click', handleInteraction);
+        }
+
+        // Keep keyboard listening globally
         window.addEventListener('keydown', handleInteraction);
 
         if (video) {
@@ -514,22 +522,20 @@ function RoomContent() {
         // Initial check
         resetTimer();
 
-        function handleInteraction() {
-            resetTimer();
-        }
-
         return () => {
             if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-            window.removeEventListener('mousemove', handleInteraction);
-            window.removeEventListener('touchstart', handleInteraction);
-            window.removeEventListener('click', handleInteraction);
+            if (container) {
+                container.removeEventListener('mousemove', handleInteraction);
+                container.removeEventListener('touchstart', handleInteraction);
+                container.removeEventListener('click', handleInteraction);
+            }
             window.removeEventListener('keydown', handleInteraction);
             if (video) {
                 video.removeEventListener('play', handlePlay);
                 video.removeEventListener('pause', handlePause);
             }
         };
-    }, [isMobile]); // Minimize dependencies to avoid timer resets on mode changes, but keep isMobile since it affects layout
+    }, [isMobile]); // Re-init if container changes visibility or mobile state changes
 
     const handleMouseEnter = () => {
         if (!isMobile) {
