@@ -482,9 +482,9 @@ function RoomContent() {
         };
     }, []);
 
-    // Auto-hide controls in Immersive Mode
+    // Auto-hide controls in Immersive or Fullscreen Mode
     useEffect(() => {
-        if (!isImmersiveMode) {
+        if (!isImmersiveMode && !isFullscreen) {
             setShowControls(true);
             return;
         }
@@ -513,7 +513,7 @@ function RoomContent() {
             window.removeEventListener('click', handleInteraction);
             window.removeEventListener('keydown', handleInteraction);
         };
-    }, [isImmersiveMode]);
+    }, [isImmersiveMode, isFullscreen]);
 
     // Trace Buffering State
     useEffect(() => {
@@ -1513,7 +1513,7 @@ function RoomContent() {
             {/* Header */}
             <header className={cn(
                 "sticky top-0 md:top-4 z-50 px-0 md:px-4 mb-0 md:mb-6 transition-all duration-300 pt-safe md:pt-0",
-                isImmersiveMode ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
+                isImmersiveMode || isFullscreen ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
             )}>
                 <div className="container mx-auto h-12 md:h-14 md:rounded-full flex items-center justify-between gap-2 md:gap-4 px-3 md:px-6 bg-black md:bg-black/40 backdrop-blur-2xl border-b md:border border-white/5 shadow-2xl pointer-events-auto">
                     <div className="flex items-center gap-2 overflow-hidden shrink-0">
@@ -1905,8 +1905,8 @@ function RoomContent() {
                                 "absolute right-6 top-1/2 -translate-y-1/2 z-[99999] transition-all duration-300",
                                 // On touch devices, we rely on showControls. On desktop, we use hover + showControls.
                                 (isMobile || showControls) ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none",
-                                // Refine for desktop: only show on hover if not in immersive mode
-                                !isMobile && !isImmersiveMode && "lg:opacity-0 lg:translate-x-4 lg:group-hover:opacity-100 lg:group-hover:translate-x-0 lg:group-hover:pointer-events-auto"
+                                // Refine for desktop: only show on hover if not in immersive or fullscreen mode
+                                !isMobile && !isImmersiveMode && !isFullscreen && "lg:opacity-0 lg:translate-x-4 lg:group-hover:opacity-100 lg:group-hover:translate-x-0 lg:group-hover:pointer-events-auto"
                             )}>
                                 <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl pointer-events-auto">
                                     {resolutions.map((res) => (
@@ -1938,7 +1938,7 @@ function RoomContent() {
                     "flex-1 flex flex-col min-h-0 overflow-hidden md:overflow-visible w-full transition-all duration-300 ease-in-out",
                     // Desktop Logic
                     "md:block md:space-y-6",
-                    !isImmersiveMode ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
+                    !isImmersiveMode && !isFullscreen ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
                 )}>
                     <Card className="flex-1 flex flex-col md:h-[calc(100vh-12rem)] shadow-none md:shadow-2xl overflow-hidden bg-transparent md:glass border-0 md:border-white/5 rounded-none md:rounded-xl">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 relative">
