@@ -1,0 +1,246 @@
+import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import { cn } from '@/lib/utils';
+
+export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
+    nextSrc?: string;
+    nextStartTime?: number;
+    isPreloadEnabled?: boolean;
+}
+
+interface PlayerState {
+    id: 'A' | 'B';
+    src: string | undefined;
+    startTime?: number;
+    isActive: boolean;
+}
+
+export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPlayerProps>(
+    ({ className, src, nextSrc, nextStartTime, isPreloadEnabled = false,
+        onTimeUpdate, onEnded, onCanPlay, onLoadedMetadata,
+        onError, onWaiting, onStalled, onLoadStart, onPlay, onPause,
+        ...props }, ref) => {
+        const videoRefA = useRef<HTMLVideoElement>(null);
+        const videoRefB = useRef<HTMLVideoElement>(null);
+
+        // Track which player is currently "Active" (visible and playing)
+        const [activePlayerId, setActivePlayerId] = useState<'A' | 'B'>('A');
+
+        // Track internal src state for each player
+        const [stateA, setStateA] = useState<PlayerState>({ id: 'A', src: (src as string) || undefined, isActive: true });
+        const [stateB, setStateB] = useState<PlayerState>({ id: 'B', src: undefined, isActive: false });
+
+        // Helper to get refs
+        const getActiveRef = () => activePlayerId === 'A' ? videoRefA : videoRefB;
+        const getInactiveRef = () => activePlayerId === 'A' ? videoRefB : videoRefA;
+
+        // Sync Source Logic
+        useEffect(() => {
+            const activeRef = getActiveRef();
+            const inactiveRef = getInactiveRef();
+
+            // 1. Check if the requested `src` matches what's already in the INACTIVE player (Preload Hit)
+            if (activePlayerId === 'A') {
+                if (src && src === stateB.src && src !== stateA.src) {
+                    // HIT! Swap immediately
+                    console.log("[Seamless] HIT! Swapping from A to B (Preloaded)");
+
+                    // Optimistic Play: Start playing B immediately before state update commits
+                    // This reduces the "gap" between visibility 100% and playback start.
+                    videoRefB.current?.play().catch(() => { });
+
+                    setActivePlayerId('B');
+                    setStateB(prev => ({ ...prev, isActive: true }));
+                    // Don't clear A immediately, keeps memory warm and prevents layout thrashing
+                    setStateA(prev => ({ ...prev, isActive: false }));
+                    return;
+                }
+            } else {
+                if (src && src === stateA.src && src !== stateB.src) {
+                    // HIT! Swap immediately
+                    const rs = videoRefA.current?.readyState;
+                    console.log(`[Seamless] HIT! Swapping from B to A (Preloaded). ReadyState: ${rs}`);
+
+                    // Optimistic Play
+                    videoRefA.current?.play().catch(() => { });
+
+                    setActivePlayerId('A');
+                    setStateA(prev => ({ ...prev, isActive: true }));
+                    // Don't clear B immediately
+                    setStateB(prev => ({ ...prev, isActive: false }));
+                    return;
+                }
+            }
+
+            // 2. Normal Case: `src` changed and it's NOT in the inactive player.
+            // We must load it in the ACTIVE player (traditional behavior) causes buffering.
+            // OR if it's the very first load.
+            const newSrc = src || undefined;
+            if (activePlayerId === 'A') {
+                if (newSrc !== stateA.src) {
+                    console.log("[Seamless] MISS! Loading new src on A:", newSrc);
+                    setStateA(prev => ({ ...prev, src: newSrc as string | undefined }));
+                }
+            } else {
+                if (newSrc !== stateB.src) {
+                    console.log("[Seamless] MISS! Loading new src on B:", newSrc);
+                    setStateB(prev => ({ ...prev, src: newSrc as string | undefined }));
+                }
+            }
+        }, [src, activePlayerId]);
+
+        // Preload Logic
+        useEffect(() => {
+            if (!isPreloadEnabled || !nextSrc) return;
+            const targetSrc = nextSrc || undefined;
+
+            // Load nextSrc into Inactive Player
+            if (activePlayerId === 'A') {
+                if (stateB.src !== targetSrc) {
+                    setStateB(prev => ({ ...prev, src: targetSrc, startTime: nextStartTime }));
+                }
+            } else {
+                if (stateA.src !== targetSrc) {
+                    setStateA(prev => ({ ...prev, src: targetSrc, startTime: nextStartTime }));
+                }
+            }
+        }, [nextSrc, nextStartTime, isPreloadEnabled, activePlayerId]);
+
+
+        // Handle Auto-Play on Swap
+        useEffect(() => {
+            const activeRef = getActiveRef();
+            if (activeRef.current) {
+                const playPromise = activeRef.current.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        // console.warn("[Seamless] Autoplay prevented:", error);
+                    });
+                }
+            }
+            // Pause inactive
+            const inactiveRef = getInactiveRef();
+            if (inactiveRef.current) {
+                inactiveRef.current.pause();
+                // REMOVED: inactiveRef.current.currentTime = 0; 
+                // Resetting time here causes the "fading out" video to jump to start, creating a visual glitch.
+                // The time will be reset automatically when src changes later.
+            }
+        }, [activePlayerId]);
+
+
+        // Proxy Ref Implementation
+        useImperativeHandle(ref, () => {
+            // We return a proxy that redirects calls to the currently active video element
+            return new Proxy({} as HTMLVideoElement, {
+                get: (_, prop) => {
+                    const activeVideo = getActiveRef().current;
+                    if (!activeVideo) {
+                        // Safety fallback for cleanup calls (like removeEventListener) when component is unmounting
+                        if (['removeEventListener', 'addEventListener', 'pause', 'play'].includes(prop as string)) {
+                            return () => { };
+                        }
+                        return undefined;
+                    }
+
+                    const value = activeVideo[prop as keyof HTMLVideoElement];
+                    if (typeof value === 'function') {
+                        return value.bind(activeVideo);
+                    }
+                    return value;
+                },
+                set: (_, prop, value) => {
+                    const activeVideo = getActiveRef().current;
+                    if (!activeVideo) return false;
+                    (activeVideo as any)[prop] = value;
+                    return true;
+                }
+            });
+        });
+
+        const activeRef = getActiveRef();
+
+        const commonProps = {
+            playsInline: true,
+            'webkit-playsinline': 'true',
+            preload: 'auto',
+            // Filter out autoplay/preload from spread props to handle manually
+            ...Object.fromEntries(Object.entries(props).filter(([k]) => !['autoPlay', 'preload', 'src'].includes(k)))
+        };
+
+        // Event Wrappers
+        // We only want to emit events from the ACTIVE player to the parent
+        const createEventHandler = (paramRef: React.RefObject<HTMLVideoElement | null>, originalHandler?: React.ReactEventHandler<HTMLVideoElement>) => {
+            return (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+                if (paramRef.current === getActiveRef().current) {
+                    originalHandler?.(e);
+                }
+            };
+        };
+
+        return (
+            <div className={cn("relative w-full h-full bg-black overflow-hidden", className)}>
+                {/* Player A */}
+                <video
+                    ref={videoRefA}
+                    src={stateA.src}
+                    autoPlay={activePlayerId === 'A'} // Only autoplay if active
+                    className={cn(
+                        "absolute inset-0 w-full h-full object-contain bg-black transition-none",
+                        activePlayerId === 'A' ? "z-10" : "z-0"
+                    )}
+                    onTimeUpdate={createEventHandler(videoRefA, onTimeUpdate)}
+                    onEnded={createEventHandler(videoRefA, onEnded)}
+                    onCanPlay={createEventHandler(videoRefA, onCanPlay)}
+                    onLoadedMetadata={(e) => {
+                        // Internal seek logic for preloaded video
+                        if (stateA.startTime && stateA.startTime > 0) {
+                            console.log(`[Seamless] Seeking A to ${stateA.startTime}`);
+                            e.currentTarget.currentTime = stateA.startTime;
+                        }
+                        // Forward to parent
+                        createEventHandler(videoRefA, onLoadedMetadata)(e);
+                    }}
+                    onError={createEventHandler(videoRefA, onError)}
+                    onWaiting={createEventHandler(videoRefA, onWaiting)}
+                    onStalled={createEventHandler(videoRefA, onStalled)}
+                    onLoadStart={createEventHandler(videoRefA, onLoadStart)}
+                    onPlay={createEventHandler(videoRefA, onPlay)}
+                    onPause={createEventHandler(videoRefA, onPause)}
+                    {...(commonProps as any)}
+                />
+
+                {/* Player B */}
+                <video
+                    ref={videoRefB}
+                    src={stateB.src}
+                    autoPlay={activePlayerId === 'B'} // Only autoplay if active
+                    className={cn(
+                        "absolute inset-0 w-full h-full object-contain bg-black transition-none",
+                        activePlayerId === 'B' ? "z-10" : "z-0"
+                    )}
+                    onTimeUpdate={createEventHandler(videoRefB, onTimeUpdate)}
+                    onEnded={createEventHandler(videoRefB, onEnded)}
+                    onCanPlay={createEventHandler(videoRefB, onCanPlay)}
+                    onLoadedMetadata={(e) => {
+                        // Internal seek logic for preloaded video
+                        if (stateB.startTime && stateB.startTime > 0) {
+                            console.log(`[Seamless] Seeking B to ${stateB.startTime}`);
+                            e.currentTarget.currentTime = stateB.startTime;
+                        }
+                        // Forward to parent
+                        createEventHandler(videoRefB, onLoadedMetadata)(e);
+                    }}
+                    onError={createEventHandler(videoRefB, onError)}
+                    onWaiting={createEventHandler(videoRefB, onWaiting)}
+                    onStalled={createEventHandler(videoRefB, onStalled)}
+                    onLoadStart={createEventHandler(videoRefB, onLoadStart)}
+                    onPlay={createEventHandler(videoRefB, onPlay)}
+                    onPause={createEventHandler(videoRefB, onPause)}
+                    {...(commonProps as any)}
+                />
+            </div>
+        );
+    }
+);
+
+SeamlessVideoPlayer.displayName = 'SeamlessVideoPlayer';

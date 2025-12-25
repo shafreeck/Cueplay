@@ -30,6 +30,7 @@ import { PlaylistItem, ChatMessage } from './types';
 import { PlaylistItemRenderer } from './components/playlist-item';
 import { ChatMessageItem } from './components/chat-message-item';
 import { MemberItem } from './components/member-item';
+import { SeamlessVideoPlayer } from './components/seamless-player';
 
 interface SortableItemProps {
     item: PlaylistItem;
@@ -141,6 +142,23 @@ function RoomContent() {
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
     const playingItemIdRef = useRef<string | null>(null);
     useEffect(() => { playingItemIdRef.current = playingItemId; }, [playingItemId]);
+
+    // Seamless Switching State
+    const [nextVideoSrc, setNextVideoSrc] = useState<string>('');
+    const [nextVideoId, setNextVideoId] = useState<string | null>(null);
+    const [enablePreload, setEnablePreload] = useState(true);
+
+    // Initialize Preload Setting
+    useEffect(() => {
+        const stored = localStorage.getItem('cueplay_preload');
+        if (stored !== null) setEnablePreload(stored === 'true');
+    }, []);
+
+    const togglePreload = (enabled: boolean) => {
+        setEnablePreload(enabled);
+        localStorage.setItem('cueplay_preload', String(enabled));
+    };
+
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -560,7 +578,7 @@ function RoomContent() {
             // Check if we are in Native Fullscreen (Video is the fullscreen element)
             const isNativeFullscreen = document.fullscreenElement === video;
             const tracks = video.textTracks;
-
+            if (!tracks) return;
 
             for (let i = 0; i < tracks.length; i++) {
                 const track = tracks[i];
@@ -583,6 +601,7 @@ function RoomContent() {
             }
 
             const tracks = video.textTracks;
+            if (!tracks) return;
             let hasActiveCue = false;
             const currentTime = video.currentTime;
 
@@ -613,13 +632,17 @@ function RoomContent() {
 
         video.addEventListener('timeupdate', updateCurrentSubtitle);
         // Also listen for cuechange events on tracks
-        for (let i = 0; i < video.textTracks.length; i++) {
-            video.textTracks[i].addEventListener('cuechange', updateCurrentSubtitle);
+        video.addEventListener('timeupdate', updateCurrentSubtitle);
+        // Also listen for cuechange events on tracks
+        if (video.textTracks) {
+            for (let i = 0; i < video.textTracks.length; i++) {
+                video.textTracks[i].addEventListener('cuechange', updateCurrentSubtitle);
+            }
+            // Listen for track changes to hijack new tracks
+            video.textTracks.addEventListener('addtrack', handleTrackChange);
+            video.textTracks.addEventListener('change', handleTrackChange);
         }
 
-        // Listen for track changes to hijack new tracks
-        video.textTracks.addEventListener('addtrack', handleTrackChange);
-        video.textTracks.addEventListener('change', handleTrackChange);
         document.addEventListener('fullscreenchange', handleFullscreenChange);
 
         // Initial check
@@ -627,11 +650,13 @@ function RoomContent() {
 
         return () => {
             video.removeEventListener('timeupdate', updateCurrentSubtitle);
-            for (let i = 0; i < video.textTracks.length; i++) {
-                video.textTracks[i].removeEventListener('cuechange', updateCurrentSubtitle);
+            if (video.textTracks) {
+                for (let i = 0; i < video.textTracks.length; i++) {
+                    video.textTracks[i].removeEventListener('cuechange', updateCurrentSubtitle);
+                }
+                video.textTracks.removeEventListener('addtrack', handleTrackChange);
+                video.textTracks.removeEventListener('change', handleTrackChange);
             }
-            video.textTracks.removeEventListener('addtrack', handleTrackChange);
-            video.textTracks.removeEventListener('change', handleTrackChange);
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
         };
     }, [videoSrc]);
@@ -707,6 +732,78 @@ function RoomContent() {
         }
     }
 
+    // Helper: Resolve metadata effectively in background without changing videoSrc
+    const resolveAndPlayMetadataOnly = async (fid: string, itemId?: string) => {
+        try {
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '');
+
+            // Update metadata UI states
+            setRawUrl(source.url);
+            if (source.resolutions && Array.isArray(source.resolutions)) {
+                setResolutions(source.resolutions);
+                const match = source.resolutions.find((r: any) => r.url === source.url);
+                setCurrentResolution(match ? match.id : 'Original');
+            } else {
+                setResolutions([]);
+                setCurrentResolution('Original');
+            }
+            if (source.meta?.duration) {
+                setDuration(source.meta.duration);
+            }
+        } catch (e) {
+            console.warn("Background metadata resolve failed", e);
+        }
+    }
+
+    // Helper to flatten playlist for finding next item
+    const getAllItems = useCallback((list: PlaylistItem[]): PlaylistItem[] => {
+        let items: PlaylistItem[] = [];
+        list.forEach(item => {
+            items.push(item);
+            if (item.children) {
+                items = items.concat(getAllItems(item.children));
+            }
+        });
+        return items;
+    }, []);
+
+    const resolveNextVideo = useCallback(async (currentId: string) => {
+        if (!enablePreload) {
+            setNextVideoSrc('');
+            return;
+        }
+
+        const allItems = getAllItems(playlistRef.current);
+        const currentIndex = allItems.findIndex(i => i.id === currentId);
+        if (currentIndex === -1 || currentIndex === allItems.length - 1) {
+            setNextVideoSrc('');
+            return;
+        }
+
+        const nextItem = allItems[currentIndex + 1];
+        if (nextItem.type !== 'file') return;
+
+        let fid = nextItem.fileId || nextItem.id;
+        // If it's a file type but id format is raw, extract it (same logic as resolveAndPlay)
+        const urlMatch = fid.match(/video\/([a-zA-Z0-9]+)/);
+        if (urlMatch) fid = urlMatch[1];
+
+        try {
+            console.log(`[Preload] Resolving next: ${nextItem.title || nextItem.fileId}, ID: ${fid}, Room: ${roomId}`);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
+            let nextUrl = source.url;
+            if (cookie && cookie.trim()) {
+                const proxyBase = await getProxyBase();
+                nextUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+            }
+            setNextVideoSrc(nextUrl);
+            setNextVideoId(fid); // Store the ID we resolved for
+            setNextVideoStartTime(nextItem.progress || 0); // Store progress for preload seeking
+        } catch (e) {
+            console.warn("[Preload] Failed:", e);
+        }
+    }, [roomId, enablePreload, getAllItems]);
+
     const resolveAndPlay = async (targetFileId: string, itemId?: string) => {
         // Permission Check: Viewers in Sync Mode cannot change video
         if (!canControl && isSynced) {
@@ -726,7 +823,7 @@ function RoomContent() {
         setFileId(fid); // Sync internal state
         lastResumedItemIdRef.current = null; // Prepare for resume
         setPlayingItemId(itemId || null); // Track playlist item
-        setVideoSrc(''); // Clear current source to force re-render/resume
+        // setVideoSrc(''); // REMOVED: Do not clear source to allow seamless transition
 
         // Update lastPlayedId for parent folder if applicable
         if (itemId) {
@@ -744,6 +841,45 @@ function RoomContent() {
                 }
                 return item;
             }));
+        }
+
+        // SEAMLESS SWITCH CHECK:
+        // If the requested video ID matches what we've already preloaded, use the CACHED URL.
+        // This ensures strict string equality for the SeamlessVideoPlayer to trigger the swap.
+        console.log(`[Seamless] Checking logic: ReqID=${fid}, NextID=${nextVideoId}, NextSrc=${!!nextVideoSrc}`);
+        if (fid === nextVideoId && nextVideoSrc) {
+            addLog(`[Seamless] Hit! Reusing preloaded URL for ${fid}`);
+            setVideoSrc(nextVideoSrc);
+
+            // Still resolve resolutions/meta in background to be safe/complete?
+            // For now, we trust the preload. But we might miss out on resolution list updates if we skip standard resolve.
+            // Let's do the standard resolve in background just to update metadata state, but not `videoSrc`.
+            resolveAndPlayMetadataOnly(fid, itemId);
+
+            // Trigger preload for *new* next item
+            if (itemId) {
+                resolveNextVideo(itemId);
+            }
+            return;
+        }
+
+        // SEAMLESS SWITCH CHECK:
+        // If the requested video ID matches what we've already preloaded, use the CACHED URL.
+        // This ensures strict string equality for the SeamlessVideoPlayer to trigger the swap.
+        if (fid === nextVideoId && nextVideoSrc) {
+            addLog(`[Seamless] Hit! Reusing preloaded URL for ${fid}`);
+            setVideoSrc(nextVideoSrc);
+
+            // Still resolve resolutions/meta in background to be safe/complete?
+            // For now, we trust the preload. But we might miss out on resolution list updates if we skip standard resolve.
+            // Let's do the standard resolve in background just to update metadata state, but not `videoSrc`.
+            resolveAndPlayMetadataOnly(fid, itemId);
+
+            // Trigger preload for *new* next item
+            if (itemId) {
+                resolveNextVideo(itemId);
+            }
+            return;
         }
 
         addLog(`Resolving video ${fid}...`);
@@ -797,6 +933,12 @@ function RoomContent() {
             }
 
             setVideoSrc(finalUrl);
+
+            // Trigger preload for next item
+            if (itemId) {
+                resolveNextVideo(itemId);
+            }
+
             addLog(`Setting Video Src: ${finalUrl.slice(0, 50)}... (Proxy: ${finalUrl.includes('127.0.0.1')})`);
         } catch (e: any) {
             console.error(e);
@@ -1715,6 +1857,21 @@ function RoomContent() {
                                                     />
                                                 </div>
 
+                                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                                    <div className="space-y-0.5">
+                                                        <Label className="text-sm font-medium">
+                                                            {t('smart_preload')}
+                                                        </Label>
+                                                        <div className="text-[10px] text-muted-foreground">
+                                                            {t('smart_preload_desc')}
+                                                        </div>
+                                                    </div>
+                                                    <Switch
+                                                        checked={enablePreload}
+                                                        onCheckedChange={togglePreload}
+                                                    />
+                                                </div>
+
                                                 {/* Cloud Storage Settings (Owner Only) */}
                                                 {isOwner && (
                                                     <div className="pt-2 mt-2 border-t space-y-3">
@@ -1902,14 +2059,14 @@ function RoomContent() {
                             {/* Open Sidebar/Drawer in Landscape Mobile - REMOVED per user feedback (only use header button) */}
                         </div>
                         {videoSrc ? (
-                            <video
+                            <SeamlessVideoPlayer
                                 ref={videoRef}
                                 controls
                                 autoPlay
-                                playsInline
-                                webkit-playsinline="true"
                                 className="w-full h-full object-contain"
                                 src={videoSrc}
+                                nextSrc={nextVideoSrc}
+                                isPreloadEnabled={enablePreload}
                                 onEnded={playNext}
                                 onLoadStart={() => addLog(`[Video Event] LoadStart: ${videoSrc.slice(0, 50)}...`)}
                                 onLoadedMetadata={() => {
@@ -1970,9 +2127,7 @@ function RoomContent() {
                                         }
                                     }
                                 }}
-                            >
-                                Your browser does not support video playback.
-                            </video>
+                            />
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
                                 {isRoomLoading ? (

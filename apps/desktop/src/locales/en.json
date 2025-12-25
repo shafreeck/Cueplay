@@ -163,6 +163,8 @@
         "res_4k": "4K",
         "res_super": "Super",
         "res_high": "High",
-        "res_low": "Low"
+        "res_low": "Low",
+        "smart_preload": "Smart Preload",
+        "smart_preload_desc": "Preload next video for seamless playback"
     }
 }

@@ -163,6 +163,8 @@
         "res_4k": "4K",
         "res_super": "超清",
         "res_high": "高清",
-        "res_low": "流畅"
+        "res_low": "流畅",
+        "smart_preload": "智能预加载",
+        "smart_preload_desc": "预加载下一个视频以实现无缝播放"
     }
 }
