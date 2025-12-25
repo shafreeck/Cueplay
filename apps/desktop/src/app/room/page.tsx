@@ -482,9 +482,11 @@ function RoomContent() {
         };
     }, []);
 
-    // Auto-hide controls in Immersive or Fullscreen Mode
+    // Auto-hide controls in Immersive, Fullscreen, or Mobile Mode
     useEffect(() => {
-        if (!isImmersiveMode && !isFullscreen) {
+        // On desktop, we only auto-hide in immersive or fullscreen mode. 
+        // On mobile, we auto-hide always to keep the player clean.
+        if (!isImmersiveMode && !isFullscreen && !isMobile) {
             setShowControls(true);
             return;
         }
@@ -1903,10 +1905,8 @@ function RoomContent() {
                         {resolutions.length > 0 && (
                             <div className={cn(
                                 "absolute right-6 top-1/2 -translate-y-1/2 z-[99999] transition-all duration-300",
-                                // On touch devices, we rely on showControls. On desktop, we use hover + showControls.
-                                (isMobile || showControls) ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4 pointer-events-none",
-                                // Refine for desktop: only show on hover if not in immersive or fullscreen mode
-                                !isMobile && !isImmersiveMode && !isFullscreen && "lg:opacity-0 lg:translate-x-4 lg:group-hover:opacity-100 lg:group-hover:translate-x-0 lg:group-hover:pointer-events-auto"
+                                // Strictly follow showControls state for all platforms
+                                showControls ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
                             )}>
                                 <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl pointer-events-auto">
                                     {resolutions.map((res) => (
