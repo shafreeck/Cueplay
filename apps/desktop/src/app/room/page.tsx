@@ -146,6 +146,7 @@ function RoomContent() {
     // Seamless Switching State
     const [nextVideoSrc, setNextVideoSrc] = useState<string>('');
     const [nextVideoId, setNextVideoId] = useState<string | null>(null);
+    const [nextVideoStartTime, setNextVideoStartTime] = useState<number>(0);
     const [enablePreload, setEnablePreload] = useState(true);
 
     // Initialize Preload Setting
