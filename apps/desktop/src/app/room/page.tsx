@@ -634,7 +634,7 @@ function RoomContent() {
             video.textTracks.removeEventListener('change', handleTrackChange);
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
         };
-    }, [currentSubtitle]);
+    }, [videoSrc]);
 
     const handleTouchStart = (e: React.TouchEvent) => {
         // Rule: Any touch resets activity timer
