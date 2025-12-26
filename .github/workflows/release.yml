@@ -52,7 +52,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "App v__VERSION__"
+          releaseName: "App ${{ github.ref_name }}"
           releaseBody: "See the assets to download this version and install."
           releaseDraft: true
           prerelease: false
@@ -124,6 +124,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           tag_name: ${{ github.ref_name }}
+          name: "App ${{ github.ref_name }}"
           draft: true
           files: |
             ${{ steps.sign_app.outputs.signedReleaseFile }}
