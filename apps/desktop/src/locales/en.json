@@ -185,17 +185,17 @@
         "save_changes": "Save Changes",
         "reset_identity": "Reset Identity",
         "manual_cookie_input_placeholder": "Paste cookie string...",
-        "system_auth_code_label": "Shared Account Connection Code",
-        "system_auth_code_placeholder": "Enter connection code from admin...",
-        "system_auth_code_desc": "Connection code allows multiple users to share a common account without logging in.",
+        "system_auth_code_label": "Shared Account Auth Code",
+        "system_auth_code_placeholder": "Enter auth code from admin...",
+        "system_auth_code_desc": "Auth code allows multiple users to share a common account without logging in.",
         "verify": "Connect",
         "verifying": "Connecting...",
         "auth_code_valid": "Connected successfully",
-        "auth_code_invalid": "Connection code invalid or session expired",
+        "auth_code_invalid": "Auth code invalid or session expired",
         "apply": "Connect Account",
         "error_no_cookie_configured": "System shared account not configured. Please login with a personal account.",
         "error_quark_login_required": "Quark Login Required",
         "always_require_auth": "Always Require Login",
-        "always_require_auth_desc": "Require connection code even when personal account is not logged in."
+        "always_require_auth_desc": "Require auth code even when personal account is not logged in."
     }
 }

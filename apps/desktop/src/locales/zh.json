@@ -185,17 +185,17 @@
         "save_changes": "保存更改",
         "reset_identity": "重置身份",
         "manual_cookie_input_placeholder": "粘贴 Cookie 字符串...",
-        "system_auth_code_label": "共享账号登录码",
-        "system_auth_code_placeholder": "填入管理员提供的链接码...",
-        "system_auth_code_desc": "链接码可以让多人在不登录的情况下使用同一个共享公共账号。",
+        "system_auth_code_label": "共享账号授权码",
+        "system_auth_code_placeholder": "填入管理员提供的授权码...",
+        "system_auth_code_desc": "授权码可以让多人在不登录的情况下使用同一个共享公共账号。",
         "verify": "连接",
         "verifying": "连接中...",
-        "auth_code_valid": "连接成功",
-        "auth_code_invalid": "链接码无效或会话已过期",
+        "auth_code_valid": "授权成功",
+        "auth_code_invalid": "授权码无效或会话已过期",
         "apply": "连接账号",
         "error_no_cookie_configured": "系统未配置共享账号，请登录个人账号使用。",
         "error_quark_login_required": "需要登录夸克账号",
         "always_require_auth": "始终要求登录",
-        "always_require_auth_desc": "即使没有登录个人账号，也要求输入链接码才能使用共享账号。"
+        "always_require_auth_desc": "即使没有登录个人账号，也要求输入授权码才能使用共享账号。"
     }
 }
