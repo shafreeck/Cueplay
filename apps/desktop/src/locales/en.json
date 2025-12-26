@@ -49,6 +49,8 @@
         "view_only_title": "View Only Mode",
         "view_only_desc": "You must \"Take Control\" to playback actions.",
         "room_id_copied": "Room ID copied to clipboard",
+        "copy_id": "Copy Room ID",
+        "copied_to_clipboard": "Copied {{value}} to clipboard",
         "control_requested_title": "Control Requested",
         "control_requested_desc": "Taking over playback control.",
         "click_to_take_control": "Click to Take Control",

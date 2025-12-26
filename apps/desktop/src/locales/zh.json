@@ -49,6 +49,8 @@
         "view_only_title": "仅观看模式",
         "view_only_desc": "您必须“获取控制权”才能进行播放操作。",
         "room_id_copied": "房间号已复制到剪贴板",
+        "copy_id": "复制房间号",
+        "copied_to_clipboard": "已将 {{value}} 复制到剪贴板",
         "control_requested_title": "请求控制权",
         "control_requested_desc": "正在获取播放控制权。",
         "click_to_take_control": "点击获取控制权",

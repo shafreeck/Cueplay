@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { ModeToggle } from '@/components/mode-toggle';
 import { UserProfile } from '@/components/user-profile';
-import { Shield, Trash2, History, Home as HomeIcon, Clapperboard, Sparkles, Search, Archive, ChevronRight, Plus, ArrowRight } from 'lucide-react';
+import { Shield, Trash2, History, Home as HomeIcon, Clapperboard, Sparkles, Search, Archive, ChevronRight, Plus, ArrowRight, Copy, Check } from 'lucide-react';
 import { RoomHistory, VisitedRoom } from '@/utils/history';
 import {
   Dialog,
@@ -35,6 +35,37 @@ interface RoomItemProps {
   deleteLabel: string;
 }
 
+function CopyButton({ value, className }: { value: string, className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+  const { t } = useTranslation('common');
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    toast({
+      description: t('copied_to_clipboard', { value }),
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`p-1.5 rounded-md hover:bg-white/10 transition-colors ${className}`}
+      title={t('copy_id')}
+    >
+      {copied ? (
+        <Check className="w-3.5 h-3.5 text-emerald-500" />
+      ) : (
+        <Copy className="w-3.5 h-3.5 text-muted-foreground/50" />
+      )}
+    </button>
+  );
+}
+
 function RoomItem({
   id,
   title,
@@ -48,14 +79,40 @@ function RoomItem({
   const [isSwiping, setIsSwiping] = useState(false);
   const threshold = -80;
 
+  // Long press for copy ID
+  const { toast } = useToast();
+  const { t } = useTranslation('common');
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLongPress, setIsLongPress] = useState(false);
+
   const handleTouchStart = (e: React.TouchEvent) => {
     setStartX(e.touches[0].clientX);
     setIsSwiping(true);
+    setIsLongPress(false);
+
+    // Start long press timer
+    timerRef.current = setTimeout(() => {
+      setIsLongPress(true);
+      if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+      navigator.clipboard.writeText(id);
+      toast({
+        description: t('copied_to_clipboard', { value: id }),
+      });
+    }, 600);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (startX === null) return;
     const diff = e.touches[0].clientX - startX;
+
+    // If moved significantly, cancel long press
+    if (Math.abs(diff) > 10) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+
     if (diff < 0) {
       setCurrentX(Math.max(diff, -100));
     } else {
@@ -64,6 +121,11 @@ function RoomItem({
   };
 
   const handleTouchEnd = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+
     if (currentX < threshold) {
       setCurrentX(-80);
     } else {
@@ -96,7 +158,8 @@ function RoomItem({
         href={href}
         className="block relative z-10 glass border-white/10 active:bg-white/10 transition-colors"
         onClick={(e) => {
-          if (currentX !== 0) {
+          // If it was a long press, prevent navigation
+          if (isLongPress || currentX !== 0) {
             e.preventDefault();
             setCurrentX(0);
           }
@@ -112,15 +175,17 @@ function RoomItem({
       >
         <div className="p-5 flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-lg truncate flex items-center gap-2">
-              {title}
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-lg truncate">
+                {title}
+              </span>
             </div>
-            <div className="text-xs text-muted-foreground/80 mt-1.5 truncate font-medium flex items-center gap-1">
+            <div className="text-xs text-muted-foreground/80 mt-1 truncate font-medium flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/50 inline-block" />
               {subtitle}
             </div>
           </div>
-          <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground/50 border border-white/5">
+          <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center text-muted-foreground/50 border border-white/5 ml-4">
             <ChevronRight className="w-4 h-4" />
           </div>
         </div>
@@ -128,6 +193,7 @@ function RoomItem({
     </div>
   );
 }
+
 
 export default function Home() {
   const router = useRouter();
@@ -414,7 +480,10 @@ export default function Home() {
                       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                       <CardHeader>
                         <CardTitle className="flex justify-between items-center text-lg">
-                          <span className="truncate" title={room.title || `Room ${room.id}`}>{room.title || t('room_title', { id: room.id })}</span>
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="truncate" title={room.title || `Room ${room.id}`}>{room.title || t('room_title', { id: room.id })}</span>
+                            <CopyButton value={room.id} className="opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity p-1" />
+                          </div>
                           {room.ownerId === userId && (
                             <Button
                               variant="ghost"
@@ -482,7 +551,10 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <CardHeader>
                           <CardTitle className="flex justify-between items-center text-lg">
-                            <span className="truncate pr-4" title={room.title || `Room ${room.id}`}>{room.title || t('room_title', { id: room.id })}</span>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="truncate pr-4" title={room.title || `Room ${room.id}`}>{room.title || t('room_title', { id: room.id })}</span>
+                              <CopyButton value={room.id} className="opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity p-1" />
+                            </div>
                             <Button
                               variant="ghost"
                               size="icon"
