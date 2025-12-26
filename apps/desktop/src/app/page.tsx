@@ -248,7 +248,7 @@ export default function Home() {
   // const isMobile = useIsMobile(); // Removed conditional
   return (
     <>
-      <div className="min-h-screen flex flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background">
+      <div className="h-screen flex flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background overflow-hidden selection:bg-primary/30">
         {/* Mobile Header */}
         <header className="md:hidden sticky top-0 z-50 bg-black/40 backdrop-blur-2xl border-b border-white/5 px-4 h-[56px] shrink-0 flex items-center justify-between pt-safe box-content">
           <div className="flex items-center gap-3">
@@ -263,7 +263,7 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="container mx-auto p-4 md:p-8 flex-1 animate-fade-in pb-24 md:pb-8">
+        <main className="container mx-auto p-4 md:p-8 flex-1 animate-fade-in pb-24 md:pb-8 overflow-y-auto no-scrollbar touch-pan-y relative z-0">
           {/* Desktop Header Row */}
           <div className="hidden md:flex flex-row items-center justify-between gap-4 mb-8 animate-fade-in relative z-50">
             {/* Left: Brand & Title */}
