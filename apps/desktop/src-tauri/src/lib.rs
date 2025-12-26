@@ -72,6 +72,13 @@ pub fn run() {
             } else {
                  // Proxy server stopped (shutdown signal or clean exit)
             }
+            
+            // Allow the frontend to know the server is down by resetting the port
+            {
+                let state = app_handle.state::<ProxyState>();
+                *state.port.lock().unwrap() = 0;
+            }
+
             // If it returns, it means it stopped or crashed. Wait a bit and restart.
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             println!("Restarting proxy server...");

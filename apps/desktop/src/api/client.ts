@@ -19,9 +19,10 @@ export interface DriveFile {
 }
 
 export class ApiClient {
-    static async listQuarkFiles(parentId: string = '0', cookie?: string): Promise<DriveFile[]> {
+    static async listQuarkFiles(parentId: string = '0', cookie?: string, authCode?: string): Promise<DriveFile[]> {
         const params = new URLSearchParams({ parentId });
         if (cookie) params.append('cookie', cookie);
+        if (authCode) params.append('authCode', authCode);
 
         const res = await fetch(`${API_BASE}/quark/list?${params.toString()}`);
         if (!res.ok) {
@@ -30,6 +31,33 @@ export class ApiClient {
         }
         const data = await res.json();
         return data.list;
+    }
+
+    static async verifyAuthCode(authCode: string): Promise<boolean> {
+        const params = new URLSearchParams({ authCode });
+        const res = await fetch(`${API_BASE}/quark/auth/verify?${params.toString()}`);
+        return res.ok;
+    }
+
+    static async getGlobalAuthRequired(): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/admin/config/auth-required`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` }
+        });
+        if (!res.ok) return true; // Default to safe
+        const data = await res.json();
+        return data.required;
+    }
+
+    static async setGlobalAuthRequired(required: boolean): Promise<void> {
+        const res = await fetch(`${API_BASE}/admin/config/auth-required`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+            },
+            body: JSON.stringify({ required }),
+        });
+        if (!res.ok) throw new Error('Failed to update toggle');
     }
 
     static async listRooms(userId: string): Promise<Room[]> {
@@ -85,11 +113,11 @@ export class ApiClient {
         return data.lease;
     }
 
-    static async resolveVideo(fileId: string, roomId?: string): Promise<any> {
+    static async resolveVideo(fileId: string, roomId?: string, authCode?: string): Promise<any> {
         const res = await fetch(`${API_BASE}/playback/resolve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileId, roomId }),
+            body: JSON.stringify({ fileId, roomId, authCode }),
         });
         if (!res.ok) {
             const err = await res.json();
@@ -97,5 +125,21 @@ export class ApiClient {
         }
         const data = await res.json();
         return { source: data.source, cookie: data.cookie };
+    }
+
+    static async saveUserCookie(userId: string, cookie: string): Promise<void> {
+        const res = await fetch(`${API_BASE}/users/${userId}/cookie`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cookie }),
+        });
+        if (!res.ok) throw new Error('Failed to save user cookie');
+    }
+
+    static async getUserCookie(userId: string): Promise<string | null> {
+        const res = await fetch(`${API_BASE}/users/${userId}/cookie`);
+        if (!res.ok) throw new Error('Failed to get user cookie');
+        const data = await res.json();
+        return data.cookie;
     }
 }

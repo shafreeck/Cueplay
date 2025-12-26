@@ -33,4 +33,29 @@ export async function adminRoutes(fastify: FastifyInstance) {
         await ConfigStore.save({ globalQuarkCookie: body.cookie });
         return { success: true };
     });
+
+    fastify.get('/admin/config/auth-code', async (req, reply) => {
+        await requireAuth(req, reply);
+        const code = ConfigStore.getGlobalAuthCode();
+        return { authCode: code || '' };
+    });
+
+    fastify.post('/admin/config/auth-code', async (req, reply) => {
+        await requireAuth(req, reply);
+        const body = req.body as { authCode: string };
+        await ConfigStore.save({ globalQuarkAuthCode: body.authCode });
+        return { success: true };
+    });
+
+    fastify.get('/admin/config/auth-required', async (req, reply) => {
+        await requireAuth(req, reply);
+        return { required: ConfigStore.isGlobalAuthRequired() };
+    });
+
+    fastify.post('/admin/config/auth-required', async (req, reply) => {
+        await requireAuth(req, reply);
+        const body = req.body as { required: boolean };
+        await ConfigStore.save({ globalQuarkAuthRequired: body.required ? 'true' : 'false' });
+        return { success: true };
+    });
 }

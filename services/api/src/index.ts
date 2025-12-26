@@ -7,6 +7,7 @@ import { roomRoutes } from './room/controller';
 import { leaseRoutes } from './lease/controller';
 import { playbackRoutes } from './playback/controller';
 import { adminRoutes } from './admin/controller';
+import { userRoutes } from './user/controller';
 import { quarkRoutes } from './quark/controller';
 import { ConfigStore } from './config/store';
 // import { proxyRoutes } from './stream/proxy';
@@ -23,6 +24,7 @@ server.register(roomRoutes);
 server.register(leaseRoutes);
 server.register(playbackRoutes);
 server.register(adminRoutes);
+server.register(userRoutes);
 server.register(quarkRoutes);
 // server.register(proxyRoutes);
 

@@ -40,7 +40,8 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd, onAddSeries
     const loadFiles = async (parentId: string) => {
         setLoading(true);
         try {
-            const list = await ApiClient.listQuarkFiles(parentId, cookie);
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+            const list = await ApiClient.listQuarkFiles(parentId, cookie, authCode);
             setFiles(list);
         } catch (e: any) {
             console.error(e);
@@ -78,9 +79,10 @@ export function ResourceLibrary({ open, onOpenChange, cookie, onAdd, onAddSeries
             const allVideos: DriveFile[] = [];
 
             // Recursive function to fetch all videos
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
             const collectVideos = async (dirId: string, currentPath: string, depth: number) => {
                 if (depth > 3) return; // Limit recursion depth
-                const list = await ApiClient.listQuarkFiles(dirId, cookie);
+                const list = await ApiClient.listQuarkFiles(dirId, cookie, authCode);
                 for (const item of list) {
                     if (item.type === 'folder') {
                         await collectVideos(item.id, currentPath ? `${currentPath} / ${item.name}` : item.name, depth + 1);

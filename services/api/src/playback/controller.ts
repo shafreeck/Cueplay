@@ -6,11 +6,13 @@ import { RoomManager } from '../room/manager';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import prisma from '../prisma';
+
 const provider = new QuarkProvider();
 
 export async function playbackRoutes(fastify: FastifyInstance) {
     fastify.post('/playback/resolve', async (req, reply) => {
-        const body = req.body as { fileId: string, roomId?: string };
+        const body = req.body as { fileId: string, roomId?: string, authCode?: string };
 
         if (!body.fileId) {
             return reply.code(400).send({ error: 'fileId is required' });
@@ -19,19 +21,41 @@ export async function playbackRoutes(fastify: FastifyInstance) {
         try {
             // Cookie Priority:
             // 1. Room Cookie (if roomId provided)
-            // 2. Global Fallback Cookie
+            // 2. User Cookie (Room Owner)
+            // 3. Global Fallback Cookie (Requires Auth Code)
             let cookie = '';
 
             if (body.roomId) {
                 const room = await RoomManager.getRoom(body.roomId);
-                if (room && room.quarkCookie) {
-                    cookie = room.quarkCookie;
+                if (room) {
+                    if (room.quarkCookie) {
+                        cookie = room.quarkCookie;
+                    } else if (room.ownerId) {
+                        // Check User Cookie
+                        const user = await prisma.user.findUnique({ where: { id: room.ownerId } });
+                        if (user && user.quarkCookie) {
+                            cookie = user.quarkCookie;
+                        }
+                    }
                 }
             }
 
             if (!cookie) {
+                const globalAuthCode = ConfigStore.getGlobalAuthCode();
+                if (globalAuthCode && globalAuthCode !== body.authCode) {
+                    return reply.code(403).send({ error: 'system_login_required' });
+                }
                 cookie = ConfigStore.getGlobalCookie() || '';
             }
+
+            if (cookie) cookie = cookie.trim();
+
+            if (!cookie) {
+                fastify.log.warn({ msg: 'No cookie found for playback', fileId: body.fileId });
+                return reply.code(401).send({ error: 'No authorization cookie available. Please log in or set a system cookie.' });
+            }
+
+            fastify.log.info({ msg: 'Resolving with cookie', length: cookie.length });
 
             const source = await provider.resolvePlayableSource(body.fileId, {
                 cookie

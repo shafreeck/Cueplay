@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -168,6 +168,15 @@ function RoomContent() {
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [userCookie, setUserCookie] = useState('');
+    const [globalAuthRequired, setGlobalAuthRequired] = useState(false);
+
+    useEffect(() => {
+        if (currentUserId) {
+            ApiClient.getUserCookie(currentUserId).then(c => setUserCookie(c || '')).catch(() => { });
+        }
+        ApiClient.getGlobalAuthRequired().then(setGlobalAuthRequired).catch(() => { });
+    }, [currentUserId]);
 
     // Permissions (Moved here for scope visibility)
     const canControl = !!currentUserId && controllerId === currentUserId;
@@ -745,7 +754,8 @@ function RoomContent() {
         }
 
         try {
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
             lastVideoCookieRef.current = cookie;
             setRawUrl(source.url);
 
@@ -777,15 +787,24 @@ function RoomContent() {
                 addLog(`Resolving synced video: ${fid} (item: ${itemId})`);
             }
         } catch (e: any) {
-            console.error("resolveAndPlayWithoutSync error:", e);
+            console.warn("resolveAndPlayWithoutSync error:", e);
             addLog(`[Sync] Error: ${e.message}`);
+            if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
+                toast({
+                    variant: "destructive",
+                    title: t('error_quark_login_required'),
+                    description: t('error_no_cookie_configured'),
+                    action: <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button>
+                });
+            }
         }
     }
 
     // Helper: Resolve metadata effectively in background without changing videoSrc
     const resolveAndPlayMetadataOnly = async (fid: string, itemId?: string) => {
         try {
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '');
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
 
             // Update metadata UI states
             setRawUrl(source.url);
@@ -800,8 +819,16 @@ function RoomContent() {
             if (source.meta?.duration) {
                 setDuration(source.meta.duration);
             }
-        } catch (e) {
+        } catch (e: any) {
             console.warn("Background metadata resolve failed", e);
+            if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
+                toast({
+                    variant: "destructive",
+                    title: t('error_quark_login_required'),
+                    description: t('error_no_cookie_configured'),
+                    action: <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button>
+                });
+            }
         }
     }
 
@@ -840,7 +867,8 @@ function RoomContent() {
 
         try {
             console.log(`[Preload] Resolving next: ${nextItem.title || nextItem.fileId}, ID: ${fid}, Room: ${roomId}`);
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
             let nextUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
@@ -849,8 +877,15 @@ function RoomContent() {
             setNextVideoSrc(nextUrl);
             setNextVideoId(fid); // Store the ID we resolved for
             setNextVideoStartTime(nextItem.progress || 0); // Store progress for preload seeking
-        } catch (e) {
+        } catch (e: any) {
             console.warn("[Preload] Failed:", e);
+            if (e.message.includes('No authorization cookie')) {
+                // Optional: Don't toast on preload failure to avoid spam? 
+                // Actually, if preload fails due to auth, main playback will fail too. 
+                // Better to warn early OR just let main playback handle it.
+                // Let's suppress toast for preload to avoid double toasts.
+                console.log("Preload auth failed, will be handled by main playback.");
+            }
         }
     }, [roomId, enablePreload, getAllItems]);
 
@@ -934,7 +969,8 @@ function RoomContent() {
 
         addLog(`Resolving video ${fid}...`);
         try {
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '');
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
             lastVideoCookieRef.current = cookie;
             console.log("Resolve result:", { hasSource: !!source, cookieLen: cookie?.length });
 
@@ -991,13 +1027,22 @@ function RoomContent() {
 
             addLog(`Setting Video Src: ${finalUrl.slice(0, 50)}... (Proxy: ${finalUrl.includes('127.0.0.1')})`);
         } catch (e: any) {
-            console.error(e);
-            toast({
-                variant: "destructive",
-                title: t('failed_resolve_title'),
-                description: e.message || t('unknown_error'),
-            });
+            console.warn(e);
             addLog(`Resolve error: ${e.message}`);
+            if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
+                toast({
+                    variant: "destructive",
+                    title: t('error_quark_login_required'),
+                    description: t('error_no_cookie_configured'),
+                    action: <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button>
+                });
+            } else {
+                toast({
+                    variant: "destructive",
+                    title: t('failed_resolve_title'),
+                    description: e.message || t('unknown_error'),
+                });
+            }
         }
     }
 
@@ -1022,7 +1067,8 @@ function RoomContent() {
 
         try {
             // Resolve first to validate
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '');
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
             const title = source.meta?.file_name || source.meta?.title || fid;
 
             const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title };
@@ -1047,12 +1093,21 @@ function RoomContent() {
             addLog(`Added to playlist: ${fid}`);
             setInputValue(''); // Clear input only on success
         } catch (e: any) {
-            console.error(e);
-            toast({
-                variant: "destructive",
-                title: t('invalid_video_title'),
-                description: `Could not resolve video: ${e.message}`
-            });
+            console.warn(e);
+            if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
+                toast({
+                    variant: "destructive",
+                    title: t('error_quark_login_required'),
+                    description: t('error_no_cookie_configured'),
+                    action: <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button>
+                });
+            } else {
+                toast({
+                    variant: "destructive",
+                    title: t('invalid_video_title'),
+                    description: `${t('resolve_failed') || 'Could not resolve video'}: ${e.message}`
+                });
+            }
         } finally {
             setIsResolving(false);
         }
@@ -1116,7 +1171,8 @@ function RoomContent() {
         }
         setIsResolving(true);
         try {
-            const { source } = await ApiClient.resolveVideo(file.id, roomId || '');
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode);
             const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
 
             const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file' };
@@ -1143,12 +1199,21 @@ function RoomContent() {
             }
 
         } catch (e: any) {
-            console.error(e);
-            toast({
-                variant: "destructive",
-                title: t('invalid_video_title'),
-                description: `Could not resolve video: ${e.message}`
-            });
+            console.warn(e);
+            if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
+                toast({
+                    variant: "destructive",
+                    title: t('error_quark_login_required'),
+                    description: t('error_no_cookie_configured'),
+                    action: <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button>
+                });
+            } else {
+                toast({
+                    variant: "destructive",
+                    title: t('invalid_video_title'),
+                    description: `${t('resolve_failed') || 'Could not resolve video'}: ${e.message}`
+                });
+            }
         } finally {
             setIsResolving(false);
         }
@@ -1344,10 +1409,13 @@ function RoomContent() {
             const data = JSON.parse(event.data);
             if (data.type === 'error') {
                 const isRoomNotFound = data.payload.msg === 'Room not found';
+                const isLoginRequired = data.payload.msg === 'system_login_required';
+
                 toast({
                     variant: "destructive",
-                    title: t('error'),
-                    description: isRoomNotFound ? t('room_not_found') : data.payload.msg
+                    title: isLoginRequired ? t('error_quark_login_required') : t('error'),
+                    description: isRoomNotFound ? t('room_not_found') : (isLoginRequired ? t('error_no_cookie_configured') : data.payload.msg),
+                    action: isLoginRequired ? <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button> : undefined
                 });
                 if (isRoomNotFound) {
                     router.push('/');
@@ -1379,13 +1447,20 @@ function RoomContent() {
 
                 // Sync playlist metadata if needed (but don't set placeholder)
                 if (remoteFileId) {
-                    ApiClient.resolveVideo(remoteFileId, roomId || '').then(({ source }) => {
+                    const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
+                    ApiClient.resolveVideo(remoteFileId, roomId || '', authCode).then(({ source }) => {
                         setPlaylist(prev => prev.map(item =>
                             item.fileId === remoteFileId && item.title === 'Current Video'
                                 ? { ...item, title: source.meta?.file_name || source.meta?.title || remoteFileId }
                                 : item
                         ));
-                    }).catch(() => { });
+                    }).catch((e) => {
+                        if (e.message.includes('No authorization cookie')) {
+                            // Silent fail for background sync, or toast?
+                            // Maybe toast once?
+                            console.warn("Background sync auth failed");
+                        }
+                    });
                 }
 
                 // ... inside RoomContent component ...
@@ -2013,30 +2088,43 @@ function RoomContent() {
                                                         <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
                                                             <div className="flex items-center justify-between">
                                                                 <div className="flex items-center gap-2">
-                                                                    <div className={`h-2 w-2 rounded-full ${roomCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-zinc-600')}`} />
+                                                                    <div className={`h-2 w-2 rounded-full ${roomCookie || userCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? 'bg-red-500' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]') : 'bg-red-500')}`} />
                                                                     <span className="text-xs font-medium text-foreground">
-                                                                        {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
+                                                                        {roomCookie ? t('quark_drive_connected') : (userCookie ? t('user_cookie_connected') : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? t('quark_drive_disconnected') : t('using_global_connection')) : t('quark_drive_disconnected')))}
                                                                     </span>
                                                                 </div>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-5 w-5 hover:bg-white/10"
-                                                                    title={t('manual_cookie_input')}
-                                                                    onClick={() => setShowManualInput(!showManualInput)}
-                                                                >
-                                                                    <Settings className="h-3 w-3 text-muted-foreground" />
-                                                                </Button>
+                                                                <div className="flex gap-1">
+                                                                    {roomCookie && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-5 w-5 text-destructive hover:bg-destructive/10"
+                                                                            title={t('disconnect_cookie')}
+                                                                            onClick={() => updateRoomCookie('')}
+                                                                        >
+                                                                            <Unplug className="h-3 w-3" />
+                                                                        </Button>
+                                                                    )}
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-5 w-5 hover:bg-white/10"
+                                                                        title={t('manual_cookie_input')}
+                                                                        onClick={() => setShowManualInput(!showManualInput)}
+                                                                    >
+                                                                        <Settings className="h-3 w-3 text-muted-foreground" />
+                                                                    </Button>
+                                                                </div>
                                                             </div>
 
                                                             <Button
-                                                                variant={roomCookie ? "outline" : "default"}
+                                                                variant={roomCookie || userCookie ? "outline" : "default"}
                                                                 size="sm"
                                                                 className="w-full h-8 text-xs gap-2"
                                                                 onClick={() => setShowQuarkLogin(true)}
                                                             >
                                                                 <QrCode className="h-3.5 w-3.5" />
-                                                                {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
+                                                                {roomCookie || userCookie ? t('reconnect_login') : t('login_quark_scan')}
                                                             </Button>
 
                                                             {showManualInput && (
@@ -2540,7 +2628,7 @@ function RoomContent() {
                 <ResourceLibrary
                     open={isLibraryOpen}
                     onOpenChange={setIsLibraryOpen}
-                    cookie={roomCookie || undefined}
+                    cookie={roomCookie || userCookie || undefined}
                     onAdd={handleAddFileFromLibrary}
                     onAddSeries={handleAddSeriesFromLibrary}
                 />
@@ -2717,28 +2805,42 @@ function RoomContent() {
                                                     <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-4">
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-2">
-                                                                <div className={`h-2.5 w-2.5 rounded-full ${roomCookie ? 'bg-green-500' : (hasGlobalCookie ? 'bg-amber-500' : 'bg-zinc-600')}`} />
+                                                                <div className={`h-2.5 w-2.5 rounded-full ${roomCookie || userCookie ? 'bg-green-500' : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? 'bg-red-500' : 'bg-amber-500') : 'bg-red-500')}`} />
                                                                 <span className="text-sm font-medium">
-                                                                    {roomCookie ? t('quark_drive_connected') : (hasGlobalCookie ? t('using_global_connection') : t('quark_drive_disconnected'))}
+                                                                    {roomCookie ? t('quark_drive_connected') : (userCookie ? (t('user_cookie_connected') || 'User Connected') : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? t('quark_drive_disconnected') : t('using_global_connection')) : t('quark_drive_disconnected')))}
                                                                 </span>
                                                             </div>
                                                         </div>
                                                         <Button
-                                                            className="w-full h-10 rounded-xl bg-primary hover:bg-primary/90 text-sm gap-2"
+                                                            className={`w-full h-10 rounded-xl text-sm gap-2 ${roomCookie || userCookie ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-primary hover:bg-primary/90'}`}
                                                             onClick={() => setShowQuarkLogin(true)}
                                                         >
                                                             <QrCode className="h-4 w-4" />
-                                                            {roomCookie ? t('reconnect_login') : t('login_quark_scan')}
+                                                            {roomCookie || userCookie ? t('reconnect_login') : t('login_quark_scan')}
                                                         </Button>
 
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="w-full text-[10px] text-muted-foreground h-6"
-                                                            onClick={() => setShowManualInput(!showManualInput)}
-                                                        >
-                                                            {showManualInput ? t('hide_manual_input') : t('manual_cookie_input')}
-                                                        </Button>
+                                                        <div className="flex gap-2">
+                                                            {roomCookie && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="flex-1 h-8 bg-white/5 text-destructive hover:bg-destructive/10 text-[10px]"
+                                                                    onClick={() => updateRoomCookie('')}
+                                                                >
+                                                                    <Unplug className="h-3 w-3 mr-2" />
+                                                                    {t('disconnect_cookie') || 'Disconnect'}
+                                                                </Button>
+                                                            )}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className={`flex-1 h-8 bg-white/5 hover:bg-white/10 text-[10px] text-muted-foreground`}
+                                                                onClick={() => setShowManualInput(!showManualInput)}
+                                                            >
+                                                                <Settings className="h-3 w-3 mr-2" />
+                                                                {showManualInput ? t('hide_manual_input') : t('manual_input') || 'Manual'}
+                                                            </Button>
+                                                        </div>
 
                                                         {showManualInput && (
                                                             <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">

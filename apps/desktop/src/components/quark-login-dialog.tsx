@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,15 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
     const { t } = useTranslation('common');
     const [qrcodeUrl, setQrcodeUrl] = useState('');
     const [sessionId, setSessionId] = useState('');
-    const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'pending' | 'success' | 'error'>('idle');
+    const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'pending' | 'scanned' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
+
+    // Use ref for onSuccess to avoid resetting poll interval on parent re-renders
+    const onSuccessRef = useRef(onSuccess);
+    useEffect(() => {
+        onSuccessRef.current = onSuccess;
+    }, [onSuccess]);
+
 
     // Auto-generate QR code when dialog opens
     useEffect(() => {
@@ -31,7 +38,7 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
 
     // Poll for QR code status
     useEffect(() => {
-        if (!sessionId || loginStatus !== 'pending') return;
+        if (!sessionId || (loginStatus !== 'pending' && loginStatus !== 'scanned')) return;
 
         const pollInterval = setInterval(async () => {
             try {
@@ -44,10 +51,12 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
 
                     // Notify parent and close dialog after a short delay
                     setTimeout(() => {
-                        onSuccess?.(data.cookie);
+                        onSuccessRef.current?.(data.cookie);
                         onOpenChange(false);
                         resetState();
                     }, 1500);
+                } else if (data.status === 'scanned') {
+                    setLoginStatus('scanned');
                 } else if (data.status === 'expired') {
                     setLoginStatus('error');
                     setErrorMessage('QR code expired. Please try again.');
@@ -59,7 +68,7 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
         }, 2000); // Poll every 2 seconds
 
         return () => clearInterval(pollInterval);
-    }, [sessionId, loginStatus, onSuccess, onOpenChange]);
+    }, [sessionId, loginStatus, onOpenChange]);
 
     const resetState = () => {
         setQrcodeUrl('');
@@ -122,6 +131,18 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
                             <div className="flex items-center gap-2 text-primary animate-pulse">
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 <p className="text-xs font-medium">{t('waiting_for_scan')}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {loginStatus === 'scanned' && (
+                        <div className="flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-300">
+                            <div className="relative p-4 bg-white/10 rounded-full animate-pulse">
+                                <CheckCircle2 className="w-16 h-16 text-primary" />
+                            </div>
+                            <div className="text-center space-y-2">
+                                <p className="text-lg font-bold text-white">{t('scan_success_confirm') || 'Scanned Successfully'}</p>
+                                <p className="text-sm text-muted-foreground">{t('scan_success_confirm_desc') || 'Please confirm login on your phone'}</p>
                             </div>
                         </div>
                     )}

@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useToast } from "@/components/ui/use-toast";
 import Link from 'next/link';
-import { ArrowLeft, ShieldCheck, Lock, QrCode, Settings } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Lock, QrCode, Settings, Unplug, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Switch } from "@/components/ui/switch";
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 
 import { API_BASE } from '@/api/config';
@@ -18,9 +19,12 @@ export default function AdminPage() {
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [cookie, setCookie] = useState('');
+    const [authCode, setAuthCode] = useState('');
+    const [authRequired, setAuthRequired] = useState(true);
     const [loading, setLoading] = useState(false);
     const [showLoginDialog, setShowLoginDialog] = useState(false);
     const [showManualInput, setShowManualInput] = useState(false);
+    const [isSavingAuthRequired, setIsSavingAuthRequired] = useState(false);
 
     // Initial check (could verify stored token)
     useEffect(() => {
@@ -33,6 +37,7 @@ export default function AdminPage() {
 
     const loadConfig = async (token: string) => {
         try {
+            // Load Cookie
             const res = await fetch(`${API_BASE}/admin/config/cookie`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -42,8 +47,81 @@ export default function AdminPage() {
             } else {
                 if (res.status === 401) logout();
             }
+
+            // Load Auth Code
+            const resAuth = await fetch(`${API_BASE}/admin/config/auth-code`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (resAuth.ok) {
+                const data = await resAuth.json();
+                setAuthCode(data.authCode || '');
+            }
+
+            // Load Auth Required
+            const resReq = await fetch(`${API_BASE}/admin/config/auth-required`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (resReq.ok) {
+                const data = await resReq.json();
+                setAuthRequired(data.required);
+            }
         } catch (e) {
             console.error(e);
+        }
+    };
+
+    const saveAuthCode = async () => {
+        const token = localStorage.getItem('admin_token');
+        if (!token) return;
+
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/admin/config/auth-code`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ authCode })
+            });
+
+            if (res.ok) {
+                toast({ title: "Saved", description: "Authorization code updated." });
+            } else {
+                throw new Error('Save failed');
+            }
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to save authorization code." });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const toggleAuthRequired = async (val: boolean) => {
+        const token = localStorage.getItem('admin_token');
+        if (!token) return;
+
+        setIsSavingAuthRequired(true);
+        try {
+            const res = await fetch(`${API_BASE}/admin/config/auth-required`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ required: val })
+            });
+
+            if (res.ok) {
+                setAuthRequired(val);
+                toast({ title: t('saved') || "Saved", description: t('always_require_auth') });
+            } else {
+                throw new Error('Save failed');
+            }
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to update preference." });
+        } finally {
+            setIsSavingAuthRequired(false);
         }
     };
 
@@ -179,15 +257,28 @@ export default function AdminPage() {
                                             {cookie ? t('quark_drive_connected') : t('quark_drive_disconnected')}
                                         </span>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 hover:bg-white/10"
-                                        onClick={() => setShowManualInput(!showManualInput)}
-                                        title={t('manual_configuration')}
-                                    >
-                                        <Settings className="w-4 h-4 text-muted-foreground" />
-                                    </Button>
+                                    <div className="flex gap-1">
+                                        {cookie && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                                onClick={() => saveConfig('')}
+                                                title={t('disconnect_cookie') || 'Disconnect'}
+                                            >
+                                                <Unplug className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 hover:bg-white/10"
+                                            onClick={() => setShowManualInput(!showManualInput)}
+                                            title={t('manual_configuration')}
+                                        >
+                                            <Settings className="w-4 h-4 text-muted-foreground" />
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <Button
@@ -216,6 +307,40 @@ export default function AdminPage() {
                                         </p>
                                     </div>
                                 )}
+                            </div>
+
+                            {/* System Authorization Code Section */}
+                            <div className="pt-4 border-t border-white/5">
+                                <label className="text-sm font-medium block mb-2">{t('system_auth_code_label')}</label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="text"
+                                        value={authCode}
+                                        onChange={(e) => setAuthCode(e.target.value)}
+                                        placeholder={t('system_auth_code_placeholder')}
+                                        className="font-mono text-sm"
+                                    />
+                                    <Button onClick={saveAuthCode} disabled={loading} variant="secondary">
+                                        {t('save')}
+                                    </Button>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-2">
+                                    {t('system_auth_code_desc')}
+                                </p>
+                            </div>
+
+                            <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                    <label className="text-sm font-medium block">{t('always_require_auth')}</label>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {t('always_require_auth_desc')}
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={authRequired}
+                                    onCheckedChange={toggleAuthRequired}
+                                    disabled={isSavingAuthRequired}
+                                />
                             </div>
                         </CardContent>
                     </Card>

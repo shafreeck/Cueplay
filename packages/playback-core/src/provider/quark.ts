@@ -256,7 +256,7 @@ export class QuarkProvider implements PlayableProvider {
      * Check QR code login status
      * Based on captured Quark API: https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken
      */
-    async checkQRCodeStatus(token: string, cookies?: string): Promise<{ status: 'pending' | 'success' | 'expired'; cookie?: string }> {
+    async checkQRCodeStatus(token: string, cookies?: string): Promise<{ status: 'pending' | 'success' | 'expired' | 'scanned'; cookie?: string; statusCode?: number }> {
         const requestId = this.generateUUID();
         const timestamp = Date.now();
         const url = `${QuarkProvider.QR_STATUS_URL}?client_id=${QuarkProvider.CLIENT_ID}&v=1.2&token=${token}&request_id=${requestId}&t=${timestamp}`;
@@ -288,7 +288,12 @@ export class QuarkProvider implements PlayableProvider {
 
         // Status code 50004001 means "not scanned yet" or "pending"
         if (data.status === 50004001) {
-            return { status: 'pending' };
+            return { status: 'pending', statusCode: data.status };
+        }
+
+        // Status code 50004002 means "scanned" (Waiting for confirmation)
+        if (data.status === 50004002) {
+            return { status: 'scanned', statusCode: data.status };
         }
 
         // Status code 2000000 means success
@@ -371,13 +376,14 @@ export class QuarkProvider implements PlayableProvider {
             return {
                 status: 'success',
                 cookie: currentCookies || `service_ticket=${ticket}`,
+                statusCode: data.status
             };
         }
 
         console.warn(`[Quark] Check Status Error: ${data.status} ${data.message}`);
 
         // Other status codes are considered expired or error
-        return { status: 'expired' };
+        return { status: 'expired', statusCode: data.status };
     }
 
     /**
