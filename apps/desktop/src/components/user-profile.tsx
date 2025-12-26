@@ -349,7 +349,7 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
             <QuarkLoginDialog
                 open={showQuarkLogin}
                 onOpenChange={setShowQuarkLogin}
-                onLoginSuccess={handleLoginSuccess}
+                onSuccess={handleLoginSuccess}
             />
         </>
     );
