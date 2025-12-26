@@ -38,13 +38,13 @@ jobs:
         run: pnpm install
 
       - name: Update version from tag
+        shell: bash
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          if [[ $VERSION == v* ]]; then VERSION=${VERSION#v}; fi
           echo "Updating version to $VERSION"
           cd apps/desktop
           npm version $VERSION --no-git-tag-version
-          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
+          node -e "const fs = require('fs'); const conf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8')); conf.version = '$VERSION'; fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(conf, null, 2));"
 
       - name: Build and Upload
         uses: tauri-apps/tauri-action@v0
@@ -90,13 +90,13 @@ jobs:
         run: pnpm install
 
       - name: Update version from tag
+        shell: bash
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          if [[ $VERSION == v* ]]; then VERSION=${VERSION#v}; fi
           echo "Updating version to $VERSION"
           cd apps/desktop
           npm version $VERSION --no-git-tag-version
-          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
+          node -e "const fs = require('fs'); const conf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8')); conf.version = '$VERSION'; fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(conf, null, 2));"
 
       - name: Initialize Android Libs
         run: pnpm --filter @cueplay/desktop tauri android init
