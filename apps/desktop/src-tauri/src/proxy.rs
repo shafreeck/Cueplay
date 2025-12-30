@@ -67,6 +67,9 @@ struct ProxyParams {
     referer: Option<String>,
 }
 
+
+use reqwest::Url;
+
 async fn proxy_handler(
     Query(params): Query<ProxyParams>,
     headers: HeaderMap,
@@ -89,7 +92,7 @@ async fn proxy_handler(
         .header("User-Agent", user_agent)
         .header("Referer", referer);
 
-    if let Some(c) = cookie {
+    if let Some(c) = &cookie {
         req_builder = req_builder.header("Cookie", c);
     }
 
@@ -101,13 +104,14 @@ async fn proxy_handler(
         }
     }
 
+
     match req_builder.send().await {
         Ok(resp) => {
             let status = resp.status();
             let mut response_builder = Response::builder().status(status);
 
-            // Forward response headers
-            let headers_to_forward = ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"];
+            // Forward response headers (Exclude content-length to handle it manually)
+            let headers_to_forward = ["content-type", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"];
             for key in headers_to_forward {
                  if let Some(val) = resp.headers().get(key) {
                      response_builder = response_builder.header(key, val);
@@ -121,7 +125,86 @@ async fn proxy_handler(
                  return response_builder.body(Body::from(error_text)).unwrap();
             }
 
-            // Stream body
+            // Check for m3u8 playlist
+            let content_type = resp.headers().get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+                
+            if content_type.contains("application/vnd.apple.mpegurl") || content_type.contains("application/x-mpegurl") {
+                // Buffer and rewrite m3u8
+                match resp.text().await {
+                    Ok(body) => {
+                         let mut new_lines = Vec::new();
+                         let base_url = Url::parse(&url).unwrap_or_else(|_| Url::parse("http://unknown").unwrap()); // Best effort
+                         
+                         for line in body.lines() {
+                             let line = line.trim();
+                             if line.is_empty() {
+                                 new_lines.push(line.to_string());
+                                 continue;
+                             }
+                             
+                             if line.starts_with("#") {
+                                 // Check for URI="..." in tags like #EXT-X-KEY
+                                 if line.contains("URI=\"") {
+                                     // Simple string replacement: find URI="..." and replace inside
+                                     // This is a naive regex-like approach without regex crate
+                                     if let Some(start) = line.find("URI=\"") {
+                                         let rest = &line[start + 5..];
+                                         if let Some(end) = rest.find("\"") {
+                                            let uri_str = &rest[..end];
+                                            if let Ok(abs_url) = base_url.join(uri_str) {
+                                                let mut encoded_proxy_url = format!("proxy?url={}", urlencoding::encode(abs_url.as_str()));
+                                                if let Some(c) = &cookie {
+                                                     encoded_proxy_url.push_str(&format!("&cookie={}", urlencoding::encode(c)));
+                                                }
+                                                let new_line = format!("{}URI=\"{}\"{}", &line[..start + 5], encoded_proxy_url, &rest[end..]);
+                                                new_lines.push(new_line);
+                                            } else {
+                                                new_lines.push(line.to_string());
+                                            }
+                                         } else {
+                                             new_lines.push(line.to_string());
+                                         }
+                                     } else {
+                                         new_lines.push(line.to_string());
+                                     }
+                                 } else {
+                                     new_lines.push(line.to_string());
+                                 }
+                             } else {
+                                 // This is a segment URI
+                                 if let Ok(abs_url) = base_url.join(line) {
+                                     let mut proxy_url = format!("proxy?url={}", urlencoding::encode(abs_url.as_str()));
+                                     if let Some(c) = &cookie {
+                                          proxy_url.push_str(&format!("&cookie={}", urlencoding::encode(c)));
+                                     }
+                                     new_lines.push(proxy_url);
+                                 } else {
+                                     new_lines.push(line.to_string());
+                                 }
+                             }
+                         }
+                         
+                         let new_body = new_lines.join("\n");
+                         println!("[Proxy] Rewrote m3u8 playlist ({} lines). Size: {}", new_lines.len(), new_body.len());
+                         
+                         // Update Content-Length
+                         response_builder = response_builder.header("content-length", new_body.len().to_string());
+                         return response_builder.body(Body::from(new_body)).unwrap();
+                    }
+                    Err(e) => {
+                        println!("[Proxy] Failed to read m3u8 body: {}", e);
+                         return response_builder.body(Body::from(format!("Proxy failed to read body: {}", e))).unwrap();
+                    }
+                }
+            }
+
+            // Stream body (Forward Content-Length for standard streams)
+            if let Some(val) = resp.headers().get("content-length") {
+                response_builder = response_builder.header("content-length", val);
+            }
+            
             println!("[Proxy] Success: {}", status);
             response_builder.body(Body::from_stream(resp.bytes_stream())).unwrap()
         }
