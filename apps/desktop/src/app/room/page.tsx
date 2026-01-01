@@ -1368,11 +1368,7 @@ function RoomContent() {
 
     // WebSocket Synchronization
     useEffect(() => {
-        let wsUrl = `${WS_BASE}/ws`;
-        // Fallback for localhost resolution issues in Tauri environments
-        if (wsUrl.includes('localhost')) {
-            wsUrl = wsUrl.replace('localhost', '127.0.0.1');
-        }
+        const wsUrl = `${WS_BASE}/ws`;
         let userId = localStorage.getItem('cueplay_userid') || `user_${Math.random().toString(36).substring(7)}`;
         localStorage.setItem('cueplay_userid', userId);
         setCurrentUserId(userId);
@@ -1405,7 +1401,6 @@ function RoomContent() {
 
         ws.onerror = (error) => {
             addLog("[WS] Connection error");
-            console.error("[WS] Error:", error);
         };
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
