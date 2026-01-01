@@ -215,6 +215,7 @@ function RoomContent() {
     const chatListRef = useRef<HTMLDivElement>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
+    const [reconnectTrigger, setReconnectTrigger] = useState(0);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -1367,7 +1368,11 @@ function RoomContent() {
 
     // WebSocket Synchronization
     useEffect(() => {
-        const wsUrl = `${WS_BASE}/ws`;
+        let wsUrl = `${WS_BASE}/ws`;
+        // Fallback for localhost resolution issues in Tauri environments
+        if (wsUrl.includes('localhost')) {
+            wsUrl = wsUrl.replace('localhost', '127.0.0.1');
+        }
         let userId = localStorage.getItem('cueplay_userid') || `user_${Math.random().toString(36).substring(7)}`;
         localStorage.setItem('cueplay_userid', userId);
         setCurrentUserId(userId);
@@ -1378,32 +1383,29 @@ function RoomContent() {
         const ws = new WebSocket(wsUrl);
         socketRef.current = ws;
 
-        const sendStateLocal = () => {
-            if (isRemoteUpdate.current || isLoadingSource.current || !videoRef.current || ws.readyState !== WebSocket.OPEN) return;
-
-            // Enforce View Only: Only controller can broadcast state
-            if (controllerIdRef.current && controllerIdRef.current !== currentUserId) {
-                addLog(`Blocked Sync: I am ${currentUserId}, Controller is ${controllerIdRef.current}`);
-                return;
-            }
-
-            const video = videoRef.current;
-            addLog(`Sending State: ${video.currentTime.toFixed(1)}s`);
-            ws.send(JSON.stringify({
-                type: 'PLAYER_STATE',
-                payload: {
-                    state: video.paused ? 'paused' : 'playing',
-                    time: video.currentTime,
-                    playbackRate: video.playbackRate,
-                    sentAt: Date.now()
-                }
-            }));
+        let reconnectTimer: NodeJS.Timeout | null = null;
+        const triggerReconnect = () => {
+            if (reconnectTimer) return;
+            addLog("[WS] Reconnecting in 3s...");
+            reconnectTimer = setTimeout(() => {
+                setReconnectTrigger(prev => prev + 1);
+            }, 3000);
         };
 
         ws.onopen = () => {
             const payload = { roomId: roomId || '', userId, name };
             console.log("JOIN_ROOM Payload:", payload); // Debug log
             ws.send(JSON.stringify({ type: 'JOIN_ROOM', payload }));
+        };
+
+        ws.onclose = () => {
+            addLog("[WS] Connection closed");
+            triggerReconnect();
+        };
+
+        ws.onerror = (error) => {
+            addLog("[WS] Connection error");
+            console.error("[WS] Error:", error);
         };
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -1424,6 +1426,15 @@ function RoomContent() {
             }
             if (data.type === 'MEDIA_CHANGE') {
                 const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId } = data.payload;
+
+                // *** CONTROLLER GUARD ***
+                // If I am the controller and I already have this item playing, ignore the echo.
+                // This prevents AbortError caused by double resolution/setting video source.
+                const amIController = !controllerIdRef.current || controllerIdRef.current === userId;
+                if (amIController && remotePlayingItemId && remotePlayingItemId === playingItemIdRef.current) {
+                    addLog(`[WS] MEDIA_CHANGE ignored (already playing ${remotePlayingItemId})`);
+                    return;
+                }
                 setFileId(remoteFileId || '');
                 setRawUrl(url || '');
                 lastResumedItemIdRef.current = null; // Prepare for resume
@@ -1551,6 +1562,11 @@ function RoomContent() {
                     });
                 }
 
+                // *** CONTROLLER GUARD ***: Controller stops here after updating UI
+                // Controller should NOT sync its own playback state from the network (prevent feedback loops)
+                // but we ALLOWED playlist progress update above to keep UI fresh based on echo.
+                if (amIController) return;
+
                 // Latency Compensation
                 let compensatedTime = time;
                 if (sentAt) {
@@ -1644,9 +1660,11 @@ function RoomContent() {
         };
 
         return () => {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            ws.onclose = null; // Prevent reconnection on intentional close
             ws.close();
         };
-    }, [roomId]);
+    }, [roomId, reconnectTrigger]);
 
 
 
