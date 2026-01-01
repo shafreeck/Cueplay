@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+import Hls from 'hls.js';
 import { cn } from '@/lib/utils';
 
 export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
@@ -22,6 +23,8 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
         ...props }, ref) => {
         const videoRefA = useRef<HTMLVideoElement>(null);
         const videoRefB = useRef<HTMLVideoElement>(null);
+        const hlsRefA = useRef<Hls | null>(null);
+        const hlsRefB = useRef<Hls | null>(null);
 
         // Track which player is currently "Active" (visible and playing)
         const [activePlayerId, setActivePlayerId] = useState<'A' | 'B'>('A');
@@ -108,6 +111,96 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 }
             }
         }, [src, activePlayerId]);
+
+        // HLS Management for Player A
+        useEffect(() => {
+            const video = videoRefA.current;
+            const sourceUrl = stateA.src;
+
+            if (!video) return;
+
+            // Cleanup previous HLS instance
+            if (hlsRefA.current) {
+                hlsRefA.current.destroy();
+                hlsRefA.current = null;
+            }
+
+            if (!sourceUrl) {
+                video.removeAttribute('src');
+                video.load();
+                return;
+            }
+
+            const isHls = sourceUrl.includes('.m3u8');
+            const canPlayNativeHls = video.canPlayType('application/vnd.apple.mpegurl');
+
+            // Strategy: Use native HLS if available (Safari/macOS), otherwise use hls.js (Windows/Chrome)
+            if (isHls && (canPlayNativeHls === '' || canPlayNativeHls === 'maybe') && Hls.isSupported()) {
+                console.log("[Seamless] Player A using hls.js for:", sourceUrl);
+                const hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                });
+                hlsRefA.current = hls;
+                hls.loadSource(sourceUrl);
+                hls.attachMedia(video);
+            } else {
+                console.log("[Seamless] Player A using native playback for:", sourceUrl);
+                video.src = sourceUrl;
+            }
+
+            return () => {
+                if (hlsRefA.current) {
+                    hlsRefA.current.destroy();
+                    hlsRefA.current = null;
+                }
+            };
+        }, [stateA.src]);
+
+        // HLS Management for Player B
+        useEffect(() => {
+            const video = videoRefB.current;
+            const sourceUrl = stateB.src;
+
+            if (!video) return;
+
+            // Cleanup previous HLS instance
+            if (hlsRefB.current) {
+                hlsRefB.current.destroy();
+                hlsRefB.current = null;
+            }
+
+            if (!sourceUrl) {
+                video.removeAttribute('src');
+                video.load();
+                return;
+            }
+
+            const isHls = sourceUrl.includes('.m3u8');
+            const canPlayNativeHls = video.canPlayType('application/vnd.apple.mpegurl');
+
+            // Strategy: Use native HLS if available (Safari/macOS), otherwise use hls.js (Windows/Chrome)
+            if (isHls && (canPlayNativeHls === '' || canPlayNativeHls === 'maybe') && Hls.isSupported()) {
+                console.log("[Seamless] Player B using hls.js for:", sourceUrl);
+                const hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                });
+                hlsRefB.current = hls;
+                hls.loadSource(sourceUrl);
+                hls.attachMedia(video);
+            } else {
+                console.log("[Seamless] Player B using native playback for:", sourceUrl);
+                video.src = sourceUrl;
+            }
+
+            return () => {
+                if (hlsRefB.current) {
+                    hlsRefB.current.destroy();
+                    hlsRefB.current = null;
+                }
+            };
+        }, [stateB.src]);
 
         // Preload Logic
         useEffect(() => {
@@ -220,7 +313,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 {/* Player A */}
                 <video
                     ref={videoRefA}
-                    src={stateA.src}
+                    // src={stateA.src} -- Controlled by HLS management effect
                     autoPlay={activePlayerId === 'A'} // Only autoplay if active
                     className={cn(
                         "absolute inset-0 w-full h-full object-contain bg-black transition-none",
@@ -250,7 +343,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 {/* Player B */}
                 <video
                     ref={videoRefB}
-                    src={stateB.src}
+                    // src={stateB.src} -- Controlled by HLS management effect
                     autoPlay={activePlayerId === 'B'} // Only autoplay if active
                     className={cn(
                         "absolute inset-0 w-full h-full object-contain bg-black transition-none",
