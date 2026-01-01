@@ -17,7 +17,7 @@ android {
     compileSdk = 36
     namespace = "art.cueplay"
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "art.cueplay"
         minSdk = 24
         targetSdk = 36
