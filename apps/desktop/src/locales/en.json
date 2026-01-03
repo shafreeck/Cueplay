@@ -158,6 +158,8 @@
         "retry": "Retry",
         "original_quality": "Original",
         "quality": "Quality",
+        "subtitles": "Subtitles",
+        "sub_short": "SUB",
         "res_4k": "4K",
         "res_super": "Super",
         "res_high": "High",

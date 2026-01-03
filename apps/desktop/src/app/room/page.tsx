@@ -2346,90 +2346,91 @@ function RoomContent() {
                             </div>
                         )}
 
-                        {/* Unified Resolution & Subtitle Switcher Overlay */}
+                        {/* Right Side Control Satellite Pills */}
                         {(resolutions.length > 0 || manualTracks.length > 1) && (
                             <div className={cn(
-                                "absolute right-6 top-1/2 -translate-y-1/2 z-[30] transition-all duration-300",
+                                "absolute right-6 top-1/2 -translate-y-1/2 z-[30] transition-all duration-300 flex flex-col items-end gap-3",
                                 showControls ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
                             )}>
-                                <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl pointer-events-auto max-h-[60vh] overflow-y-auto no-scrollbar min-w-[70px]">
-                                    {!isSubMenuOpen ? (
-                                        <div className="flex flex-col gap-1">
-                                            <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-500 font-bold border-b border-white/5 mb-1">
-                                                SET
-                                            </div>
-                                            {resolutions.map((res) => (
-                                                <button
-                                                    key={res.id}
-                                                    className={cn(
-                                                        "w-full px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 active:scale-90 text-left",
-                                                        currentResolution === res.id
-                                                            ? "bg-white/20 text-white shadow-sm"
-                                                            : "text-zinc-400 hover:text-white hover:bg-white/10"
-                                                    )}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        addLog(`[Resolution] User selected ${res.name}`);
-                                                        changeResolution(res);
-                                                    }}
-                                                >
-                                                    {getResolutionLabel(res.name)}
-                                                </button>
-                                            ))}
-                                            {manualTracks.length > 1 && (
-                                                <>
-                                                    <div className="h-px bg-white/5 my-1" />
-                                                    <button
-                                                        className="w-full px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 active:scale-90 text-left flex items-center justify-between gap-2 text-zinc-400 hover:text-white hover:bg-white/10"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setIsSubMenuOpen(true);
-                                                        }}
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <MessageSquare className="w-3 h-3" />
-                                                            <span>SUB</span>
-                                                        </div>
-                                                        <ChevronRight className="w-3 h-3" />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col gap-1">
+                                {/* Group 1: Resolution (Always visible if exists) */}
+                                {resolutions.length > 0 && (
+                                    <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-2">
+                                        {resolutions.map((res) => (
                                             <button
-                                                className="px-2 py-1 flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-500 font-bold hover:text-white transition-colors border-b border-white/5 mb-1"
+                                                key={res.id}
+                                                className={cn(
+                                                    "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90",
+                                                    currentResolution === res.id
+                                                        ? "bg-white/20 text-white shadow-sm"
+                                                        : "text-zinc-500 hover:text-white hover:bg-white/10"
+                                                )}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setIsSubMenuOpen(false);
+                                                    changeResolution(res);
                                                 }}
                                             >
-                                                <ArrowLeft className="w-3 h-3" />
-                                                <span>SUBTITLES</span>
+                                                {getResolutionLabel(res.name)}
                                             </button>
-                                            <div className="max-h-[40vh] overflow-y-auto no-scrollbar flex flex-col gap-1">
-                                                {manualTracks.map((t) => (
-                                                    <button
-                                                        key={t.id}
-                                                        className={cn(
-                                                            "px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap text-left flex justify-between items-center gap-3",
-                                                            selectedManualTrackId === t.id
-                                                                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                                                                : "text-zinc-400 hover:text-white hover:bg-white/10"
-                                                        )}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedManualTrackId(t.id);
-                                                        }}
-                                                    >
-                                                        <span>{t.language ? t.language.toUpperCase() : `TRK ${t.id}`}</span>
-                                                        {selectedManualTrackId === t.id && <Check className="w-3 h-3" />}
-                                                    </button>
-                                                ))}
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Group 2: Subtitles (Independent Triggered Menu) */}
+                                {manualTracks.length > 1 && (
+                                    <div className={cn(
+                                        "bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 overflow-hidden flex flex-col",
+                                        isSubMenuOpen ? "p-2 min-w-[120px]" : "p-1.5"
+                                    )}>
+                                        {!isSubMenuOpen ? (
+                                            // Subtitle Trigger Button
+                                            <button
+                                                className="w-12 py-1.5 text-[10px] font-bold text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsSubMenuOpen(true);
+                                                }}
+                                            >
+                                                {t('sub_short')}
+                                            </button>
+                                        ) : (
+                                            // Subtitle Sub-menu Content
+                                            <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col">
+                                                <button
+                                                    className="flex items-center gap-2 px-2 py-1.5 border-b border-white/5 mb-1 group hover:text-white transition-colors"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setIsSubMenuOpen(false);
+                                                    }}
+                                                >
+                                                    <ArrowLeft className="w-3 h-3 text-zinc-500 group-hover:text-white transition-colors" />
+                                                    <span className="text-[10px] uppercase tracking-tighter text-zinc-400 font-bold">
+                                                        {t('subtitles')}
+                                                    </span>
+                                                </button>
+                                                <div className="flex flex-col gap-1 max-h-[30vh] overflow-y-auto no-scrollbar py-0.5">
+                                                    {manualTracks.map((t) => (
+                                                        <button
+                                                            key={t.id}
+                                                            className={cn(
+                                                                "px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap text-left flex justify-between items-center gap-4",
+                                                                selectedManualTrackId === t.id
+                                                                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                                                                    : "text-zinc-400 hover:text-white hover:bg-white/10"
+                                                            )}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedManualTrackId(t.id);
+                                                            }}
+                                                        >
+                                                            <span className="truncate max-w-[120px]">{t.language ? t.language.toUpperCase() : `TRACK ${t.id}`}</span>
+                                                            {selectedManualTrackId === t.id && <Check className="w-3 h-3 shrink-0" />}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
-                                </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
