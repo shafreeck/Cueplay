@@ -132,20 +132,43 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             }
 
             const isHls = sourceUrl.includes('.m3u8');
-            const canPlayNativeHls = video.canPlayType('application/vnd.apple.mpegurl');
 
-            // Strategy: Use native HLS if available (Safari/macOS), otherwise use hls.js (Windows/Chrome)
-            if (isHls && (canPlayNativeHls === '' || canPlayNativeHls === 'maybe') && Hls.isSupported()) {
-                console.log("[Seamless] Player A using hls.js for:", sourceUrl);
+            // Strategy: Universal hls.js first (Windows, macOS, Android). Fallback to native (iOS) only if not supported.
+            if (isHls && Hls.isSupported()) {
+                console.log("[Seamless] Player A using hls.js (Universal) for:", sourceUrl);
                 const hls = new Hls({
                     enableWorker: true,
                     lowLatencyMode: true,
                 });
                 hlsRefA.current = hls;
+
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log("[Seamless] fatal network error encountered, try to recover");
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log("[Seamless] fatal media error encountered, try to recover");
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.log("[Seamless] fatal error, cannot recover");
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+
                 hls.loadSource(sourceUrl);
                 hls.attachMedia(video);
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Fallback for iOS
+                console.log("[Seamless] Player A using native playback (Fallback) for:", sourceUrl);
+                video.src = sourceUrl;
             } else {
-                console.log("[Seamless] Player A using native playback for:", sourceUrl);
+                // Standard Playback
                 video.src = sourceUrl;
             }
 
@@ -177,20 +200,43 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             }
 
             const isHls = sourceUrl.includes('.m3u8');
-            const canPlayNativeHls = video.canPlayType('application/vnd.apple.mpegurl');
 
-            // Strategy: Use native HLS if available (Safari/macOS), otherwise use hls.js (Windows/Chrome)
-            if (isHls && (canPlayNativeHls === '' || canPlayNativeHls === 'maybe') && Hls.isSupported()) {
-                console.log("[Seamless] Player B using hls.js for:", sourceUrl);
+            // Strategy: Universal hls.js first (Windows, macOS, Android). Fallback to native (iOS) only if not supported.
+            if (isHls && Hls.isSupported()) {
+                console.log("[Seamless] Player B using hls.js (Universal) for:", sourceUrl);
                 const hls = new Hls({
                     enableWorker: true,
                     lowLatencyMode: true,
                 });
                 hlsRefB.current = hls;
+
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log("[Seamless] fatal network error encountered, try to recover");
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log("[Seamless] fatal media error encountered, try to recover");
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.log("[Seamless] fatal error, cannot recover");
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+
                 hls.loadSource(sourceUrl);
                 hls.attachMedia(video);
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Fallback for iOS
+                console.log("[Seamless] Player B using native playback (Fallback) for:", sourceUrl);
+                video.src = sourceUrl;
             } else {
-                console.log("[Seamless] Player B using native playback for:", sourceUrl);
+                // Standard Playback
                 video.src = sourceUrl;
             }
 
