@@ -138,7 +138,12 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             video.src = sourceUrl;
 
             // Clear extractor on source change
-            extractorARef.current = null;
+            if (extractorARef.current) {
+                if (typeof (extractorARef.current as any).stop === 'function') {
+                    extractorARef.current.stop();
+                }
+                extractorARef.current = null;
+            }
         }, [stateA.src]);
 
         // Native Source Management for Player B
@@ -158,7 +163,12 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             video.src = sourceUrl;
 
             // Clear extractor on source change
-            extractorBRef.current = null;
+            if (extractorBRef.current) {
+                if (typeof (extractorBRef.current as any).stop === 'function') {
+                    extractorBRef.current.stop();
+                }
+                extractorBRef.current = null;
+            }
         }, [stateB.src]);
 
         // Preload Logic
@@ -399,6 +409,12 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 }
                 // Clear subtitle on swap/cleanup
                 props.onSubtitleChange?.('');
+
+                // Final cleanup of background extractors
+                const eA = extractorARef.current as any;
+                const eB = extractorBRef.current as any;
+                if (eA && typeof eA.stop === 'function') eA.stop();
+                if (eB && typeof eB.stop === 'function') eB.stop();
             };
         }, [activePlayerId, props.onSubtitleChange]); // Re-bind when active player changes!
 

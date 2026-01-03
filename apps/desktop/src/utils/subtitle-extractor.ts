@@ -25,8 +25,11 @@ export class SubtitleExtractor {
     private onTracksDetected?: (tracks: SubtitleTrackInfo[]) => void;
     private onLog?: (msg: string) => void;
     private activeTrackId: number | null = null;
-    private isBusy = false;
-    private lastSeekTime = 0;
+
+    private abortController: AbortController | null = null;
+    private isStopped = false;
+    private loadedTracks: Set<number> = new Set();
+    private processingTrackId: number | null = null;
 
     constructor(url: string, options?: {
         cookie?: string;
@@ -40,11 +43,12 @@ export class SubtitleExtractor {
         this.mp4box = MP4Box.createFile();
 
         this.mp4box.onError = (e: any) => {
+            if (this.isStopped) return;
             this.log(`[Extractor] Error: ${e}`);
         };
 
         this.mp4box.onReady = (info: any) => {
-            if (this.isMOOVReady) return;
+            if (this.isMOOVReady || this.isStopped) return;
 
             this.detectedTracks = info.tracks
                 .filter((t: any) => {
@@ -78,26 +82,38 @@ export class SubtitleExtractor {
     }
 
     private log(msg: string) {
+        if (this.isStopped) return;
         if (this.onLog) this.onLog(msg);
         else console.log(msg);
     }
 
+    stop() {
+        this.log(`[Extractor] Stopping background tasks...`);
+        this.isStopped = true;
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+    }
+
     async setTrack(trackId: number, currentTime: number = 0) {
+        if (this.isStopped) return;
         if (!this.detectedTracks.find(t => t.id === trackId)) return;
-        if (this.activeTrackId === trackId && this.cues.has(trackId)) return;
 
-        this.log(`[Extractor] Track Switch -> T${trackId}`);
+        const isNewTrack = this.activeTrackId !== trackId;
         this.activeTrackId = trackId;
-        this.lastSeekTime = currentTime;
 
-        if (this.isMOOVReady) {
-            await this.extractActiveTrack(currentTime);
+        if (isNewTrack) {
+            this.log(`[Extractor] Track Switch -> T${trackId}`);
+            if (this.isMOOVReady) {
+                await this.extractActiveTrack(currentTime);
+            }
         }
     }
 
     async initialize(currentTime: number = 0) {
-        if (this.isMOOVReady && this.activeTrackId !== null && this.cues.has(this.activeTrackId)) return;
-        this.lastSeekTime = currentTime;
+        if (this.isStopped) return;
+        if (this.isMOOVReady && this.activeTrackId !== null && this.loadedTracks.has(this.activeTrackId)) return;
 
         try {
             const headRes = await fetch(this.url, { method: 'HEAD' });
@@ -111,13 +127,13 @@ export class SubtitleExtractor {
             }
 
             let retry = 0;
-            while (!this.isMOOVReady && retry < 25) {
+            while (!this.isMOOVReady && retry < 25 && !this.isStopped) {
                 await new Promise(r => setTimeout(r, 200));
                 retry++;
                 if (retry % 5 === 0) this.mp4box.flush();
             }
 
-            if (!this.isMOOVReady && totalSize > 5242880) {
+            if (!this.isMOOVReady && totalSize > 5242880 && !this.isStopped) {
                 const tailStart = totalSize - 5242880;
                 const lastChunk = await fetch(this.url, { headers: { 'Range': `bytes=${tailStart}-${totalSize - 1}` } });
                 if (lastChunk.ok || lastChunk.status === 206) {
@@ -127,30 +143,37 @@ export class SubtitleExtractor {
                 }
 
                 retry = 0;
-                while (!this.isMOOVReady && retry < 25) {
+                while (!this.isMOOVReady && retry < 25 && !this.isStopped) {
                     await new Promise(r => setTimeout(r, 200));
                     retry++;
                     this.mp4box.flush();
                 }
             }
 
-            if (this.isMOOVReady) {
+            if (this.isMOOVReady && !this.isStopped) {
                 await this.extractActiveTrack(currentTime);
             }
         } catch (e: any) {
-            this.log(`[Extractor] Init Error: ${e.message}`);
+            if (!this.isStopped) this.log(`[Extractor] Init Error: ${e.message}`);
         }
     }
 
     private async extractActiveTrack(currentTime: number) {
-        if (this.activeTrackId === null) return;
-        // Don't skip if we need to prioritize new time
+        if (this.activeTrackId === null || this.isStopped) return;
+        if (this.loadedTracks.has(this.activeTrackId)) return;
+
+        // Cancel previous track's requests if different
+        if (this.abortController) {
+            this.abortController.abort();
+        }
+        this.abortController = new AbortController();
+        const signal = this.abortController.signal;
 
         const tId = this.activeTrackId;
         const track = this.mp4box.getTrackById(tId);
         if (!track || !track.samples || track.samples.length === 0) return;
 
-        this.log(`[Extractor] Prioritized extraction for T${tId} @ ${currentTime.toFixed(1)}s`);
+        this.log(`[Extractor] T${tId} loading samples...`);
         const trackCues: SubtitleCue[] = this.cues.get(tId) || [];
         this.cues.set(tId, trackCues);
 
@@ -170,52 +193,46 @@ export class SubtitleExtractor {
         }
         if (currentCluster.length > 0) clusters.push(currentCluster);
 
-        // PRIORITY SORT: Clusters near currentTime first
+        // Priority sort
         const priorityQueue = clusters.map(c => {
             const clusterStartTime = c[0].cts / c[0].timescale;
             const dist = Math.abs(clusterStartTime - currentTime);
-            // If it's in the future (within 5 mins), give it high priority
             const weight = (clusterStartTime >= currentTime && clusterStartTime < currentTime + 300) ? 0 : dist;
             return { cluster: c, weight };
         }).sort((a, b) => a.weight - b.weight);
 
         const sortedClusters = priorityQueue.map(p => p.cluster);
-
-        // Fetch loop (Parallel with concurrency)
-        const concurrency = 12;
+        const concurrency = 8;
         const queue = [...sortedClusters];
 
         const processBatch = async () => {
-            while (queue.length > 0) {
+            while (queue.length > 0 && !this.isStopped && !signal.aborted) {
                 const batch = queue.splice(0, concurrency);
-                await Promise.all(batch.map(c => this.fetchCluster(c, trackCues)));
-                // No log spam here
+                await Promise.all(batch.map(c => this.fetchCluster(c, trackCues, signal)));
+            }
+            if (!this.isStopped && !signal.aborted && queue.length === 0) {
+                this.loadedTracks.add(tId);
+                this.log(`[Extractor] T${tId} fully loaded.`);
             }
         };
 
         processBatch();
-
-        // Block just a tiny bit for the immediate results near currentTime
-        let waitCount = 0;
-        while (waitCount < 5) {
-            await new Promise(r => setTimeout(r, 100));
-            // Check if we have cues near current time
-            const hasNearby = trackCues.some(c => Math.abs(c.startTime - currentTime) < 30);
-            if (hasNearby) break;
-            waitCount++;
-        }
     }
 
-    private async fetchCluster(cluster: any[], targetCues: SubtitleCue[]) {
+    private async fetchCluster(cluster: any[], targetCues: SubtitleCue[], signal: AbortSignal) {
         const start = cluster[0].offset;
         const end = cluster[cluster.length - 1].offset + cluster[cluster.length - 1].size;
 
         try {
-            const res = await fetch(this.url, { headers: { 'Range': `bytes=${start}-${end - 1}` } });
+            const res = await fetch(this.url, {
+                headers: { 'Range': `bytes=${start}-${end - 1}` },
+                signal
+            });
             if (!res.ok && res.status !== 206) return;
 
             const buffer = await res.arrayBuffer();
             for (const s of cluster) {
+                if (signal.aborted) break;
                 const relOffset = s.offset - start;
                 if (s.size > 2) {
                     try {
@@ -232,7 +249,6 @@ export class SubtitleExtractor {
                             // eslint-disable-next-line no-control-regex
                             text = text.replace(/[^\x20-\x7E\s\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/g, ' ').trim();
                             if (text) {
-                                // Prevent duplicates if re-fetched
                                 if (!targetCues.some(c => c.startTime === startTime && c.text === text)) {
                                     targetCues.push({ startTime, endTime, text });
                                 }
@@ -245,7 +261,7 @@ export class SubtitleExtractor {
     }
 
     getActiveCue(time: number): string {
-        if (this.activeTrackId === null) return '';
+        if (this.activeTrackId === null || this.isStopped) return '';
         const trackCues = this.cues.get(this.activeTrackId);
         if (!trackCues) return '';
         const cue = trackCues.find(c => time >= c.startTime && time <= (c.endTime + 0.1));
@@ -257,7 +273,7 @@ export class SubtitleExtractor {
     }
 
     hasSubtitles(): boolean {
-        if (this.activeTrackId === null) return false;
+        if (this.activeTrackId === null || this.isStopped) return false;
         return (this.cues.get(this.activeTrackId)?.length || 0) > 0;
     }
 }
