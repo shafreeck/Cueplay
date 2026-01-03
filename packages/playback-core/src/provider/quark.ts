@@ -195,9 +195,14 @@ export class QuarkProvider implements PlayableProvider {
             allFiles = [...allFiles, ...mappedFiles];
 
             // Termination condition:
-            // 1. If we have fetched all items according to 'total'
-            // 2. Or if the returned list is empty or smaller than 'size' (fallback)
-            if (allFiles.length >= total || list.length < size) {
+            // 1. If we have fetched all items according to 'total' (if total > 0)
+            // 2. Or if the returned list is absolutely empty (definitely no more data)
+            // Note: We DO NOT stop just because list.length < size, because server-side filtering (risk files)
+            // can result in a short page even if there are more items on next pages.
+            // However, we should be careful not to infinite loop if total is 0 or broken.
+            // The safest bet for Quark is: if list is empty, we are done. If list has items, we try next page 
+            // UNLESS we are sure we have everything.
+            if ((total > 0 && allFiles.length >= total) || list.length === 0) {
                 hasMore = false;
             } else {
                 page++;
