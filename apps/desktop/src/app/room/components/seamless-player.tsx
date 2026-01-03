@@ -441,25 +441,31 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 if (!tracks) return;
 
                 let hasActiveCue = false;
-                const currentTime = activeVideo.currentTime;
+                let hasEnabledTrack = false;
 
                 for (let i = 0; i < tracks.length; i++) {
                     const track = tracks[i];
                     // Hijack logic: If showing, force hidden
                     if (track.mode === 'showing') {
                         track.mode = 'hidden';
+                        hasEnabledTrack = true;
+                    } else if (track.mode === 'hidden') {
+                        hasEnabledTrack = true;
                     }
 
                     if (track.mode === 'hidden') {
                         if (track.activeCues && track.activeCues.length > 0) {
                             const activeCue = track.activeCues[0] as VTTCue;
-                            // Basic duration check (optional, but good for safety)
-                            // For now just trust activeCues
                             props.onSubtitleChange?.(activeCue.text || '');
                             hasActiveCue = true;
-                            break;
                         }
                     }
+                }
+
+                // Force enable first track if none are enabled
+                if (!hasEnabledTrack && tracks.length > 0) {
+                    console.log("[Seamless] Auto-enabling first subtitle track");
+                    tracks[0].mode = 'hidden';
                 }
 
                 if (!hasActiveCue) {
