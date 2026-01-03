@@ -443,6 +443,8 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 let hasActiveCue = false;
                 let hasEnabledTrack = false;
 
+                console.log(`[Seamless] Checking subtitles. Tracks found: ${tracks.length}`);
+
                 for (let i = 0; i < tracks.length; i++) {
                     const track = tracks[i];
                     // Hijack logic: If showing, force hidden
@@ -529,6 +531,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     onLoadStart={createEventHandler(videoRefA, onLoadStart)}
                     onPlay={createEventHandler(videoRefA, onPlay)}
                     onPause={createEventHandler(videoRefA, onPause)}
+                    crossOrigin="anonymous"
                     {...(commonProps as any)}
                 />
 
@@ -559,6 +562,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     onLoadStart={createEventHandler(videoRefB, onLoadStart)}
                     onPlay={createEventHandler(videoRefB, onPlay)}
                     onPause={createEventHandler(videoRefB, onPause)}
+                    crossOrigin="anonymous"
                     {...(commonProps as any)}
                 />
             </div>
