@@ -649,16 +649,40 @@ function RoomContent() {
 
         // Manage tracks: In native fullscreen, we show native tracks. In all other cases, we hide them and use Custom Overlay.
         const handleTrackChange = () => {
+            const video = videoRef.current;
+            if (!video) return;
+
             // Check if we are in Native Fullscreen (Video is the fullscreen element)
             const isNativeFullscreen = document.fullscreenElement === video;
             const tracks = video.textTracks;
-            if (!tracks) return;
+            if (!tracks || tracks.length === 0) return;
 
+            let hasActiveTrack = false;
             for (let i = 0; i < tracks.length; i++) {
                 const track = tracks[i];
                 if (track.mode === 'showing') {
                     track.mode = 'hidden'; // Hide browser native subtitles
+                    hasActiveTrack = true;
+                } else if (track.mode === 'hidden') {
+                    hasActiveTrack = true;
                 }
+            }
+
+            // Auto-enable first track if none are active (Fix for Windows/hls.js where tracks default to disabled)
+            if (!hasActiveTrack && tracks.length > 0) {
+                // Prefer subtitles or captions
+                let candidateIdx = -1;
+                for (let i = 0; i < tracks.length; i++) {
+                    if (tracks[i].kind === 'subtitles' || tracks[i].kind === 'captions') {
+                        candidateIdx = i;
+                        break;
+                    }
+                }
+
+                // If found or just fallback to 0
+                const targetIdx = candidateIdx >= 0 ? candidateIdx : 0;
+                console.log(`[Subtitle] Auto-enabling track ${targetIdx} (${tracks[targetIdx].label}) to 'hidden'`);
+                tracks[targetIdx].mode = 'hidden';
             }
         };
 
