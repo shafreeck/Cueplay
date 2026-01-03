@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import Hls from 'hls.js';
 import { cn } from '@/lib/utils';
+import { SubtitleExtractor, SubtitleTrackInfo } from '@/utils/subtitle-extractor';
 
 export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
     nextSrc?: string;
@@ -8,6 +9,9 @@ export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTML
     isPreloadEnabled?: boolean;
     onSeamlessStart?: () => void;
     onSubtitleChange?: (text: string) => void;
+    onManualTracksDetected?: (tracks: SubtitleTrackInfo[]) => void;
+    manualTrackId?: number;
+    onDebug?: (msg: string) => void;
 }
 
 interface PlayerState {
@@ -20,12 +24,16 @@ interface PlayerState {
 export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPlayerProps>(
     ({ className, src, nextSrc, nextStartTime, isPreloadEnabled = false, onSeamlessStart,
         onTimeUpdate, onEnded, onCanPlay, onLoadedMetadata,
-        onError, onWaiting, onStalled, onLoadStart, onPlay, onPause,
+        onError, onWaiting, onStalled, onLoadStart, onPlay, onPause, onDebug,
         ...props }, ref) => {
         const videoRefA = useRef<HTMLVideoElement>(null);
         const videoRefB = useRef<HTMLVideoElement>(null);
         const hlsRefA = useRef<Hls | null>(null);
         const hlsRefB = useRef<Hls | null>(null);
+
+        // Subtitle Extractor Refs
+        const extractorARef = useRef<SubtitleExtractor | null>(null);
+        const extractorBRef = useRef<SubtitleExtractor | null>(null);
 
         // Track which player is currently "Active" (visible and playing)
         const [activePlayerId, setActivePlayerId] = useState<'A' | 'B'>('A');
@@ -113,215 +121,44 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             }
         }, [src, activePlayerId]);
 
-        // HLS Management for Player A
+        // Native Source Management for Player A
         useEffect(() => {
             const video = videoRefA.current;
             const sourceUrl = stateA.src;
 
             if (!video) return;
 
-            // Cleanup previous HLS instance
-            if (hlsRefA.current) {
-                hlsRefA.current.destroy();
-                hlsRefA.current = null;
-            }
-
             if (!sourceUrl) {
                 video.removeAttribute('src');
                 video.load();
                 return;
             }
 
-            // Robust HLS detection: Check both raw and decoded URL for .m3u8
-            // This handles cases where the URL is wrapped in a proxy (e.g., ip/proxy?url=encoded_native)
-            const isHls = sourceUrl.includes('.m3u8') || decodeURIComponent(sourceUrl).includes('.m3u8');
+            console.log(`[Seamless] Player A Source: ${sourceUrl.slice(0, 50)}... (Native Only)`);
+            video.src = sourceUrl;
 
-            console.log(`[Seamless] Player A Source: ${sourceUrl.slice(0, 50)}... | isHls: ${isHls}`);
-
-            // Strategy: Universal hls.js first (Windows, macOS, Android). Fallback to native (iOS) only if not supported.
-            if (isHls && Hls.isSupported()) {
-                console.log("[Seamless] Player A using hls.js (Universal) for:", sourceUrl);
-                // Add visual log for user
-                if (process.env.NODE_ENV === 'development') {
-                    console.log("%c[Seamless] Enforcing hls.js", "color: yellow; font-weight: bold;");
-                }
-
-                const hls = new Hls({
-                    enableWorker: false,
-                    lowLatencyMode: true,
-                    debug: true,
-                    manifestLoadingTimeOut: 10000,
-                    manifestLoadingMaxRetry: 2, // Retry less to fail fast for MP4s
-                    levelLoadingTimeOut: 10000,
-                    fragLoadingTimeOut: 10000,
-                    xhrSetup: function (xhr, url) {
-                        // Some proxies might require specific headers or handling?
-                        // For now just standard.
-                    },
-                });
-                hlsRefA.current = hls;
-
-                hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-                    console.log(`[Seamless] Custom HLS Manifest Parsed. Levels: ${data.levels.length}, Tracks: ${hls.subtitleTracks.length}`);
-                    if (hls.subtitleTracks.length > 0) {
-                        console.log("[Seamless] Subtitle tracks found:", hls.subtitleTracks);
-                    } else {
-                        console.warn("[Seamless] NO SUBTITLE TRACKS FOUND IN MANIFEST");
-                    }
-                });
-
-                hls.on(Hls.Events.SUBTITLE_TRACK_LOADED, (event, data) => {
-                    console.log(`[Seamless] Subtitle track loaded:`, data);
-                });
-
-                hls.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        console.warn(`[Seamless] HLS Fatal Error: ${data.type}`, data);
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                // Fallback for MP4s misidentified as HLS (Manifest timeout/error)
-                                if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
-                                    data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
-                                    data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
-                                    console.log(`[Seamless] Manifest load failed (${data.details}), fallback to native.`);
-                                    hls.destroy();
-                                    video.src = sourceUrl;
-                                } else {
-                                    console.log("[Seamless] fatal network error encountered, try to recover");
-                                    hls.startLoad();
-                                }
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.log("[Seamless] fatal media error encountered, try to recover");
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                console.log("[Seamless] fatal error, cannot recover. Fallback to native.");
-                                hls.destroy();
-                                video.src = sourceUrl;
-                                break;
-                        }
-                    }
-                });
-
-                hls.loadSource(sourceUrl);
-                hls.attachMedia(video);
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Fallback for iOS (or if hls.js is manually disabled/not supported)
-                console.log("[Seamless] Player A using native playback (iOS/Fallback) for:", sourceUrl);
-                video.src = sourceUrl;
-            } else {
-                // Standard Playback (MP4, etc.)
-                console.log("[Seamless] Player A using standard playback for:", sourceUrl);
-                video.src = sourceUrl;
-            }
-
-            return () => {
-                if (hlsRefA.current) {
-                    hlsRefA.current.destroy();
-                    hlsRefA.current = null;
-                }
-            };
+            // Clear extractor on source change
+            extractorARef.current = null;
         }, [stateA.src]);
 
-        // HLS Management for Player B
+        // Native Source Management for Player B
         useEffect(() => {
             const video = videoRefB.current;
             const sourceUrl = stateB.src;
 
             if (!video) return;
 
-            // Cleanup previous HLS instance
-            if (hlsRefB.current) {
-                hlsRefB.current.destroy();
-                hlsRefB.current = null;
-            }
-
             if (!sourceUrl) {
                 video.removeAttribute('src');
                 video.load();
                 return;
             }
 
-            // Robust HLS detection
-            const isHls = sourceUrl.includes('.m3u8') || decodeURIComponent(sourceUrl).includes('.m3u8');
-            console.log(`[Seamless] Player B Source: ${sourceUrl.slice(0, 50)}... | isHls: ${isHls}`);
+            console.log(`[Seamless] Player B Source: ${sourceUrl.slice(0, 50)}... (Native Only)`);
+            video.src = sourceUrl;
 
-            // Strategy: Universal hls.js first (Windows, macOS, Android). Fallback to native (iOS) only if not supported.
-            if (isHls && Hls.isSupported()) {
-                console.log("[Seamless] Player B using hls.js (Universal) for:", sourceUrl);
-                if (process.env.NODE_ENV === 'development') {
-                    console.log("%c[Seamless] Player B: Enforcing hls.js", "color: yellow; font-weight: bold;");
-                }
-
-                const hls = new Hls({
-                    enableWorker: false,
-                    lowLatencyMode: true,
-                    debug: true,
-                    manifestLoadingTimeOut: 10000,
-                    manifestLoadingMaxRetry: 2,
-                    levelLoadingTimeOut: 10000,
-                    fragLoadingTimeOut: 10000,
-                });
-                hlsRefB.current = hls;
-
-                hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-                    console.log(`[Seamless] Player B Manifest Parsed. Levels: ${data.levels.length}, Tracks: ${hls.subtitleTracks.length}`);
-                    if (hls.subtitleTracks.length > 0) {
-                        console.log("[Seamless] Player B Subtitle tracks found:", hls.subtitleTracks);
-                    } else {
-                        console.warn("[Seamless] Player B NO SUBTITLE TRACKS FOUND");
-                    }
-                });
-
-                hls.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        console.warn(`[Seamless] Player B HLS Fatal Error: ${data.type}`, data);
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                // Fallback logic
-                                if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
-                                    data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
-                                    data.details === Hls.ErrorDetails.MANIFEST_PARSING_ERROR) {
-                                    console.log(`[Seamless] Player B Manifest load failed (${data.details}), fallback to native.`);
-                                    hls.destroy();
-                                    video.src = sourceUrl;
-                                } else {
-                                    console.log("[Seamless] fatal network error encountered, try to recover");
-                                    hls.startLoad();
-                                }
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.log("[Seamless] fatal media error encountered, try to recover");
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                console.log("[Seamless] fatal error, cannot recover. Fallback to native.");
-                                hls.destroy();
-                                video.src = sourceUrl;
-                                break;
-                        }
-                    }
-                });
-
-                hls.loadSource(sourceUrl);
-                hls.attachMedia(video);
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Fallback for iOS
-                console.log("[Seamless] Player B using native playback (iOS/Fallback) for:", sourceUrl);
-                video.src = sourceUrl;
-            } else {
-                // Standard Playback
-                console.log("[Seamless] Player B using standard playback for:", sourceUrl);
-                video.src = sourceUrl;
-            }
-
-            return () => {
-                if (hlsRefB.current) {
-                    hlsRefB.current.destroy();
-                    hlsRefB.current = null;
-                }
-            };
+            // Clear extractor on source change
+            extractorBRef.current = null;
         }, [stateB.src]);
 
         // Preload Logic
@@ -416,8 +253,11 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             'webkit-playsinline': 'true',
             preload: 'auto',
             controls: props.controls && !tempHideControls, // Override logic
-            // Filter out autoplay/preload/controls/src from spread props to handle manually
-            ...Object.fromEntries(Object.entries(props).filter(([k]) => !['autoPlay', 'preload', 'src', 'controls'].includes(k)))
+            // Filter out autoplay/preload/controls/src AND custom player props from spread props to handle manually
+            ...Object.fromEntries(Object.entries(props).filter(([k]) => ![
+                'autoPlay', 'preload', 'src', 'controls',
+                'onSubtitleChange', 'onDebug', 'onManualTracksDetected', 'manualTrackId'
+            ].includes(k)))
         };
 
         // Event Wrappers
@@ -443,7 +283,15 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 let hasActiveCue = false;
                 let hasEnabledTrack = false;
 
-                console.log(`[Seamless] Checking subtitles. Tracks found: ${tracks.length}`);
+                // console.log(`[Seamless] Checking subtitles. Tracks found: ${tracks.length}`);
+
+                // DIAGNOSTIC LOG (Throttled)
+                if (Math.random() < 0.05) {
+                    const vTracks = (activeVideo as any).videoTracks?.length ?? 'n/a';
+                    const aTracks = (activeVideo as any).audioTracks?.length ?? 'n/a';
+                    const trackLangs = Array.from(tracks).map(t => `${t.kind}:${t.language || 'unknown'}(${t.mode})`).join(', ');
+                    onDebug?.(`[Sub] Check: ${tracks.length} tracks. V:${vTracks} A:${aTracks}. Details: [${trackLangs}]. RS:${activeVideo.readyState}`);
+                }
 
                 for (let i = 0; i < tracks.length; i++) {
                     const track = tracks[i];
@@ -471,7 +319,53 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 }
 
                 if (!hasActiveCue) {
+                    // FALLBACK: If native tracks didn't find anything, try Manual Extractor
+                    const activeExtractor = activePlayerIdRef.current === 'A' ? extractorARef.current : extractorBRef.current;
+                    if (activeExtractor && activeExtractor.hasSubtitles()) {
+                        const manualCue = activeExtractor.getActiveCue(activeVideo.currentTime);
+                        if (manualCue) {
+                            props.onSubtitleChange?.(manualCue);
+                            hasActiveCue = true;
+                        }
+                    }
+                }
+
+                if (!hasActiveCue) {
                     props.onSubtitleChange?.('');
+                }
+            };
+
+            // AUTO-INIT MANUAL EXTRACTOR if native tracks are empty
+            const checkInitManual = async () => {
+                const tracks = activeVideo.textTracks;
+                if (tracks && tracks.length === 0 && (activeVideo as any).readyState >= 1) {
+                    const currentSrc = activeVideo.src;
+                    if (!currentSrc) return;
+
+                    const currentExtractor = activePlayerIdRef.current === 'A' ? extractorARef.current : extractorBRef.current;
+
+                    // If already initialized for this URL, skip
+                    if (currentExtractor && (currentExtractor as any).url === currentSrc) return;
+
+                    onDebug?.(`[Sub] Native tracks empty. Initializing Manual Extractor...`);
+
+                    const extractor = new SubtitleExtractor(currentSrc, {
+                        onLog: (msg) => onDebug?.(msg),
+                        onTracksDetected: (tracks) => {
+                            props.onManualTracksDetected?.(tracks);
+                        }
+                    });
+
+                    if (activePlayerIdRef.current === 'A') extractorARef.current = extractor;
+                    else extractorBRef.current = extractor;
+
+                    await extractor.initialize(activeVideo.currentTime);
+
+                    if (extractor.hasSubtitles()) {
+                        onDebug?.(`[Sub] Manual Extractor ready with tracks!`);
+                    } else {
+                        onDebug?.(`[Sub] Manual Extractor found no tracks.`);
+                    }
                 }
             };
 
@@ -491,8 +385,14 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 activeVideo.textTracks.addEventListener('addtrack', onAddTrack);
             }
 
+            // Check for manual init on metadata load or readyState change
+            activeVideo.addEventListener('loadedmetadata', checkInitManual);
+            const checkInterval = setInterval(checkInitManual, 2000);
+
             return () => {
                 activeVideo.removeEventListener('timeupdate', updateSubtitle);
+                activeVideo.removeEventListener('loadedmetadata', checkInitManual);
+                clearInterval(checkInterval);
                 if (activeVideo.textTracks) {
                     activeVideo.textTracks.removeEventListener('change', updateSubtitle);
                     activeVideo.textTracks.removeEventListener('addtrack', onAddTrack);
@@ -501,6 +401,16 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                 props.onSubtitleChange?.('');
             };
         }, [activePlayerId, props.onSubtitleChange]); // Re-bind when active player changes!
+
+        useEffect(() => {
+            if (props.manualTrackId !== undefined) {
+                const extractor = activePlayerIdRef.current === 'A' ? extractorARef.current : extractorBRef.current;
+                const activeVideo = activePlayerIdRef.current === 'A' ? videoRefA.current : videoRefB.current;
+                if (extractor && activeVideo) {
+                    extractor.setTrack(props.manualTrackId, activeVideo.currentTime);
+                }
+            }
+        }, [props.manualTrackId]);
 
         return (
             <div className={cn("relative w-full h-full bg-black overflow-hidden", className)}>

@@ -198,6 +198,29 @@ function RoomContent() {
 
     // UI State for Mobile/Responsive Layout
     const [activeTab, setActiveTab] = useState('playlist');
+    const [manualTracks, setManualTracks] = useState<any[]>([]);
+    const [selectedManualTrackId, setSelectedManualTrackId] = useState<number | undefined>(undefined);
+    const [isSubMenuOpen, setIsSubMenuOpen] = useState(false);
+
+    const handleManualTracks = useCallback((tracks: any[]) => {
+        setManualTracks(tracks);
+        // Auto-select first track if nothing selected
+        if (tracks.length > 0 && selectedManualTrackId === undefined) {
+            const best = tracks.find(t => {
+                const lang = (t.language || '').toLowerCase();
+                return lang === 'chi' || lang === 'zho' || lang === 'zh';
+            }) || tracks.find(t => (t.language || '').toLowerCase() === 'eng')
+                || tracks[0];
+            setSelectedManualTrackId(best.id);
+        }
+    }, [selectedManualTrackId]);
+
+    // Reset manual tracks on video change
+    useEffect(() => {
+        setManualTracks([]);
+        setSelectedManualTrackId(undefined);
+        setIsSubMenuOpen(false);
+    }, [videoSrc]);
     const [isInputFocused, setIsInputFocused] = useState(false);
     const lastTapRef = useRef<number>(0);
 
@@ -674,6 +697,7 @@ function RoomContent() {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
             lastVideoCookieRef.current = cookie;
+            addLog(`[ResolveSync] Source: ${JSON.stringify(source, null, 2)}`);
             setRawUrl(source.url);
 
             if (source.resolutions && Array.isArray(source.resolutions)) {
@@ -889,7 +913,8 @@ function RoomContent() {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
             lastVideoCookieRef.current = cookie;
-            console.log("Resolve result:", { hasSource: !!source, cookieLen: cookie?.length });
+            addLog(`[Resolve] Source: ${JSON.stringify(source, null, 2)}`);
+            console.log("Resolve result (Full):", { source, cookieLen: cookie?.length });
 
             setRawUrl(source.url); // Use raw URL for sharing
 
@@ -2285,6 +2310,9 @@ function RoomContent() {
                                         }
                                     }
                                 }}
+                                onDebug={(msg) => addLog(msg)}
+                                onManualTracksDetected={handleManualTracks}
+                                manualTrackId={selectedManualTrackId}
                             />
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
@@ -2317,32 +2345,90 @@ function RoomContent() {
                                 </div>
                             </div>
                         )}
-                        {/* Resolution Switcher Overlay - Vertical List on Right */}
-                        {resolutions.length > 0 && (
+
+                        {/* Unified Resolution & Subtitle Switcher Overlay */}
+                        {(resolutions.length > 0 || manualTracks.length > 1) && (
                             <div className={cn(
-                                "absolute right-6 top-1/2 -translate-y-1/2 z-[99999] transition-all duration-300",
-                                // Strictly follow showControls state for all platforms
+                                "absolute right-6 top-1/2 -translate-y-1/2 z-[30] transition-all duration-300",
                                 showControls ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
                             )}>
-                                <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl pointer-events-auto">
-                                    {resolutions.map((res) => (
-                                        <button
-                                            key={res.id}
-                                            className={cn(
-                                                "w-12 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 active:scale-90",
-                                                currentResolution === res.id
-                                                    ? "bg-white/20 text-white shadow-sm"
-                                                    : "text-zinc-400 hover:text-white hover:bg-white/10"
+                                <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl pointer-events-auto max-h-[60vh] overflow-y-auto no-scrollbar min-w-[70px]">
+                                    {!isSubMenuOpen ? (
+                                        <div className="flex flex-col gap-1">
+                                            <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-500 font-bold border-b border-white/5 mb-1">
+                                                SET
+                                            </div>
+                                            {resolutions.map((res) => (
+                                                <button
+                                                    key={res.id}
+                                                    className={cn(
+                                                        "w-full px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 active:scale-90 text-left",
+                                                        currentResolution === res.id
+                                                            ? "bg-white/20 text-white shadow-sm"
+                                                            : "text-zinc-400 hover:text-white hover:bg-white/10"
+                                                    )}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        addLog(`[Resolution] User selected ${res.name}`);
+                                                        changeResolution(res);
+                                                    }}
+                                                >
+                                                    {getResolutionLabel(res.name)}
+                                                </button>
+                                            ))}
+                                            {manualTracks.length > 1 && (
+                                                <>
+                                                    <div className="h-px bg-white/5 my-1" />
+                                                    <button
+                                                        className="w-full px-3 py-1.5 text-xs font-medium rounded-xl transition-all duration-200 active:scale-90 text-left flex items-center justify-between gap-2 text-zinc-400 hover:text-white hover:bg-white/10"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setIsSubMenuOpen(true);
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <MessageSquare className="w-3 h-3" />
+                                                            <span>SUB</span>
+                                                        </div>
+                                                        <ChevronRight className="w-3 h-3" />
+                                                    </button>
+                                                </>
                                             )}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                addLog(`[Resolution] User selected ${res.name}`);
-                                                changeResolution(res);
-                                            }}
-                                        >
-                                            {getResolutionLabel(res.name)}
-                                        </button>
-                                    ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-1">
+                                            <button
+                                                className="px-2 py-1 flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-500 font-bold hover:text-white transition-colors border-b border-white/5 mb-1"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsSubMenuOpen(false);
+                                                }}
+                                            >
+                                                <ArrowLeft className="w-3 h-3" />
+                                                <span>SUBTITLES</span>
+                                            </button>
+                                            <div className="max-h-[40vh] overflow-y-auto no-scrollbar flex flex-col gap-1">
+                                                {manualTracks.map((t) => (
+                                                    <button
+                                                        key={t.id}
+                                                        className={cn(
+                                                            "px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap text-left flex justify-between items-center gap-3",
+                                                            selectedManualTrackId === t.id
+                                                                ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                                                                : "text-zinc-400 hover:text-white hover:bg-white/10"
+                                                        )}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedManualTrackId(t.id);
+                                                        }}
+                                                    >
+                                                        <span>{t.language ? t.language.toUpperCase() : `TRK ${t.id}`}</span>
+                                                        {selectedManualTrackId === t.id && <Check className="w-3 h-3" />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
