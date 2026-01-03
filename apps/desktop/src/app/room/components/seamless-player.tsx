@@ -450,7 +450,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                         track.mode = 'hidden';
                     }
 
-                    if (track.mode === 'hidden' || track.mode === 'showing') {
+                    if (track.mode === 'hidden') {
                         if (track.activeCues && track.activeCues.length > 0) {
                             const activeCue = track.activeCues[0] as VTTCue;
                             // Basic duration check (optional, but good for safety)
