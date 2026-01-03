@@ -82,6 +82,7 @@ export class QuarkProvider implements PlayableProvider {
 
         // Handle video_list response (new format)
         if (data.data?.video_list && Array.isArray(data.data.video_list)) {
+            console.log('[Quark Debug] Video List:', JSON.stringify(data.data.video_list, null, 2));
             const list = data.data.video_list;
 
             // Map resolutions
@@ -92,8 +93,10 @@ export class QuarkProvider implements PlayableProvider {
                     name: v.resolution || v.video_info?.resolution || 'Unknown',
                     url: v.video_info.url,
                     width: v.video_info.width,
-                    height: v.video_info.height
+                    height: v.video_info.height,
+                    format_type: v.video_info?.format_type // Log this if possible
                 }));
+            console.log('[Quark Debug] Parsed Resolutions:', JSON.stringify(resolutions, null, 2));
 
             // Strategy: Find first with channels=2. If not found, fallback to first.
             if (!playUrl) {
@@ -106,6 +109,8 @@ export class QuarkProvider implements PlayableProvider {
                     playUrl = resolutions[0].url;
                 }
             }
+        } else {
+            console.log('[Quark Debug] No video_list found. Full Data:', JSON.stringify(data, null, 2));
         }
 
         if (!playUrl) {

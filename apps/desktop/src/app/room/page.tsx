@@ -639,122 +639,14 @@ function RoomContent() {
         };
     }, [resetTimer, videoSrc, isImmersiveMode, showControls]); // Re-bind when video source changes
 
-    // Subtitle Hijacking Logic
+    // Subtitle logic moved to SeamlessVideoPlayer via onSubtitleChange prop
     useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
-
-        // Clear subtitle when video changes
-        setCurrentSubtitle('');
-
-        // Manage tracks: In native fullscreen, we show native tracks. In all other cases, we hide them and use Custom Overlay.
-        const handleTrackChange = () => {
-            const video = videoRef.current;
-            if (!video) return;
-
-            // Check if we are in Native Fullscreen (Video is the fullscreen element)
-            const isNativeFullscreen = document.fullscreenElement === video;
-            const tracks = video.textTracks;
-            if (!tracks || tracks.length === 0) return;
-
-            let hasActiveTrack = false;
-            for (let i = 0; i < tracks.length; i++) {
-                const track = tracks[i];
-                if (track.mode === 'showing') {
-                    track.mode = 'hidden'; // Hide browser native subtitles
-                    hasActiveTrack = true;
-                } else if (track.mode === 'hidden') {
-                    hasActiveTrack = true;
-                }
-            }
-
-            // Auto-enable first track if none are active (Fix for Windows/hls.js where tracks default to disabled)
-            if (!hasActiveTrack && tracks.length > 0) {
-                // Prefer subtitles or captions
-                let candidateIdx = -1;
-                for (let i = 0; i < tracks.length; i++) {
-                    if (tracks[i].kind === 'subtitles' || tracks[i].kind === 'captions') {
-                        candidateIdx = i;
-                        break;
-                    }
-                }
-
-                // If found or just fallback to 0
-                const targetIdx = candidateIdx >= 0 ? candidateIdx : 0;
-                console.log(`[Subtitle] Auto-enabling track ${targetIdx} (${tracks[targetIdx].label}) to 'hidden'`);
-                tracks[targetIdx].mode = 'hidden';
-            }
-        };
-
+        // Just handle fullscreen changes strictly related to UI mode (if any)
         const handleFullscreenChange = () => {
-            handleTrackChange();
+            // Optional logic
         };
-
-        // Check current active cues and update subtitle on every timeupdate
-        const updateCurrentSubtitle = () => {
-            // Don't update custom overlay if in native fullscreen (optimization)
-            if (document.fullscreenElement === video) {
-                if (currentSubtitle) setCurrentSubtitle('');
-                return;
-            }
-
-            const tracks = video.textTracks;
-            if (!tracks) return;
-            let hasActiveCue = false;
-            const currentTime = video.currentTime;
-
-            for (let i = 0; i < tracks.length; i++) {
-                const track = tracks[i];
-
-                if (track.mode === 'hidden' && track.activeCues && track.activeCues.length > 0) {
-                    const activeCue = track.activeCues[0] as VTTCue;
-                    const cueDisplayDuration = currentTime - activeCue.startTime;
-
-                    // Check if subtitle has been displayed for too long
-                    // This handles cases where browser sets endTime to video duration during progressive loading
-                    if (cueDisplayDuration > MAX_SUBTITLE_DURATION) {
-                        setCurrentSubtitle('');
-                    } else {
-                        setCurrentSubtitle(activeCue.text);
-                        hasActiveCue = true;
-                    }
-                    break;
-                }
-            }
-
-            // Clear subtitle if no active cue
-            if (!hasActiveCue) {
-                setCurrentSubtitle('');
-            }
-        };
-
-        video.addEventListener('timeupdate', updateCurrentSubtitle);
-        // Also listen for cuechange events on tracks
-        video.addEventListener('timeupdate', updateCurrentSubtitle);
-        // Also listen for cuechange events on tracks
-        if (video.textTracks) {
-            for (let i = 0; i < video.textTracks.length; i++) {
-                video.textTracks[i].addEventListener('cuechange', updateCurrentSubtitle);
-            }
-            // Listen for track changes to hijack new tracks
-            video.textTracks.addEventListener('addtrack', handleTrackChange);
-            video.textTracks.addEventListener('change', handleTrackChange);
-        }
-
         document.addEventListener('fullscreenchange', handleFullscreenChange);
-
-        // Initial check
-        handleTrackChange();
-
         return () => {
-            video.removeEventListener('timeupdate', updateCurrentSubtitle);
-            if (video.textTracks) {
-                for (let i = 0; i < video.textTracks.length; i++) {
-                    video.textTracks[i].removeEventListener('cuechange', updateCurrentSubtitle);
-                }
-                video.textTracks.removeEventListener('addtrack', handleTrackChange);
-                video.textTracks.removeEventListener('change', handleTrackChange);
-            }
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
         };
     }, [videoSrc]);
@@ -2327,6 +2219,7 @@ function RoomContent() {
                                     isSeamlessSwitchingRef.current = true;
                                     setShowControls(false);
                                 }}
+                                onSubtitleChange={setCurrentSubtitle}
                                 autoPlay
                                 className="w-full h-full object-contain"
                                 src={videoSrc}
