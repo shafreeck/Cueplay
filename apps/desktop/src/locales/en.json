@@ -196,6 +196,12 @@
         "error_no_cookie_configured": "System shared account not configured. Please login with a personal account.",
         "error_quark_login_required": "Quark Login Required",
         "always_require_auth": "Always Require Login",
-        "always_require_auth_desc": "Require auth code even when personal account is not logged in."
+        "always_require_auth_desc": "Require auth code even when personal account is not logged in.",
+        "danmaku": "Danmaku",
+        "show_danmaku": "Show Danmaku",
+        "hide_danmaku": "Hide Danmaku",
+        "danmaku_on": "Danmaku On",
+        "danmaku_off": "Danmaku Off",
+        "danmaku_short": "DAN"
     }
 }

@@ -196,6 +196,12 @@
         "error_no_cookie_configured": "系统未配置共享账号，请登录个人账号使用。",
         "error_quark_login_required": "需要登录夸克账号",
         "always_require_auth": "始终要求登录",
-        "always_require_auth_desc": "即使没有登录个人账号，也要求输入授权码才能使用共享账号。"
+        "always_require_auth_desc": "即使没有登录个人账号，也要求输入授权码才能使用共享账号。",
+        "danmaku": "弹幕",
+        "show_danmaku": "显示弹幕",
+        "hide_danmaku": "隐藏弹幕",
+        "danmaku_on": "弹幕已开启",
+        "danmaku_off": "弹幕已关闭",
+        "danmaku_short": "弹"
     }
 }

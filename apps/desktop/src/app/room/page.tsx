@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, ChevronLeft, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, EyeOff, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, ChevronLeft, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -31,6 +31,7 @@ import { PlaylistItemRenderer } from './components/playlist-item';
 import { ChatMessageItem } from './components/chat-message-item';
 import { MemberItem } from './components/member-item';
 import { SeamlessVideoPlayer } from './components/seamless-player';
+import { DanmakuOverlay } from './components/danmaku-overlay';
 
 interface SortableItemProps {
     item: PlaylistItem;
@@ -253,6 +254,10 @@ function RoomContent() {
     const lastVideoCookieRef = useRef<string>('');
     const pendingSeekTimeRef = useRef<number | null>(null);
 
+    // Danmaku Ref
+    const danmakuRef = useRef<import('./components/danmaku-overlay').DanmakuOverlayHandle>(null);
+    const [isDanmakuEnabled, setIsDanmakuEnabled] = useState(true);
+
     // Sync Ref with State
     useEffect(() => {
         isSyncedRef.current = isSynced;
@@ -454,7 +459,21 @@ function RoomContent() {
         socketRef.current.send(JSON.stringify({ type: 'CHAT_MESSAGE', payload }));
         setMessages(prev => [...prev, payload]);
         setChatInput('');
+        if (isDanmakuEnabled) {
+            danmakuRef.current?.add(payload.content);
+        }
     };
+
+    useEffect(() => {
+        // Listen for incoming messages to trigger Danmaku (Assume there's a listener somewhere or add it)
+        // Looking at the code, I need to find where incoming messages are handled.
+        // I can't find the socket listener in the initial read (lines 1-800).
+        // I will add a separate effect to hook into messages update if I can't find the socket handler.
+        // For now, let's just use the `messages` array update, BUT that might re-trigger old messages if not careful.
+        // Better: Hook into the socket handler.
+        // Wait, I haven't seen the socket handler code yet (it was likely further down).
+        // I will read the rest of the file to find the socket handler.
+    }, []);
 
     useEffect(() => {
         addLog(`Fullscreen Enabled: ${document.fullscreenEnabled}`);
@@ -1565,6 +1584,9 @@ function RoomContent() {
                 const message = data.payload;
                 setMessages(prev => {
                     if (prev.some(m => m.id === message.id)) return prev;
+                    if (isDanmakuEnabled) {
+                        danmakuRef.current?.add(message.content);
+                    }
                     return [...prev, message];
                 });
             } else if (data.type === 'MEMBER_PROGRESS') {
@@ -2246,6 +2268,11 @@ function RoomContent() {
                                     isSeamlessSwitchingRef.current = true;
                                     setShowControls(false);
                                 }}
+                                children={
+                                    <>
+                                        {isDanmakuEnabled && <DanmakuOverlay ref={danmakuRef} />}
+                                    </>
+                                }
                                 onSubtitleChange={setCurrentSubtitle}
                                 autoPlay
                                 className="w-full h-full object-contain"
@@ -2349,11 +2376,15 @@ function RoomContent() {
                         )}
 
                         {/* Right Side Control Satellite Pills */}
-                        {(resolutions.length > 0 || manualTracks.length > 1) && (
+                        {/* Always show if controls are needed, Danmaku is always available */}
+                        {(true) && (
                             <div className={cn(
                                 "absolute right-6 top-1/2 -translate-y-1/2 z-[30] transition-all duration-300 flex flex-col items-end gap-3",
                                 showControls ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
                             )}>
+
+
+
                                 {/* Group 1: Resolution (Always visible if exists) */}
                                 {resolutions.length > 0 && (
                                     <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-2">
@@ -2433,6 +2464,26 @@ function RoomContent() {
                                         )}
                                     </div>
                                 )}
+
+                                {/* Group 3: Danmaku Toggle */}
+                                <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-2">
+                                    <button
+                                        className={cn(
+                                            "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90 flex items-center justify-center gap-1",
+                                            isDanmakuEnabled
+                                                ? "bg-white/20 text-white shadow-sm"
+                                                : "text-zinc-500 hover:text-white hover:bg-white/10"
+                                        )}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsDanmakuEnabled(!isDanmakuEnabled);
+                                            toast({ description: !isDanmakuEnabled ? t('danmaku_on') : t('danmaku_off'), duration: 1000 });
+                                        }}
+                                        title={isDanmakuEnabled ? t('hide_danmaku') : t('show_danmaku')}
+                                    >
+                                        <span className="text-[12px]">{t('danmaku_short')}</span>
+                                    </button>
+                                </div>
                             </div>
                         )}
 

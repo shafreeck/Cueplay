@@ -12,6 +12,7 @@ export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTML
     onManualTracksDetected?: (tracks: SubtitleTrackInfo[]) => void;
     manualTrackId?: number;
     onDebug?: (msg: string) => void;
+    children?: React.ReactNode;
 }
 
 interface PlayerState {
@@ -24,7 +25,7 @@ interface PlayerState {
 export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPlayerProps>(
     ({ className, src, nextSrc, nextStartTime, isPreloadEnabled = false, onSeamlessStart,
         onTimeUpdate, onEnded, onCanPlay, onLoadedMetadata,
-        onError, onWaiting, onStalled, onLoadStart, onPlay, onPause, onDebug,
+        onError, onWaiting, onStalled, onLoadStart, onPlay, onPause, onDebug, children,
         ...props }, ref) => {
         const videoRefA = useRef<HTMLVideoElement>(null);
         const videoRefB = useRef<HTMLVideoElement>(null);
@@ -491,6 +492,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     crossOrigin="anonymous"
                     {...(commonProps as any)}
                 />
+                {children}
             </div>
         );
     }
