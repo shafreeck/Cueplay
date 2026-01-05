@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug } from 'lucide-react';
+import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, ChevronLeft, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -235,6 +235,7 @@ function RoomContent() {
     useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
     const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const chatListRef = useRef<HTMLDivElement>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
@@ -1903,6 +1904,7 @@ function RoomContent() {
                                 </>
                             )}
                         </div>
+
                         {!canControl && (
                             <Button
                                 variant="ghost"
@@ -2135,12 +2137,12 @@ function RoomContent() {
             <main className={cn(
                 "flex-1 flex flex-col min-h-0 animate-fade-in",
                 "md:container md:mx-auto md:grid md:gap-6 transition-all duration-300 ease-in-out",
-                (isImmersiveMode || isLandscapeMobile) ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : "md:p-6 md:grid-cols-4"
+                (isImmersiveMode || isLandscapeMobile) ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : (isSidebarOpen ? "md:p-6 md:grid-cols-4" : "md:p-6 md:grid-cols-1")
             )}>
                 {/* Video Section */}
                 <div className={cn(
                     "space-y-4 shrink-0 z-10 w-full transition-all duration-300 ease-in-out",
-                    isImmersiveMode ? "md:col-span-1" : "md:col-span-3"
+                    isImmersiveMode || !isSidebarOpen ? "md:col-span-1 relative group/video" : "md:col-span-3 relative group/video"
                 )}>
                     <div
                         ref={containerRef}
@@ -2433,7 +2435,32 @@ function RoomContent() {
                                 )}
                             </div>
                         )}
+
+                        {/* Sidebar Toggle Button (When Closed) */}
+                        {!isImmersiveMode && !isLandscapeMobile && !isSidebarOpen && (
+                            <div className={cn(
+                                "absolute top-4 right-4 z-[100] transition-all duration-300",
+                                showControls ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
+                            )}>
+                                <Button
+                                    variant="secondary"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-full shadow-lg border border-white/10 bg-black/50 hover:bg-black/80 backdrop-blur-sm flex items-center justify-center transition-all hover:scale-105 cursor-pointer"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        setIsSidebarOpen(true);
+                                    }}
+                                    title={t('show_sidebar')}
+                                >
+                                    <PanelRightOpen className="h-4 w-4 text-white/90" />
+                                </Button>
+                            </div>
+                        )}
                     </div>
+
+
                 </div>
 
                 {/* Sidebar / Mobile Content Area */}
@@ -2441,33 +2468,44 @@ function RoomContent() {
                     "flex-1 flex flex-col min-h-0 overflow-hidden md:overflow-visible w-full transition-all duration-300 ease-in-out",
                     // Desktop Logic
                     "md:block md:space-y-6",
-                    (!isImmersiveMode && !isFullscreen && !isLandscapeMobile) ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
+                    (!isImmersiveMode && !isFullscreen && !isLandscapeMobile && isSidebarOpen) ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
                 )}>
                     <Card className="flex-1 flex flex-col md:h-[calc(100vh-12rem)] shadow-none md:shadow-2xl overflow-hidden bg-transparent md:glass border-0 md:border-white/5 rounded-none md:rounded-xl">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 relative">
-                            <CardHeader className="hidden md:block py-4 px-4 border-b border-white/5 bg-transparent">
-                                <TabsList className="grid w-full grid-cols-3 bg-black/30 h-10 p-1 rounded-full border border-white/10">
-                                    <TabsTrigger
-                                        value="playlist"
-                                        className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
+                            <CardHeader className="hidden md:block py-4 pl-2 pr-4 border-b border-white/5 bg-transparent">
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10"
+                                        onClick={() => setIsSidebarOpen(false)}
+                                        title={t('hide_sidebar')}
                                     >
-                                        {t('playlist')}
-                                    </TabsTrigger>
-                                    <TabsTrigger
-                                        value="chat"
-                                        className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
-                                    >
-                                        <div className="flex items-center gap-1.5">
-                                            <span>{t('chat')}</span>
-                                        </div>
-                                    </TabsTrigger>
-                                    <TabsTrigger
-                                        value="members"
-                                        className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
-                                    >
-                                        {t('members')}
-                                    </TabsTrigger>
-                                </TabsList>
+                                        <PanelRightClose className="h-5 w-5" />
+                                    </Button>
+                                    <TabsList className="grid w-full grid-cols-3 bg-black/30 h-10 p-1 rounded-full border border-white/10">
+                                        <TabsTrigger
+                                            value="playlist"
+                                            className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
+                                        >
+                                            {t('playlist')}
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="chat"
+                                            className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                <span>{t('chat')}</span>
+                                            </div>
+                                        </TabsTrigger>
+                                        <TabsTrigger
+                                            value="members"
+                                            className="rounded-full data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300 text-xs font-medium"
+                                        >
+                                            {t('members')}
+                                        </TabsTrigger>
+                                    </TabsList>
+                                </div>
                             </CardHeader>
 
                             <CardContent className="flex-1 overflow-hidden p-0 bg-transparent flex flex-col">
