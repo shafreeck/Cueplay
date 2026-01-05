@@ -220,6 +220,9 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                         fastify.log.info({ msg: 'Controller left, handoff to next', roomId: currentRoomId, nextUserId });
                     }
                     */
+
+                    // Remove member from room on disconnect
+                    await RoomManager.removeMember(currentRoomId, pUserId);
                 }
 
                 if (clients.size === 0) {

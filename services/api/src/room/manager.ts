@@ -239,4 +239,29 @@ export class RoomManager {
 
 
     }
+    static async removeMember(roomId: string, userId: string): Promise<void> {
+        const room = await this.getRoom(roomId);
+        if (!room) return;
+
+        // Remove from memory
+        room.removeMember(userId);
+
+        // Remove from DB
+        try {
+            await prisma.member.delete({
+                where: {
+                    roomId_userId: {
+                        roomId,
+                        userId
+                    }
+                }
+            });
+            console.log(`[RoomManager] Removed member ${userId} from room ${roomId}`);
+        } catch (e) {
+            console.error(`[RoomManager] Failed to remove member ${userId} from DB:`, e);
+        }
+
+        // Update cache
+        cache.set(roomId, room);
+    }
 }
