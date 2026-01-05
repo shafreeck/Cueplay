@@ -10,6 +10,7 @@ import { ArrowLeft, ShieldCheck, Lock, QrCode, Settings, Unplug, ShieldAlert } f
 import { useTranslation } from 'react-i18next';
 import { Switch } from "@/components/ui/switch";
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
+import { DriveManager } from '@/components/drive-manager';
 
 import { API_BASE } from '@/api/config';
 
@@ -18,13 +19,11 @@ export default function AdminPage() {
     const { t } = useTranslation('common');
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [cookie, setCookie] = useState('');
     const [authCode, setAuthCode] = useState('');
     const [authRequired, setAuthRequired] = useState(true);
     const [loading, setLoading] = useState(false);
-    const [showLoginDialog, setShowLoginDialog] = useState(false);
-    const [showManualInput, setShowManualInput] = useState(false);
     const [isSavingAuthRequired, setIsSavingAuthRequired] = useState(false);
+    const [driveManagerOpen, setDriveManagerOpen] = useState(false);
 
     // Initial check (could verify stored token)
     useEffect(() => {
@@ -37,17 +36,6 @@ export default function AdminPage() {
 
     const loadConfig = async (token: string) => {
         try {
-            // Load Cookie
-            const res = await fetch(`${API_BASE}/admin/config/cookie`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setCookie(data.cookie || '');
-            } else {
-                if (res.status === 401) logout();
-            }
-
             // Load Auth Code
             const resAuth = await fetch(`${API_BASE}/admin/config/auth-code`, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -55,6 +43,8 @@ export default function AdminPage() {
             if (resAuth.ok) {
                 const data = await resAuth.json();
                 setAuthCode(data.authCode || '');
+            } else {
+                if (resAuth.status === 401) logout();
             }
 
             // Load Auth Required
@@ -158,35 +148,7 @@ export default function AdminPage() {
         setPassword('');
     };
 
-    const saveConfig = async (cookieToSave?: string) => {
-        const token = localStorage.getItem('admin_token');
-        if (!token) return;
 
-        const value = cookieToSave !== undefined ? cookieToSave : cookie;
-
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_BASE}/admin/config/cookie`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ cookie: value })
-            });
-
-            if (res.ok) {
-                toast({ title: "Saved", description: "Global configuration updated." });
-                if (cookieToSave !== undefined) setCookie(cookieToSave);
-            } else {
-                throw new Error('Save failed');
-            }
-        } catch (e) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to save configuration." });
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (!isAuthenticated) {
         return (
@@ -249,64 +211,17 @@ export default function AdminPage() {
                                 <p>{t('service_credential_desc')}</p>
                             </div>
 
-                            <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`h-2 w-2 rounded-full ${cookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
-                                        <span className="text-sm font-medium text-foreground">
-                                            {cookie ? t('quark_drive_connected') : t('quark_drive_disconnected')}
-                                        </span>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        {cookie && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 text-destructive hover:bg-destructive/10"
-                                                onClick={() => saveConfig('')}
-                                                title={t('disconnect_cookie') || 'Disconnect'}
-                                            >
-                                                <Unplug className="w-4 h-4" />
-                                            </Button>
-                                        )}
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 hover:bg-white/10"
-                                            onClick={() => setShowManualInput(!showManualInput)}
-                                            title={t('manual_configuration')}
-                                        >
-                                            <Settings className="w-4 h-4 text-muted-foreground" />
-                                        </Button>
-                                    </div>
-                                </div>
-
+                            <div className="bg-muted/30 rounded-lg p-4 border border-white/5 space-y-4">
                                 <Button
-                                    variant={cookie ? "outline" : "default"}
-                                    size="sm"
                                     className="w-full gap-2"
-                                    onClick={() => setShowLoginDialog(true)}
+                                    onClick={() => setDriveManagerOpen(true)}
                                 >
-                                    <QrCode className="w-4 h-4" />
-                                    {cookie ? t('update_connection') : t('login_to_quark_drive')}
+                                    <Settings className="w-4 h-4" />
+                                    {t('manage_system_drives') || "Manage System Drives"}
                                 </Button>
-
-                                {showManualInput && (
-                                    <div className="pt-3 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200 space-y-2">
-                                        <label className="text-xs font-medium text-muted-foreground">{t('manual_cookie_string')}</label>
-                                        <Input
-                                            type="password"
-                                            value={cookie}
-                                            onChange={(e) => setCookie(e.target.value)}
-                                            onBlur={() => saveConfig()}
-                                            placeholder="Enter cookie string..."
-                                            className="font-mono text-xs h-8"
-                                        />
-                                        <p className="text-[10px] text-muted-foreground">
-                                            {t('changes_saved_automatically')}
-                                        </p>
-                                    </div>
-                                )}
+                                <p className="text-xs text-muted-foreground text-center">
+                                    {t('manage_system_drives_desc') || "Manage system-wide drives accessible to all rooms."}
+                                </p>
                             </div>
 
                             {/* System Authorization Code Section */}
@@ -358,12 +273,10 @@ export default function AdminPage() {
                 </div>
             </div>
 
-            <QuarkLoginDialog
-                open={showLoginDialog}
-                onOpenChange={setShowLoginDialog}
-                onSuccess={(newCookie) => {
-                    saveConfig(newCookie);
-                }}
+            <DriveManager
+                open={driveManagerOpen}
+                onOpenChange={setDriveManagerOpen}
+                isSystemMode={true}
             />
         </div>
     );

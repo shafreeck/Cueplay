@@ -21,9 +21,12 @@ export class QuarkProvider implements PlayableProvider {
     private static LIST_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/sort';
     private static QR_TOKEN_URL = 'https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin';
     private static QR_STATUS_URL = 'https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken';
+    private static SHARE_TOKEN_URL = 'https://drive-pc.quark.cn/1/clouddrive/share/sharepage/token?pr=ucpro&fr=pc';
+    private static SHARE_SAVE_URL = 'https://drive-pc.quark.cn/1/clouddrive/share/sharepage/save?pr=ucpro&fr=pc';
     private static CLIENT_ID = '532';
 
     async resolvePlayableSource(fileId: string, context: QuarkContext): Promise<PlayableSource> {
+
         if (!context.cookie) {
             throw new Error('QuarkProvider requires a cookie in context');
         }
@@ -217,6 +220,88 @@ export class QuarkProvider implements PlayableProvider {
         return allFiles;
     }
 
+    async saveShareLink(shareLink: string, options?: { passCode?: string; targetDirId?: string; cookie?: string }): Promise<{ success: boolean }> {
+        const cookie = options?.cookie;
+        if (!cookie) {
+            throw new Error('No cookie provided for saveShareLink');
+        }
+
+        // 1. Parse pwd_id from shareLink
+        // Format: https://pan.quark.cn/s/396d16ce617b
+        const match = shareLink.match(/\/s\/([a-zA-Z0-9]+)/);
+        if (!match) {
+            throw new Error('Invalid Quark share link format. Expected https://pan.quark.cn/s/...');
+        }
+        const pwdId = match[1];
+
+        const headers = {
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://pan.quark.cn/',
+            'Origin': 'https://pan.quark.cn',
+            'Content-Type': 'application/json'
+        };
+
+        // 2. Get Share Token (stoken)
+        const tokenBody = {
+            pwd_id: pwdId,
+            passcode: options?.passCode || ''
+        };
+
+        console.log('[Quark] Getting share token for', pwdId);
+        const tokenRes = await fetch(QuarkProvider.SHARE_TOKEN_URL, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(tokenBody)
+        });
+
+        if (!tokenRes.ok) {
+            throw new Error(`Failed to get share token: ${tokenRes.status}`);
+        }
+
+        const tokenData = await tokenRes.json() as any;
+        if (tokenData.code !== 0 && tokenData.code !== 200) {
+            throw new Error(`Quark Share Token Error: ${tokenData.message || JSON.stringify(tokenData)}`);
+        }
+
+        const stoken = tokenData.data?.stoken;
+        if (!stoken) {
+            // Some public links might not return stoken or use a different flow?
+            // Or maybe stoken is blank for public? Let's check data structure.
+            // If stoken is missing, we can try to proceed with empty stoken or throw.
+            // Usually it is required.
+            console.warn('[Quark] No stoken returned, trying to proceed without distinct stoken or check response structure:', JSON.stringify(tokenData));
+        }
+
+        // 3. Save Files
+        const saveBody = {
+            pwd_id: pwdId,
+            stoken: stoken,
+            pdir_fid: '0', // Source parent ID (usually 0 for root of share)
+            to_pdir_fid: options?.targetDirId || '0', // Target in My Drive
+            pdir_save_all: true,
+            scene: 'link'
+        };
+
+        console.log('[Quark] Saving share content...');
+        const saveRes = await fetch(QuarkProvider.SHARE_SAVE_URL, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(saveBody)
+        });
+
+        if (!saveRes.ok) {
+            throw new Error(`Failed to save share: ${saveRes.status}`);
+        }
+
+        const saveData = await saveRes.json() as any;
+        if (saveData.code !== 0 && saveData.code !== 200) {
+            throw new Error(`Quark Save Error: ${saveData.message || JSON.stringify(saveData)}`);
+        }
+
+        return { success: true };
+    }
+
     /**
      * Generate QR code for login
      * Based on captured Quark API: https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin
@@ -394,6 +479,56 @@ export class QuarkProvider implements PlayableProvider {
 
         // Other status codes are considered expired or error
         return { status: 'expired', statusCode: data.status };
+    }
+
+    /**
+     * Get account info (nickname, avatar)
+     */
+    async getAccountInfo(cookie: string): Promise<{ nickname?: string; avatar?: string; id?: string }> {
+        const url = 'https://pan.quark.cn/account/info?fr=pc&platform=pc';
+        // Headers mimicking the user's successful curl request
+        const headers = {
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0',
+            'Referer': 'https://pan.quark.cn/',
+            'Origin': 'https://pan.quark.cn',
+            'Accept': 'application/json, text/plain, */*',
+            'sec-ch-ua': '"Microsoft Edge";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"macOS"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin'
+        };
+
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers
+            });
+
+            if (!response.ok) {
+                console.warn(`[Quark] getAccountInfo HTTP ${response.status}`);
+                throw new Error(`Failed to get account info: ${response.status}`);
+            }
+
+            const data = await response.json() as any;
+            // Quark API returns code: "OK" for success, or 0/200 for other endpoints
+            if (data.code !== 0 && data.code !== 200 && data.code !== 'OK') {
+                console.warn('[Quark] Failed to get account info API error:', data);
+                return {};
+            }
+
+            const user = data.data;
+            return {
+                nickname: user.nickname,
+                avatar: user.avatar || user.avatarUri, // Some endpoints use avatarUri
+                id: user.id
+            };
+        } catch (e) {
+            console.error('[Quark] getAccountInfo exception:', e);
+            return {};
+        }
     }
 
     /**

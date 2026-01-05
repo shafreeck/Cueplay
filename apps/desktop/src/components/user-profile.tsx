@@ -14,11 +14,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from 'react-i18next';
-import { Settings, Unplug, QrCode, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, QrCode } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
 import { ApiClient } from '@/api/client';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
+import { DriveAccount } from '@/api/client'; // Import DriveAccount
 
 export function UserProfile({ userId, autoOpen = false }: { userId: string; autoOpen?: boolean }) {
     const { t } = useTranslation('common');
@@ -29,9 +30,9 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
 
     // New State for Auth
     const [authCode, setAuthCode] = useState('');
-    const [userCookie, setUserCookie] = useState('');
     const [showQuarkLogin, setShowQuarkLogin] = useState(false);
-    const [showManualInput, setShowManualInput] = useState(false);
+    const [userDrives, setUserDrives] = useState<DriveAccount[]>([]); // Track user drives locally for UI status
+
 
     // Verification State
     const [verifying, setVerifying] = useState(false);
@@ -50,12 +51,7 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
             // Load Auth Code
             setAuthCode(localStorage.getItem('cueplay_system_auth_code') || '');
 
-            // Load User Cookie from Backend
-            if (userId) {
-                ApiClient.getUserCookie(userId)
-                    .then(c => setUserCookie(c || ''))
-                    .catch(e => console.error("Failed to load user cookie", e));
-            }
+            // Legacy User Cookie loading removed
 
             // Check if global auth is required
             ApiClient.getGlobalAuthRequired()
@@ -89,14 +85,28 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
         setOpen(false);
     };
 
+    // Load User Drives on mount/open
+    useEffect(() => {
+        if (open && userId) {
+            // Fetch drives scoped to this user (no room ID)
+            ApiClient.listDrives(undefined, userId)
+                .then(setUserDrives)
+                .catch(e => console.error("Failed to load user drives", e));
+        }
+    }, [open, userId]);
+
     const handleLoginSuccess = async (cookie: string) => {
-        setUserCookie(cookie);
         if (userId) {
             try {
-                await ApiClient.saveUserCookie(userId, cookie);
-                // Also refresh cookie state visually if needed
+                // Add drive with User Scope
+                await ApiClient.addDrive(cookie, undefined, undefined, userId);
+                toast({ title: t('drive_connected') });
+                // Refresh list
+                const list = await ApiClient.listDrives(undefined, userId);
+                setUserDrives(list);
             } catch (e) {
-                console.error("Failed to save user cookie", e);
+                console.error("Failed to add user drive", e);
+                toast({ title: t('failed_add_drive'), variant: 'destructive' });
             }
         }
     };
@@ -213,110 +223,89 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
                                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">{t('authorization_settings')}</h3>
 
                                 <div className="bg-muted/20 border border-border/50 rounded-xl p-4 space-y-4">
-                                    {/* Connection Status Card */}
+
+                                    {/* Personal Drive Connection */}
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
-                                            <div className={`h-2.5 w-2.5 rounded-full ${userCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse' : 'bg-zinc-600'}`} />
+                                            <div className={`h-2.5 w-2.5 rounded-full ${userDrives.length > 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse' : 'bg-zinc-600'}`} />
                                             <div className="flex flex-col">
                                                 <span className="text-sm font-medium">
-                                                    {userCookie ? t('user_cookie_connected') : t('not_logged_in')}
+                                                    {userDrives.length > 0 ? t('user_cookie_connected') : t('not_logged_in')}
                                                 </span>
                                                 <span className="text-[10px] text-muted-foreground">
-                                                    {userCookie ? t('quark_login') : t('auth_required_desc')}
+                                                    {userDrives.length > 0 ? (userDrives[0].data?.nickname || t('quark_drive')) : t('connect_personal_drive_desc')}
                                                 </span>
                                             </div>
                                         </div>
-                                        {userCookie && (
+                                        {userDrives.length > 0 && (
                                             <Button
                                                 variant="secondary"
                                                 size="sm"
                                                 className="h-7 text-xs px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                onClick={() => handleLoginSuccess('')}
+                                                onClick={async () => {
+                                                    // Disconnect all user drives for now (simplified)
+                                                    for (const d of userDrives) {
+                                                        await ApiClient.removeDrive(d.id);
+                                                    }
+                                                    setUserDrives([]);
+                                                }}
                                             >
                                                 {t('disconnect_cookie')}
                                             </Button>
                                         )}
                                     </div>
 
-                                    {/* Connect Button */}
-                                    {!userCookie && (
+                                    {!userDrives.length && (
                                         <Button
                                             className="w-full gap-2"
                                             onClick={() => setShowQuarkLogin(true)}
+                                            disabled={!userId}
+                                            title={!userId ? "User ID missing" : ""}
                                         >
                                             <QrCode className="h-4 w-4" />
                                             {t('login_quark_scan')}
                                         </Button>
                                     )}
 
-                                    {/* Advanced Settings Toggle */}
-                                    <div className="pt-2">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setShowManualInput(!showManualInput)}
-                                            className="h-6 w-full justify-between px-0 hover:bg-transparent text-muted-foreground hover:text-foreground group"
-                                        >
-                                            <span className="text-[10px] font-medium uppercase tracking-wider group-hover:underline decoration-border/50 underline-offset-4">{t('advanced_settings')}</span>
-                                            <Settings className={`h-3 w-3 transition-transform duration-300 ${showManualInput ? 'rotate-90' : ''}`} />
-                                        </Button>
+                                    {/* System Auth Code (If required) */}
+                                    {isAuthRequired && (
+                                        <div className="space-y-1.5 pt-2 border-t border-border/30 mt-2">
 
-                                        {showManualInput && (
-                                            <div className="mt-3 space-y-4 animate-in slide-in-from-top-2 fade-in duration-200">
-                                                {/* Manual Cookie */}
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="manual-cookie" className="text-[10px] font-medium text-muted-foreground">{t('manual_cookie_input')}</Label>
-                                                    <Input
-                                                        id="manual-cookie"
-                                                        value={userCookie}
-                                                        onChange={(e) => handleLoginSuccess(e.target.value)}
-                                                        className="h-8 text-xs font-mono bg-background/50"
-                                                        placeholder={t('manual_cookie_input_placeholder')}
-                                                        type="password"
-                                                    />
+                                            <Label htmlFor="auth-code" className="text-[10px] font-medium text-muted-foreground block">{t('system_auth_code_label')}</Label>
+                                            <p className="text-[10px] text-muted-foreground/60 leading-tight">
+                                                {t('system_auth_code_desc')}
+                                            </p>
+                                            <div className="relative group/auth">
+                                                <Input
+                                                    id="auth-code"
+                                                    type="password"
+                                                    value={authCode}
+                                                    onChange={(e) => {
+                                                        setAuthCode(e.target.value);
+                                                        setAuthCodeStatus('idle');
+                                                    }}
+                                                    className="h-8 text-xs font-mono bg-background/50 mt-1.5 pr-16"
+                                                    placeholder={t('system_auth_code_placeholder')}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleVerifyAuthCode();
+                                                    }}
+                                                />
+                                                <div className="absolute right-1 top-[7px] flex items-center gap-1">
+                                                    {authCodeStatus === 'success' && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                                                    {authCodeStatus === 'error' && <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-6 text-[10px] px-1.5 hover:bg-muted"
+                                                        onClick={handleVerifyAuthCode}
+                                                        disabled={verifying || !authCode}
+                                                    >
+                                                        {verifying ? <Loader2 className="h-3 w-3 animate-spin" /> : t('verify')}
+                                                    </Button>
                                                 </div>
-
-                                                {/* System Auth Code */}
-                                                {isAuthRequired && (
-                                                    <div className="space-y-1.5 pt-2 border-t border-border/30">
-                                                        <Label htmlFor="auth-code" className="text-[10px] font-medium text-muted-foreground block">{t('system_auth_code_label')}</Label>
-                                                        <p className="text-[10px] text-muted-foreground/60 leading-tight">
-                                                            {t('system_auth_code_desc')}
-                                                        </p>
-                                                        <div className="relative group/auth">
-                                                            <Input
-                                                                id="auth-code"
-                                                                type="password"
-                                                                value={authCode}
-                                                                onChange={(e) => {
-                                                                    setAuthCode(e.target.value);
-                                                                    setAuthCodeStatus('idle');
-                                                                }}
-                                                                className="h-8 text-xs font-mono bg-background/50 mt-1.5 pr-16"
-                                                                placeholder={t('system_auth_code_placeholder')}
-                                                                onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter') handleVerifyAuthCode();
-                                                                }}
-                                                            />
-                                                            <div className="absolute right-1 top-[7px] flex items-center gap-1">
-                                                                {authCodeStatus === 'success' && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                                                                {authCodeStatus === 'error' && <XCircle className="h-3.5 w-3.5 text-destructive" />}
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    className="h-6 text-[10px] px-1.5 hover:bg-muted"
-                                                                    onClick={handleVerifyAuthCode}
-                                                                    disabled={verifying || !authCode}
-                                                                >
-                                                                    {verifying ? <Loader2 className="h-3 w-3 animate-spin" /> : t('verify')}
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -346,6 +335,7 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
                 </DialogContent>
             </Dialog>
 
+            {/* Authentication Dialog */}
             <QuarkLoginDialog
                 open={showQuarkLogin}
                 onOpenChange={setShowQuarkLogin}

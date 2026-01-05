@@ -8,6 +8,23 @@ export interface Room {
     description?: string;
 }
 
+// ... imports
+
+export interface DriveAccount {
+    id: string;
+    type: string;
+    name: string;
+    avatar?: string;
+    description?: string;
+    data?: {
+        nickname?: string;
+        cookie?: string;
+    };
+    roomId?: string;
+    userId?: string;
+    isSystem?: boolean;
+}
+
 export interface DriveFile {
     id: string;
     name: string;
@@ -16,13 +33,15 @@ export interface DriveFile {
     size?: number;
     updatedAt?: number;
     thumbnail?: string;
+    driveId?: string;
 }
 
 export class ApiClient {
-    static async listQuarkFiles(parentId: string = '0', cookie?: string, authCode?: string): Promise<DriveFile[]> {
+    static async listQuarkFiles(parentId: string = '0', cookie?: string, authCode?: string, driveId?: string): Promise<DriveFile[]> {
         const params = new URLSearchParams({ parentId });
         if (cookie) params.append('cookie', cookie);
         if (authCode) params.append('authCode', authCode);
+        if (driveId) params.append('driveId', driveId);
 
         const res = await fetch(`${API_BASE}/quark/list?${params.toString()}`);
         if (!res.ok) {
@@ -32,6 +51,62 @@ export class ApiClient {
         const data = await res.json();
         return data.list;
     }
+
+    // --- Drive Management ---
+    static async listDrives(roomId?: string, userId?: string): Promise<DriveAccount[]> {
+        const params = new URLSearchParams();
+        if (roomId) params.append('roomId', roomId);
+
+        const headers: Record<string, string> = {};
+        if (userId) headers['x-user-id'] = userId;
+
+        const res = await fetch(`${API_BASE}/drive/list?${params.toString()}`, { headers });
+        if (!res.ok) throw new Error('Failed to list drives');
+        const data = await res.json();
+        return data.accounts;
+    }
+
+    static async addDrive(cookie: string, name?: string, roomId?: string, userId?: string, isSystem?: boolean): Promise<DriveAccount> {
+        const res = await fetch(`${API_BASE}/drive/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cookie, name, roomId, userId, isSystem }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to add drive');
+        }
+        const data = await res.json();
+        return data.account;
+    }
+
+    static async removeDrive(id: string): Promise<void> {
+        const res = await fetch(`${API_BASE}/drive/remove`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+        });
+        if (!res.ok) throw new Error('Failed to remove drive');
+    }
+
+    static async renameDrive(id: string, name: string): Promise<void> {
+        const res = await fetch(`${API_BASE}/drive/rename`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, name }),
+        });
+        if (!res.ok) throw new Error('Failed to rename drive');
+    }
+
+    static async updateDrive(id: string, cookie: string): Promise<void> {
+        const res = await fetch(`${API_BASE}/drive/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, cookie }),
+        });
+        if (!res.ok) throw new Error('Failed to update drive');
+    }
+
 
     static async verifyAuthCode(authCode: string): Promise<boolean> {
         const params = new URLSearchParams({ authCode });
@@ -113,11 +188,11 @@ export class ApiClient {
         return data.lease;
     }
 
-    static async resolveVideo(fileId: string, roomId?: string, authCode?: string): Promise<any> {
+    static async resolveVideo(fileId: string, roomId?: string, authCode?: string, driveId?: string): Promise<any> {
         const res = await fetch(`${API_BASE}/playback/resolve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileId, roomId, authCode }),
+            body: JSON.stringify({ fileId, roomId, authCode, driveId }),
         });
         if (!res.ok) {
             const err = await res.json();
@@ -134,6 +209,18 @@ export class ApiClient {
             body: JSON.stringify({ cookie }),
         });
         if (!res.ok) throw new Error('Failed to save user cookie');
+    }
+
+    static async saveQuarkShare(shareLink: string, passCode?: string, targetDirId?: string): Promise<void> {
+        const res = await fetch(`${API_BASE}/quark/share/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shareLink, passCode, targetDirId }),
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Failed to save share link');
+        }
     }
 
     static async getUserCookie(userId: string): Promise<string | null> {

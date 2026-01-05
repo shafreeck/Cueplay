@@ -2,6 +2,7 @@
 export interface PlaylistItem {
     id: string;
     fileId: string;
+    driveId?: string;
     title?: string;
     type?: 'file' | 'folder';
     children?: PlaylistItem[];

@@ -40,6 +40,16 @@ export async function playbackRoutes(fastify: FastifyInstance) {
                 }
             }
 
+            // High Priority: Drive ID (Specific authorization for this resource)
+            // This overrides room/user cookies because the resource explicitly belongs to this drive.
+            if ((req.body as any).driveId) {
+                const { DriveService } = await import('../drive/drive-service');
+                const driveCookie = await DriveService.getCookieForDrive((req.body as any).driveId);
+                if (driveCookie) {
+                    cookie = driveCookie;
+                }
+            }
+
             if (!cookie) {
                 const globalAuthCode = ConfigStore.getGlobalAuthCode();
                 if (globalAuthCode && globalAuthCode !== body.authCode) {

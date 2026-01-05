@@ -141,8 +141,8 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
                                 <CheckCircle2 className="w-16 h-16 text-primary" />
                             </div>
                             <div className="text-center space-y-2">
-                                <p className="text-lg font-bold text-white">{t('scan_success_confirm') || 'Scanned Successfully'}</p>
-                                <p className="text-sm text-muted-foreground">{t('scan_success_confirm_desc') || 'Please confirm login on your phone'}</p>
+                                <p className="text-lg font-bold text-white">{t('scan_success_confirm')}</p>
+                                <p className="text-sm text-muted-foreground">{t('scan_success_confirm_desc')}</p>
                             </div>
                         </div>
                     )}

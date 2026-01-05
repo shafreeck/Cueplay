@@ -11,7 +11,8 @@ import { useToast } from "@/components/ui/use-toast";
 
 import { ModeToggle } from '@/components/mode-toggle';
 import { UserProfile } from '@/components/user-profile';
-import { Shield, Trash2, History, Home as HomeIcon, Clapperboard, Sparkles, Search, Archive, ChevronRight, Plus, ArrowRight, Copy, Check } from 'lucide-react';
+import { ResourceLibrary } from '@/components/resource-library';
+import { Shield, Trash2, History, Home as HomeIcon, Clapperboard, Sparkles, Search, Archive, ChevronRight, Plus, ArrowRight, Copy, Check, FolderSearch } from 'lucide-react';
 import { RoomHistory, VisitedRoom } from '@/utils/history';
 import {
   Dialog,
@@ -209,6 +210,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [joinId, setJoinId] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
 
   useEffect(() => {
@@ -324,6 +326,14 @@ export default function Home() {
             <h1 className="font-bold text-lg tracking-tight drop-shadow-md">{t('rooms')}</h1>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+              onClick={() => setIsLibraryOpen(true)}
+            >
+              <FolderSearch className="w-5 h-5" />
+            </Button>
             <LanguageToggle />
             <UserProfile userId={userId} />
           </div>
@@ -350,6 +360,16 @@ export default function Home() {
 
             {/* Right: Actions */}
             <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full text-white/70 hover:bg-white/10 hover:text-white mr-1"
+                onClick={() => setIsLibraryOpen(true)}
+                title={t('resource_library')}
+              >
+                <FolderSearch className="w-5 h-5" />
+              </Button>
+
               {/* Join Group - Dark Pill */}
               <div className="flex items-center bg-black/20 p-1 pl-4 rounded-full border border-white/5 backdrop-blur-sm shadow-sm ring-1 ring-white/5 transition-colors hover:bg-black/30 hover:border-white/10">
                 <Input
@@ -628,6 +648,13 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ResourceLibrary
+        open={isLibraryOpen}
+        onOpenChange={setIsLibraryOpen}
+        userId={userId || undefined}
+        key={userId || 'guest'}
+      />
     </>
   );
 }

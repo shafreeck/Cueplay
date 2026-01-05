@@ -116,6 +116,12 @@ export class SubtitleExtractor {
         if (this.isMOOVReady && this.activeTrackId !== null && this.loadedTracks.has(this.activeTrackId)) return;
 
         try {
+            // SKIP HLS: mp4box cannot parse .m3u8
+            if (this.url.includes('.m3u8') || this.url.includes('m3u8')) {
+                this.log('Skipping MKV/MP4 subtitle extraction for HLS stream');
+                return;
+            }
+
             const headRes = await fetch(this.url, { method: 'HEAD' });
             const totalSize = parseInt(headRes.headers.get('content-length') || '0');
 

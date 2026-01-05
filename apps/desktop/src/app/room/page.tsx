@@ -168,7 +168,30 @@ function RoomContent() {
 
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') {
+            let id = localStorage.getItem('cueplay_userid');
+            if (!id) {
+                id = 'user_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('cueplay_userid', id);
+            }
+            return id;
+        }
+        return null; // Server-side
+    });
+
+    // Fallback: Ensure ID is set if hydration missed it
+    useEffect(() => {
+        if (!currentUserId && typeof window !== 'undefined') {
+            let id = localStorage.getItem('cueplay_userid');
+            if (!id) {
+                id = 'user_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('cueplay_userid', id);
+            }
+            setCurrentUserId(id);
+        }
+    }, [currentUserId]);
+
     const [userCookie, setUserCookie] = useState('');
     const [globalAuthRequired, setGlobalAuthRequired] = useState(false);
 
@@ -707,15 +730,18 @@ function RoomContent() {
         }
     };
 
-    const resolveAndPlayWithoutSync = async (fid: string, itemId?: string) => {
+    const resolveAndPlayWithoutSync = async (fid: string, itemId?: string, explicitDriveId?: string) => {
         if (itemId) {
             lastResumedItemIdRef.current = null; // Prepare for resume
             setPlayingItemId(itemId);
         }
 
         try {
+            const item = itemId ? findPlaylistItem(playlist, itemId) : null;
+            const driveId = explicitDriveId || item?.driveId;
+
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
             lastVideoCookieRef.current = cookie;
             addLog(`[ResolveSync] Source: ${JSON.stringify(source, null, 2)}`);
             setRawUrl(source.url);
@@ -764,8 +790,11 @@ function RoomContent() {
     // Helper: Resolve metadata effectively in background without changing videoSrc
     const resolveAndPlayMetadataOnly = async (fid: string, itemId?: string) => {
         try {
+            const item = itemId ? findPlaylistItem(playlist, itemId) : null;
+            const driveId = item?.driveId;
+
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
 
             // Update metadata UI states
             setRawUrl(source.url);
@@ -829,7 +858,7 @@ function RoomContent() {
         try {
             console.log(`[Preload] Resolving next: ${nextItem.title || nextItem.fileId}, ID: ${fid}, Room: ${roomId}`);
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId);
             let nextUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
@@ -850,7 +879,7 @@ function RoomContent() {
         }
     }, [roomId, enablePreload, getAllItems]);
 
-    const resolveAndPlay = async (targetFileId: string, itemId?: string) => {
+    const resolveAndPlay = async (targetFileId: string, itemId?: string, explicitDriveId?: string) => {
         // Permission Check: Viewers in Sync Mode cannot change video
         if (!canControl && isSynced) {
             toast({
@@ -930,8 +959,12 @@ function RoomContent() {
 
         addLog(`Resolving video ${fid}...`);
         try {
+            // Find item to get driveId
+            const item = findPlaylistItem(playlist, itemId || '');
+            const driveId = explicitDriveId || item?.driveId;
+
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
             lastVideoCookieRef.current = cookie;
             addLog(`[Resolve] Source: ${JSON.stringify(source, null, 2)}`);
             console.log("Resolve result (Full):", { source, cookieLen: cookie?.length });
@@ -960,7 +993,8 @@ function RoomContent() {
                         url: source.url,
                         provider: 'quark',
                         meta: source.meta,
-                        playingItemId: itemId || null
+                        playingItemId: itemId || null,
+                        driveId: driveId
                     }
                 }));
             }
@@ -1134,10 +1168,10 @@ function RoomContent() {
         setIsResolving(true);
         try {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode);
+            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId);
             const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
 
-            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file' };
+            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file', driveId: file.driveId };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -1157,7 +1191,8 @@ function RoomContent() {
 
             // Auto play if empty
             if (playlist.length === 0) {
-                resolveAndPlay(file.id, newItem.id);
+                // Pass driveId explicitly because playlist state might not be updated yet
+                resolveAndPlay(file.id, newItem.id, file.driveId);
             }
 
         } catch (e: any) {
@@ -1194,7 +1229,8 @@ function RoomContent() {
             id: Math.random().toString(36).slice(2),
             fileId: f.id,
             title: f.name,
-            type: 'file'
+            type: 'file',
+            driveId: f.driveId
         }));
 
         const newItem: PlaylistItem = {
@@ -1408,24 +1444,31 @@ function RoomContent() {
                     // So we must resolve on every MEDIA_CHANGE if we want to use Global Cookie.
 
                     // Trigger resolution for self
-                    resolveAndPlayWithoutSync(remoteFileId, remotePlayingItemId);
+                    // @ts-ignore - payload might not have driveId in old clients, but we handle undefined
+                    resolveAndPlayWithoutSync(remoteFileId, remotePlayingItemId, data.payload.driveId);
                 }
                 setCurrentSubtitle('');
 
                 // Sync playlist metadata if needed (but don't set placeholder)
+                // Sync playlist metadata if needed (but don't set placeholder)
                 if (remoteFileId) {
                     const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-                    ApiClient.resolveVideo(remoteFileId, roomId || '', authCode).then(({ source }) => {
+
+                    // Try to find driveId if possible (might be empty if playlist not synced yet)
+                    const item = playlistRef.current.find(i => i.fileId === remoteFileId || i.id === playingItemId);
+                    const driveId = item?.driveId;
+
+                    ApiClient.resolveVideo(remoteFileId, roomId || '', authCode, driveId).then(({ source }) => {
                         setPlaylist(prev => prev.map(item =>
                             item.fileId === remoteFileId && item.title === 'Current Video'
                                 ? { ...item, title: source.meta?.file_name || source.meta?.title || remoteFileId }
                                 : item
                         ));
                     }).catch((e) => {
-                        if (e.message.includes('No authorization cookie')) {
-                            // Silent fail for background sync, or toast?
-                            // Maybe toast once?
-                            console.warn("Background sync auth failed");
+                        // Suppress ALL auth errors for background sync (metadata only)
+                        // We do not want to prompt login just because we synced a state from another user/drive
+                        if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
+                            console.warn("Background sync auth failed (suppressed)");
                         }
                     });
                 }
@@ -1960,6 +2003,18 @@ function RoomContent() {
                         </Button>
                         <div className="h-4 w-px bg-white/10 mx-1 md:mx-2" />
 
+                        {/* Resource Library Trigger */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsLibraryOpen(true)}
+                            className="flex h-8 w-8 text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10"
+                            title={t('resource_library')}
+                        >
+                            <FolderSearch className="w-5 h-5" />
+                        </Button>
+                        <div className="h-4 w-px bg-white/10 mx-1 md:mx-2" />
+
                         {isLandscapeMobile ? (
                             <Button
                                 variant="ghost"
@@ -2058,76 +2113,9 @@ function RoomContent() {
                                                     />
                                                 </div>
 
-                                                {/* Cloud Storage Settings (Owner Only) */}
-                                                {isOwner && (
-                                                    <div className="pt-2 mt-2 border-t space-y-3">
-                                                        <Label className="text-[10px] font-bold text-primary uppercase tracking-wider">{t('cloud_storage')}</Label>
 
-                                                        <div className="bg-muted/30 rounded-lg p-3 border border-white/5 space-y-3">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className={`h-2 w-2 rounded-full ${roomCookie || userCookie ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? 'bg-red-500' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]') : 'bg-red-500')}`} />
-                                                                    <span className="text-xs font-medium text-foreground">
-                                                                        {roomCookie ? t('quark_drive_connected') : (userCookie ? t('user_cookie_connected') : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? t('quark_drive_disconnected') : t('using_global_connection')) : t('quark_drive_disconnected')))}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="flex gap-1">
-                                                                    {roomCookie && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-5 w-5 text-destructive hover:bg-destructive/10"
-                                                                            title={t('disconnect_cookie')}
-                                                                            onClick={() => updateRoomCookie('')}
-                                                                        >
-                                                                            <Unplug className="h-3 w-3" />
-                                                                        </Button>
-                                                                    )}
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-5 w-5 hover:bg-white/10"
-                                                                        title={t('manual_cookie_input')}
-                                                                        onClick={() => setShowManualInput(!showManualInput)}
-                                                                    >
-                                                                        <Settings className="h-3 w-3 text-muted-foreground" />
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
 
-                                                            <Button
-                                                                variant={roomCookie || userCookie ? "outline" : "default"}
-                                                                size="sm"
-                                                                className="w-full h-8 text-xs gap-2"
-                                                                onClick={() => setShowQuarkLogin(true)}
-                                                            >
-                                                                <QrCode className="h-3.5 w-3.5" />
-                                                                {roomCookie || userCookie ? t('reconnect_login') : t('login_quark_scan')}
-                                                            </Button>
-
-                                                            {showManualInput && (
-                                                                <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
-                                                                    <Label htmlFor="roomCookie" className="text-[10px] text-muted-foreground mb-1.5 block">{t('manual_cookie_input')}</Label>
-                                                                    <Input
-                                                                        id="roomCookie"
-                                                                        value={roomCookie}
-                                                                        onChange={(e) => updateRoomCookie(e.target.value)}
-                                                                        className="h-7 text-xs font-mono bg-muted/20"
-                                                                        placeholder="Paste cookie string..."
-                                                                        type="password"
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {!isOwner && (
-                                                    <div className="text-[10px] text-muted-foreground text-center pt-2">
-                                                        {t('only_owner_settings')}
-                                                    </div>
-                                                )}
                                             </div>
-
                                             <Dialog>
                                                 <DialogTrigger asChild>
                                                     <Button variant="outline" size="sm" className="w-full mt-2">{t('view_debug_logs')}</Button>
@@ -2218,6 +2206,15 @@ function RoomContent() {
                                         }}
                                     >
                                         {canControl ? <Cast className="h-5 w-5" /> : (isLocked ? <Lock className="h-5 w-5" /> : <Eye className="h-5 w-5" />)}
+                                    </div>
+
+                                    {/* Resource Library Trigger */}
+                                    <div
+                                        className="flex items-center justify-center h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/70 hover:text-primary hover:border-primary/50 hover:shadow-[0_0_10px_rgba(124,58,237,0.3)] transition-all cursor-pointer"
+                                        onClick={() => setIsLibraryOpen(true)}
+                                        title={t('resource_library')}
+                                    >
+                                        <FolderSearch className="h-5 w-5" />
                                     </div>
 
                                     {/* Settings / Menu */}
@@ -2562,15 +2559,6 @@ function RoomContent() {
                             <CardContent className="flex-1 overflow-hidden p-0 bg-transparent flex flex-col">
                                 <TabsContent value="playlist" className="flex-1 data-[state=active]:flex data-[state=active]:flex-col min-h-0 m-0">
                                     <div className="p-3 border-b bg-muted/30 flex gap-2 shrink-0">
-                                        <Button
-                                            onClick={() => setIsLibraryOpen(true)}
-                                            size="icon"
-                                            variant="outline"
-                                            className="h-8 w-8 shrink-0 border-dashed border-muted-foreground/50 hover:border-primary/50"
-                                            title={t('resource_library')}
-                                        >
-                                            <FolderSearch className="h-4 w-4" />
-                                        </Button>
                                         <Input
                                             placeholder={t('quark_url_or_id')}
                                             value={inputValue}
@@ -2737,6 +2725,9 @@ function RoomContent() {
                     cookie={roomCookie || userCookie || undefined}
                     onAdd={handleAddFileFromLibrary}
                     onAddSeries={handleAddSeriesFromLibrary}
+                    roomId={roomId || undefined}
+                    userId={currentUserId || undefined}
+                    key={currentUserId || 'guest'}
                 />
 
                 <QuarkLoginDialog
@@ -2782,15 +2773,6 @@ function RoomContent() {
                             {activeTab === 'playlist' && (
                                 <div className="flex flex-col h-full">
                                     <div className="p-3 border-b border-white/5 flex gap-2">
-                                        <Button
-                                            onClick={() => setIsLibraryOpen(true)}
-                                            size="icon"
-                                            variant="outline"
-                                            className="h-8 w-8 shrink-0 border-dashed border-white/10 hover:border-primary/50"
-                                            title={t('resource_library')}
-                                        >
-                                            <FolderSearch className="h-4 w-4" />
-                                        </Button>
                                         <Input
                                             placeholder={t('quark_url_or_id')}
                                             value={inputValue}
