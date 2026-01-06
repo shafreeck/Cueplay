@@ -65,6 +65,7 @@ export interface PlayerStateEvent extends BaseEvent {
         time: number;
         playbackRate: number;
         sentAt?: number; // Added for latency compensation
+        playingItemId?: string;
     };
 }
 

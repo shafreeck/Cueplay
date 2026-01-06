@@ -1358,7 +1358,8 @@ function RoomContent() {
                 state: video.paused ? 'paused' : 'playing',
                 time: video.currentTime,
                 playbackRate: video.playbackRate,
-                sentAt: Date.now()
+                sentAt: Date.now(),
+                playingItemId: playingItemIdRef.current || undefined
             }
         }));
     }, [currentUserId, t, toast]);
@@ -1536,7 +1537,19 @@ function RoomContent() {
                 const amIController = !controllerIdRef.current || controllerIdRef.current === userId;
                 if (!amIController && !isSyncedRef.current) return;
 
-                const { state, time, playbackRate, sentAt } = data.payload;
+                const { state, time, playbackRate, sentAt, playingItemId: newPlayingItemId } = data.payload;
+
+                // 0. Auto-Switch Video (Priority)
+                // If the controller is on a different video, we MUST switch immediately.
+                if (newPlayingItemId && playingItemId && newPlayingItemId !== playingItemId) {
+                    addLog(`[Sync] Switching video to match controller: ${newPlayingItemId}`);
+                    // Only switch if we are NOT the controller
+                    if (!amIController) {
+                        resolveAndPlayWithoutSync(roomId || '', newPlayingItemId);
+                        // Abort state sync this turn to avoid fighting with the new video load
+                        return;
+                    }
+                }
 
                 // Update local playlist progress based on controller's authoritative time
                 // This keeps the progress bar in the playlist UI smooth for everyone
@@ -1639,6 +1652,17 @@ function RoomContent() {
 
                 // Update playlist progress if this is the controller (providing authoritative progress)
                 if (memberPlayingItemId && userId === controllerIdRef.current) {
+                    // Check for video mismatch and switch if needed (Backup for PLAYER_STATE)
+                    if (playingItemId && memberPlayingItemId !== playingItemId) {
+                        // Double check: assume PLAYER_STATE is primary, but if we missed it or it failed, this covers it.
+                        // Debounce slightly to avoid race with PLAYER_STATE
+                        if (!isRemoteUpdate.current && !isLoadingSource.current) {
+                            addLog(`[Sync] (Backup) Switching video to ${memberPlayingItemId}`);
+                            resolveAndPlayWithoutSync(roomId || '', memberPlayingItemId);
+                            return;
+                        }
+                    }
+
                     setPlaylist(prev => {
                         let updated = false;
                         const update = (list: any[]): any[] => {
@@ -1758,6 +1782,7 @@ function RoomContent() {
                         payload: {
                             state: video.paused ? 'paused' : 'playing',
                             time: video.currentTime,
+                            playingItemId: currentPlayingId || undefined,
                             playbackRate: video.playbackRate,
                             sentAt: now
                         }
