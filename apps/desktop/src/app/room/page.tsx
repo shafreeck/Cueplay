@@ -896,6 +896,7 @@ function RoomContent() {
         if (urlMatch) fid = urlMatch[1];
 
         setFileId(fid); // Sync internal state
+        retryCount.current = 0; // Reset retry counter for new video
         lastResumedItemIdRef.current = null; // Prepare for resume
         setPlayingItemId(itemId || null); // Track playlist item
         // setVideoSrc(''); // REMOVED: Do not clear source to allow seamless transition
@@ -2318,6 +2319,10 @@ function RoomContent() {
                                 }}
                                 onCanPlay={() => {
                                     addLog(`[Video Event] CanPlay`);
+
+                                    // Reset retry counter on success
+                                    retryCount.current = 0;
+
                                     if (videoRef.current) {
                                         // Restore Rate
                                         if (Math.abs(videoRef.current.playbackRate - playbackRate) > 0.01) {
