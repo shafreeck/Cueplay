@@ -11,15 +11,13 @@ import Image from "next/image";
 export default function Home() {
   const { t, locale, setLocale } = useI18n();
   const version = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.2.0";
+  const baseUrl = `https://github.com/shafreeck/Cueplay/releases/download/v${version}`;
   const [os, setOs] = useState<"mac" | "windows" | "android" | "other">("other");
   const [currentIdx, setCurrentIdx] = useState(0);
-
-  const releaseVersion = "0.2.0";
-  const baseUrl = `https://github.com/shafreeck/Cueplay/releases/download/v${releaseVersion}`;
   const downloadUrls = {
-    mac: `${baseUrl}/Cueplay_${releaseVersion}_aarch64.dmg`, // Assuming ARM64 is default for Mac
-    windows: `${baseUrl}/Cueplay_${releaseVersion}_x64_zh-CN.msi`,
-    android: `${baseUrl}/app-release.apk`,
+    mac: `${baseUrl}/Cueplay_${version}_aarch64.dmg`, // Assuming ARM64 is default for Mac
+    windows: `${baseUrl}/Cueplay_${version}_x64_zh-CN.msi`,
+    android: `${baseUrl}/Cueplay-universal-release-signed.apk`,
   };
 
   useEffect(() => {
