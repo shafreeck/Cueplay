@@ -528,10 +528,6 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                     if (!open) loadDrives(); // Refresh drives on close
                 }}
                 onSelect={handleDriveSelect}
-                initialShowAuthCode={authCodeRequired} // Pass this down? Or just handle locally?
-            // DriveManager doesn't expose just the auth dialog easily.
-            // Let's create a dedicated simplified AuthCodeDialog or rely on DriveManager to show it.
-            // DriveManager has logic to set localStorage.
             />
 
             {/* Simple Auth Code Prompt if accessed directly */}
@@ -547,7 +543,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                     <AuthCodeForm
                         onSuccess={() => {
                             setAuthCodeRequired(false);
-                            loadFiles(); // Retry loading
+                            loadFiles(currentFolder.id); // Retry loading
                         }}
                         onCancel={() => setAuthCodeRequired(false)}
                     />

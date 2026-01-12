@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import "@fontsource/inter/300.css";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
 import { I18nProvider } from "@/components/i18n-provider";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Cueplay Desktop",
@@ -29,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
+      <body className={cn("min-h-screen bg-background font-sans antialiased")}>
         <div data-tauri-drag-region className="fixed left-0 top-0 h-8 w-full z-50 bg-transparent" />
 
         <script
