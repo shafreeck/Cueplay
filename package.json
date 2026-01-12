@@ -10,7 +10,8 @@
   },
   "pnpm": {
     "patchedDependencies": {},
-    "injectWorkspacePackages": true
+    "injectWorkspacePackages": true,
+    "forceLegacyDeploy": true
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
