@@ -24,9 +24,11 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
 
     // Use ref for onSuccess to avoid resetting poll interval on parent re-renders
     const onSuccessRef = useRef(onSuccess);
+    const onOpenChangeRef = useRef(onOpenChange);
     useEffect(() => {
         onSuccessRef.current = onSuccess;
-    }, [onSuccess]);
+        onOpenChangeRef.current = onOpenChange;
+    }, [onSuccess, onOpenChange]);
 
 
     // Auto-generate QR code when dialog opens
@@ -52,7 +54,7 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
                     // Notify parent and close dialog after a short delay
                     setTimeout(() => {
                         onSuccessRef.current?.(data.cookie);
-                        onOpenChange(false);
+                        onOpenChangeRef.current(false);
                         resetState();
                     }, 1500);
                 } else if (data.status === 'scanned') {
@@ -68,7 +70,7 @@ export function QuarkLoginDialog({ open, onOpenChange, onSuccess }: QuarkLoginDi
         }, 2000); // Poll every 2 seconds
 
         return () => clearInterval(pollInterval);
-    }, [sessionId, loginStatus, onOpenChange]);
+    }, [sessionId, loginStatus]);
 
     const resetState = () => {
         setQrcodeUrl('');

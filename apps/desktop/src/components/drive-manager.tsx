@@ -3,9 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DriveAccount, ApiClient } from '@/api/client';
-import { Trash2, Plus, HardDrive, User, RefreshCw, Unplug, QrCode, Keyboard, Edit2 } from 'lucide-react';
+import { Trash2, Plus, HardDrive, User, RefreshCw, Unplug, QrCode, Keyboard, Edit2, Users, Lock } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useTranslation } from 'react-i18next';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { QuarkLoginDialog } from './quark-login-dialog';
 import { ManualCookieDialog } from './manual-cookie-dialog';
 import {
@@ -36,8 +39,8 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
     const [driveToRename, setDriveToRename] = useState<string | null>(null);
     const [newName, setNewName] = useState('');
 
-    const loadDrives = async () => {
-        setLoading(true);
+    const loadDrives = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const list = await ApiClient.listDrives(roomId, userId);
             setDrives(list);
@@ -49,7 +52,7 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                 description: e.message
             });
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -65,17 +68,52 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                 await ApiClient.updateDrive(driveToUpdate, cookie);
                 toast({ title: t('drive_updated') });
             } else {
-                await ApiClient.addDrive(cookie, undefined, roomId, userId, isSystemMode);
+                // Default isShared to false (Private)
+                await ApiClient.addDrive(cookie, undefined, roomId, userId, isSystemMode, false);
                 toast({ title: t('drive_added') });
             }
             setShowLogin(false);
             setShowManualLogin(false);
             setDriveToUpdate(null);
             loadDrives();
+            setDriveToUpdate(null);
+            loadDrives(true);
         } catch (e: any) {
+            const errorKey = e.message === 'Cookie required' ? 'error_cookie_required' :
+                (e.message === 'ID required' ? 'error_id_required' : 'unknown_error');
+
+            const errorMessage = t(errorKey) !== errorKey ? t(errorKey) : e.message;
+
             toast({
                 variant: 'destructive',
                 title: driveToUpdate ? t('failed_update_drive') : t('failed_add_drive'),
+                description: errorMessage
+            });
+        }
+    };
+
+    const handleToggleShare = async (drive: DriveAccount, checked: boolean) => {
+        try {
+            // Optimistic update
+            setDrives(prev => prev.map(d =>
+                d.id === drive.id ? { ...d, isShared: checked } : d
+            ));
+
+            // We pass undefined for cookie to only update isShared
+            await ApiClient.updateDrive(drive.id, undefined as any, checked);
+            toast({ title: checked ? t('drive_shared') : t('drive_private') });
+
+            // Reload silently to confirm
+            loadDrives(true);
+        } catch (e: any) {
+            // Revert on failure
+            setDrives(prev => prev.map(d =>
+                d.id === drive.id ? { ...d, isShared: !checked } : d
+            ));
+
+            toast({
+                variant: 'destructive',
+                title: t('failed_update_drive'),
                 description: e.message
             });
         }
@@ -195,14 +233,46 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                                                     {drive.name === 'Quark Drive' ? t('quark_drive') : drive.name}
                                                 </span>
                                                 <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground truncate">
-                                                    {drive.data?.nickname && <span className="max-w-[80px] truncate">{drive.data.nickname}</span>}
                                                     {drive.data?.nickname && <span>•</span>}
                                                     <span>{t('drive_connected')}</span>
+                                                    {(drive.roomId && !drive.isSystem) && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className={drive.isShared ? "text-green-400" : "text-zinc-500"}>
+                                                                {drive.isShared ? t('shared') : t('private')}
+                                                            </span>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-0.5 shrink-0">
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {/* Share Toggle (Only for non-system room drives) */}
+                                            {(drive.roomId && !drive.isSystem) && (
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div className="flex items-center gap-2 mr-2" onClick={(e) => e.stopPropagation()}>
+                                                                <Switch
+                                                                    checked={!!drive.isShared}
+                                                                    onCheckedChange={(checked) => handleToggleShare(drive, checked)}
+                                                                    className="scale-75 data-[state=checked]:bg-green-500"
+                                                                />
+                                                                {drive.isShared ? (
+                                                                    <Users className="h-3.5 w-3.5 text-green-400 opacity-70" />
+                                                                ) : (
+                                                                    <Lock className="h-3.5 w-3.5 text-muted-foreground opacity-50" />
+                                                                )}
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>{drive.isShared ? t('shared_with_room') : t('private_to_you')}</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            )}
+
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

@@ -232,6 +232,22 @@
         "folder_selected": "Selected Folder {{name}}",
         "scan_success_confirm": "Scanned Successfully",
         "scan_success_confirm_desc": "Please confirm login on your phone",
-        "add_link": "Add Link"
+        "add_link": "Add Link",
+        "drive_connected": "Connected",
+        "disconnect": "Disconnect",
+        "quark_drive": "Quark Drive",
+        "rename": "Rename",
+        "rename_drive": "Rename Drive",
+        "connect_personal_drive_desc": "Connect personal drive to share across rooms",
+        "private_to_you": "Private to you",
+        "shared_with_room": "Shared with room",
+        "shared": "Shared",
+        "private": "Private",
+        "drive_shared": "Drive is now shared",
+        "drive_private": "Drive is now private",
+        "drive_name": "Drive Name",
+        "enter_new_name_for_drive": "Enter a new name for your drive",
+        "error_cookie_required": "Cookie is required",
+        "error_id_required": "ID is required"
     }
 }

@@ -23,6 +23,7 @@ export interface DriveAccount {
     roomId?: string;
     userId?: string;
     isSystem?: boolean;
+    isShared?: boolean;
 }
 
 export interface DriveFile {
@@ -46,6 +47,10 @@ export class ApiClient {
         const res = await fetch(`${API_BASE}/quark/list?${params.toString()}`);
         if (!res.ok) {
             const err = await res.json();
+            if (err.error === 'No cookie provided and no global cookie set') {
+                console.warn(err.error);
+                return [];
+            }
             throw new Error(err.error || 'Failed to list files');
         }
         const data = await res.json();
@@ -66,11 +71,11 @@ export class ApiClient {
         return data.accounts;
     }
 
-    static async addDrive(cookie: string, name?: string, roomId?: string, userId?: string, isSystem?: boolean): Promise<DriveAccount> {
+    static async addDrive(cookie: string, name?: string, roomId?: string, userId?: string, isSystem?: boolean, isShared?: boolean): Promise<DriveAccount> {
         const res = await fetch(`${API_BASE}/drive/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cookie, name, roomId, userId, isSystem }),
+            body: JSON.stringify({ cookie, name, roomId, userId, isSystem, isShared }),
         });
         if (!res.ok) {
             const err = await res.json();
@@ -98,11 +103,11 @@ export class ApiClient {
         if (!res.ok) throw new Error('Failed to rename drive');
     }
 
-    static async updateDrive(id: string, cookie: string): Promise<void> {
+    static async updateDrive(id: string, cookie?: string, isShared?: boolean): Promise<void> {
         const res = await fetch(`${API_BASE}/drive/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, cookie }),
+            body: JSON.stringify({ id, cookie, isShared }),
         });
         if (!res.ok) throw new Error('Failed to update drive');
     }

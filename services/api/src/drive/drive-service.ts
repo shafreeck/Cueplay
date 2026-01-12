@@ -15,6 +15,7 @@ export interface DriveAccount {
     roomId?: string;
     userId?: string;
     isSystem?: boolean;
+    isShared?: boolean; // If true, visible to everyone in the room. If false, only visible to creator (userId).
     createdAt: number;
 }
 
@@ -69,9 +70,15 @@ export class DriveService {
             accounts = accounts.concat(userDrives);
         }
 
-        // 3. Room Drives (Specific to this room)
+        // 3. Room Drives (Shared drives in this room OR private drives in this room owned by this user)
+        // If a drive is in a room, but isShared=false, it should only be seen if userId matches.
+        // However, "User Drives" logic (step 2) already adds ALL drives belonging to userId.
+        // So here we only need to add drives that are SHARED and NOT already added (i.e. owned by others).
         if (filter.roomId) {
-            const roomDrives = this.accounts.filter(a => a.roomId === filter.roomId);
+            const roomDrives = this.accounts.filter(a =>
+                a.roomId === filter.roomId &&
+                (a.isShared || (filter.userId && a.userId === filter.userId))
+            );
             accounts = accounts.concat(roomDrives);
         }
 
@@ -108,7 +115,8 @@ export class DriveService {
             a.data.cookie === account.data.cookie &&
             a.userId === account.userId &&
             a.roomId === account.roomId &&
-            !!a.isSystem === !!account.isSystem
+            !!a.isSystem === !!account.isSystem &&
+            !!a.isShared === !!account.isShared
         );
 
         if (existingIndex >= 0) {
@@ -142,7 +150,7 @@ export class DriveService {
         await this.save();
     }
 
-    static async updateAccount(id: string, data: { cookie: string; nickname?: string; avatar?: string }): Promise<DriveAccount> {
+    static async updateAccount(id: string, data: { cookie?: string; nickname?: string; avatar?: string; isShared?: boolean }): Promise<DriveAccount> {
         await this.ensureLoaded();
         const index = this.accounts.findIndex(a => a.id === id);
         if (index === -1) {
@@ -153,9 +161,10 @@ export class DriveService {
         const updated: DriveAccount = {
             ...existing,
             avatar: data.avatar || existing.avatar,
+            isShared: data.isShared !== undefined ? data.isShared : existing.isShared,
             data: {
                 ...existing.data,
-                cookie: data.cookie,
+                cookie: data.cookie || existing.data.cookie,
                 nickname: data.nickname || existing.data.nickname
             }
         };

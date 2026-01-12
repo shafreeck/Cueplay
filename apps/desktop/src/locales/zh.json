@@ -239,17 +239,15 @@
         "rename": "重命名",
         "rename_drive": "重命名云盘",
         "connect_personal_drive_desc": "连接个人网盘，可在所有房间共享",
-        "system_auth_code_label": "系统授权码",
-        "system_auth_code_desc": "如需访问系统资源，请输入管理员提供的授权码",
-        "system_auth_code_placeholder": "输入授权码",
-        "verify": "验证",
-        "auth_code_valid": "验证成功",
-        "identity_settings": "身份设置",
-        "display_name_label": "显示名称",
-        "display_name_placeholder": "您的昵称",
-        "user_id_label": "用户 ID",
-        "authorization_settings": "授权设置",
-        "not_logged_in": "未登录",
-        "disconnect_cookie": "断开连接"
+        "private_to_you": "仅自己可见",
+        "shared_with_room": "已共享给房间成员",
+        "shared": "已共享",
+        "private": "私有",
+        "drive_shared": "云盘已共享",
+        "drive_private": "云盘已设为私有",
+        "drive_name": "云盘名称",
+        "enter_new_name_for_drive": "输入新的云盘名称",
+        "error_cookie_required": "需要 Cookie",
+        "error_id_required": "缺少 ID"
     }
 }

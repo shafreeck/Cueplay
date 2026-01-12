@@ -85,16 +85,21 @@ export async function quarkRoutes(fastify: FastifyInstance) {
     fastify.get('/quark/login/status/:sessionId', async (req, reply) => {
         const { sessionId } = req.params as { sessionId: string };
 
+        // Debug Log
+        console.log(`[API] Checking status for session: ${sessionId}`);
+
         const session = loginSessionManager.getSession(sessionId);
         if (!session) {
+            console.log(`[API] Session not found: ${sessionId}`);
             return reply.code(404).send({ error: 'Session not found or expired' });
         }
 
-        // If already successful, return the status
-        if (session.status === 'success') {
+        // Return immediately if success or expired
+        if (session.status === 'success' || session.status === 'expired') {
+            console.log(`[API] Session ${sessionId} status: ${session.status}`);
             return {
-                status: 'success',
-                cookie: session.cookie,
+                status: session.status,
+                cookie: session.cookie
             };
         }
 
@@ -103,19 +108,24 @@ export async function quarkRoutes(fastify: FastifyInstance) {
             const provider = new QuarkProvider();
             // Use initial cookies captured during QR code generation
             const result = await provider.checkQRCodeStatus(session.token, session.initialCookies);
+            console.log(`[API] Quark Provider Status for ${sessionId}: ${result.status} (Code: ${result.statusCode})`);
 
             if (result.status === 'success' && result.cookie) {
-                // Update session
                 loginSessionManager.updateSessionSuccess(sessionId, result.cookie);
-
                 return {
                     status: 'success',
                     cookie: result.cookie,
+                    statusCode: result.statusCode
                 };
+            } else if (result.status === 'expired') {
+                // If Quark says expired, mark as expired
+                // But if Quark says "scanned" (50004002) or "pending" (50004001), we just return it
+                // Note: QuarkProvider returns 'expired' for unknown error codes too.
             }
 
             return { status: result.status, statusCode: result.statusCode };
         } catch (e: any) {
+            console.error(`[API] Error checking quark status: ${e.message}`);
             return reply.code(500).send({ error: e.message });
         }
     });
@@ -186,14 +196,18 @@ export async function quarkRoutes(fastify: FastifyInstance) {
             description: a.description,
             data: {
                 nickname: a.data.nickname
-            }
+            },
+            isShared: a.isShared,
+            roomId: a.roomId,
+            userId: a.userId,
+            isSystem: a.isSystem,
         }));
         return { accounts: safeAccounts };
     });
 
     // Add a new drive (save from successful login)
     fastify.post('/drive/add', async (req, reply) => {
-        const body = req.body as { cookie: string; name?: string; roomId?: string; userId?: string; isSystem?: boolean };
+        const body = req.body as { cookie: string; name?: string; roomId?: string; userId?: string; isSystem?: boolean; isShared?: boolean };
         if (!body.cookie) return reply.code(400).send({ error: 'Cookie required' });
 
         try {
@@ -220,6 +234,7 @@ export async function quarkRoutes(fastify: FastifyInstance) {
                 roomId: body.roomId || undefined,
                 userId: body.userId || undefined,
                 isSystem: body.isSystem,
+                isShared: body.isShared,
                 data: {
                     cookie: body.cookie,
                     nickname: info.nickname
@@ -256,21 +271,27 @@ export async function quarkRoutes(fastify: FastifyInstance) {
 
     // Update a drive (re-auth)
     // Update a drive (re-auth)
+    // Update a drive (re-auth or metadata update)
     fastify.post('/drive/update', async (req, reply) => {
-        const body = req.body as { id: string; cookie: string };
-        if (!body.id || !body.cookie) return reply.code(400).send({ error: 'ID and Cookie required' });
+        const body = req.body as { id: string; cookie?: string; isShared?: boolean };
+        if (!body.id) return reply.code(400).send({ error: 'ID required' });
 
         try {
-            // Fetch user info
-            const provider = new QuarkProvider();
-            const info = await provider.getAccountInfo(body.cookie);
+            // Fetch user info ONLY if cookie is provided
+            let updateData: any = {
+                isShared: body.isShared
+            };
 
-            // Update with new cookie AND nickname/avatar
-            await DriveService.updateAccount(body.id, {
-                cookie: body.cookie,
-                nickname: info.nickname,
-                avatar: info.avatar
-            });
+            if (body.cookie) {
+                const provider = new QuarkProvider();
+                const info = await provider.getAccountInfo(body.cookie);
+                updateData.cookie = body.cookie;
+                updateData.nickname = info.nickname;
+                updateData.avatar = info.avatar;
+            }
+
+            // Update with new data
+            await DriveService.updateAccount(body.id, updateData);
             return { success: true };
         } catch (e: any) {
             return reply.code(500).send({ error: e.message });
