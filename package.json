@@ -8,6 +8,10 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"
   },
+  "pnpm": {
+    "patchedDependencies": {},
+    "injectWorkspacePackages": true
+  },
   "devDependencies": {
     "@types/ws": "^8.18.1",
     "eslint": "^8.0.0",
