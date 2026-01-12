@@ -273,7 +273,7 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                                             {/* Avatar or Default Icon */}
                                             <div className="h-8 w-8 rounded-full overflow-hidden bg-secondary/50 flex items-center justify-center shrink-0 border border-border/50">
                                                 {drive.avatar ? (
-                                                    <img src={drive.avatar} alt="Avatar" className="h-full w-full object-cover" />
+                                                    <img src={drive.avatar} alt="Avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                                                 ) : (
                                                     <User className="h-4 w-4 text-muted-foreground" />
                                                 )}
