@@ -5,10 +5,15 @@ import { loginSessionManager } from './login-session';
 import { DriveService } from '../drive/drive-service';
 
 export async function quarkRoutes(fastify: FastifyInstance) {
-    // Proxy for drive avatars to bypass Referer/CORS issues
+    // Proxy for drive avatars to bypass Referer/CORS and protocol-relative issue
     fastify.get('/drive/avatar/proxy', async (req, reply) => {
-        const { url } = req.query as { url: string };
+        let { url } = req.query as { url: string };
         if (!url) return reply.code(400).send({ error: 'URL required' });
+
+        // Handle protocol-relative URLs (e.g. //img.quark.cn/...)
+        if (url.startsWith('//')) {
+            url = 'https:' + url;
+        }
 
         try {
             const res = await fetch(url, {
