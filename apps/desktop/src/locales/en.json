@@ -252,6 +252,20 @@
         "manage_system_drives": "Manage System Drives",
         "manage_system_drives_desc": "Manage system-wide drives accessible to all rooms.",
         "global_public_drive": "Public Shared Drive",
-        "enter_auth_code": "Connect Shared Account"
+        "enter_auth_code": "Connect Shared Account",
+        "system_drive_auth_required": "This drive requires an authorization code.",
+        "connect": "Connect",
+        "updater": {
+            "check_for_updates": "Check for Updates",
+            "checking": "Checking...",
+            "update_available": "New version {{version}} available",
+            "up_to_date": "Already up to date",
+            "downloading": "Downloading... {{percent}}%",
+            "install_and_restart": "Install and Restart",
+            "error_check_failed": "Check failed",
+            "update_desc": "Check and install new application versions",
+            "already_latest": "Already Latest",
+            "download_failed": "Download failed"
+        }
     }
 }

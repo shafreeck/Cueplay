@@ -30,3 +30,8 @@ reqwest = { version = "0.12.26", default-features = false, features = ["stream",
 tower-http = { version = "0.6.8", features = ["cors"] }
 futures = "0.3.31"
 tauri-plugin-swipe-back-ios = "1.0.0"
+tauri-plugin-updater = "2"
+tauri-plugin-os = "2"
+tauri-plugin-process = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"

@@ -19,6 +19,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 import { ApiClient } from '@/api/client';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
+import { AppUpdater } from '@/components/app-updater';
 import { DriveAccount } from '@/api/client'; // Import DriveAccount
 
 export function UserProfile({ userId, autoOpen = false }: { userId: string; autoOpen?: boolean }) {
@@ -138,9 +139,9 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
                                     </div>
                                 </div>
                             </div>
+
                         </div>
-
-
+                        <AppUpdater />
                     </div>
 
                     <DialogFooter className="flex items-center justify-between sm:justify-between border-t border-border/10 pt-4">
@@ -165,7 +166,7 @@ export function UserProfile({ userId, autoOpen = false }: { userId: string; auto
                         <Button onClick={handleSave} className="min-w-[80px]">{t('save_changes')}</Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
 
         </>

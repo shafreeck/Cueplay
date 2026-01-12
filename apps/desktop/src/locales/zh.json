@@ -254,6 +254,18 @@
         "global_public_drive": "公共共享网盘",
         "enter_auth_code": "连接共享账号",
         "system_drive_auth_required": "该云盘需要授权码才能访问。",
-        "connect": "连接"
+        "connect": "连接",
+        "updater": {
+            "check_for_updates": "检查更新",
+            "checking": "正在检查...",
+            "update_available": "发现新版本 {{version}}",
+            "up_to_date": "当前已是最新版本",
+            "downloading": "正在下载... {{percent}}%",
+            "install_and_restart": "安装并重启",
+            "error_check_failed": "检查更新失败",
+            "update_desc": "检测并安装应用新版本",
+            "already_latest": "已是最新",
+            "download_failed": "下载失败"
+        }
     }
 }

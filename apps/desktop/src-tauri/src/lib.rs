@@ -40,6 +40,10 @@ pub fn run() {
   let restart_notify_state = restart_notify.clone();
   
   tauri::Builder::default()
+    .plugin(tauri_plugin_os::init())
+    .plugin(tauri_plugin_process::init())
+    .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_dialog::init())
     .manage(ProxyState { port: Mutex::new(0), restart_notify: restart_notify_state })
     .invoke_handler(tauri::generate_handler![get_proxy_port, restart_proxy])
     .setup(move |app| {
@@ -50,6 +54,10 @@ pub fn run() {
             .build(),
         )?;
       }
+
+
+      #[cfg(desktop)]
+      app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
 
       #[cfg(target_os = "ios")]
       app.handle().plugin(tauri_plugin_swipe_back_ios::init())?;

@@ -2,6 +2,15 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Cueplay",
   "version": "0.1.0",
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/shafreeck/Cueplay/releases/latest/download/latest.json"
+      ],
+      "dialog": false,
+      "pubkey": "RWS51InBlSht0Y65LLceAQ65snv5m9pvyc0+fiVLUd2FFYtCzcYY15fs"
+    }
+  },
   "identifier": "art.cueplay",
   "build": {
     "frontendDist": "../out",
