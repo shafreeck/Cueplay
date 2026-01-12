@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ApiClient, DriveFile, DriveAccount } from '@/api/client';
-import { FileIcon, FolderIcon, ChevronRight, Loader2, Plus, LayoutGrid, List as ListIcon, Search, HardDrive, Settings, User, Lock, Shield } from 'lucide-react';
+import { FileIcon, FolderIcon, ChevronRight, Loader2, Plus, LayoutGrid, List as ListIcon, Search, HardDrive, Settings, User, Lock, Shield, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
@@ -42,6 +42,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
     const [driveManagerOpen, setDriveManagerOpen] = useState(false);
     const [authCodeRequired, setAuthCodeRequired] = useState(false); // Triggers the dialog
     const [isAccessDenied, setIsAccessDenied] = useState(false); // Triggers the lock screen view
+    const [mobileView, setMobileView] = useState<'drives' | 'files'>('drives');
 
     const currentFolder = path[path.length - 1];
 
@@ -49,6 +50,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
     useEffect(() => {
         if (open) {
             loadDrives();
+            setMobileView('drives');
         }
     }, [open]);
 
@@ -152,9 +154,13 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
     };
 
     const handleDriveSelect = (id: string) => {
-        if (selectedDriveId === id) return;
+        if (selectedDriveId === id) {
+            setMobileView('files'); // On mobile, clicking already selected drive should also go to files
+            return;
+        }
         setSelectedDriveId(id);
         setPath([{ id: '0', name: 'Root' }]); // Reset path
+        setMobileView('files');
     };
 
     const handleAdd = (file: DriveFile) => {
@@ -234,7 +240,10 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
 
                 <div className="flex flex-1 overflow-hidden">
                     {/* Sidebar: Drives */}
-                    <div className="w-56 border-r flex flex-col bg-muted/10 p-2 gap-1 overflow-y-auto">
+                    <div className={cn(
+                        "border-r flex flex-col bg-muted/10 p-2 gap-1 overflow-y-auto transition-all",
+                        mobileView === 'files' ? "hidden md:flex md:w-56" : "w-full md:w-56 flex"
+                    )}>
                         <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                             {t('my_drives')}
                         </div>
@@ -286,9 +295,22 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                     </div>
 
                     {/* Main Content: Files */}
-                    <div className="flex-1 flex flex-col min-w-0">
+                    <div className={cn(
+                        "flex-1 flex-col min-w-0 transition-all",
+                        mobileView === 'drives' ? "hidden md:flex" : "flex"
+                    )}>
                         {/* Toolbar */}
                         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between gap-4">
+                            {/* Mobile Back Button */}
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="md:hidden -ml-2 h-8 w-8 shrink-0"
+                                onClick={() => setMobileView('drives')}
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
+
                             {/* Breadcrumbs */}
                             <div className="flex items-center overflow-x-auto whitespace-nowrap scrollbar-hide flex-1 min-w-0 mr-4">
                                 {path.map((item, index) => (

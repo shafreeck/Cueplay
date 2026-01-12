@@ -255,6 +255,9 @@
         "enter_auth_code": "连接共享账号",
         "system_drive_auth_required": "该云盘需要授权码才能访问。",
         "connect": "连接",
+        "auth_code_updated": "授权码已更新。",
+        "auth_code_update_failed": "保存授权码失败。",
+        "pref_update_failed": "更新偏好设置失败。",
         "updater": {
             "check_for_updates": "检查更新",
             "checking": "正在检查...",

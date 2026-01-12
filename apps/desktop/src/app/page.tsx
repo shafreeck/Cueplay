@@ -329,7 +329,7 @@ export default function Home() {
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+              className="rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/5 transition-all"
               onClick={() => setIsLibraryOpen(true)}
             >
               <FolderSearch className="w-5 h-5" />
@@ -362,12 +362,12 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
-                size="icon"
-                className="rounded-full text-white/70 hover:bg-white/10 hover:text-white mr-1"
+                className="h-10 rounded-full px-5 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/5 transition-all mr-2 gap-2 group"
                 onClick={() => setIsLibraryOpen(true)}
                 title={t('resource_library')}
               >
-                <FolderSearch className="w-5 h-5" />
+                <FolderSearch className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                <span className="font-medium">{t('resource_library')}</span>
               </Button>
 
               {/* Join Group - Dark Pill */}

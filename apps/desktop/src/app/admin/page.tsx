@@ -76,12 +76,12 @@ export default function AdminPage() {
             });
 
             if (res.ok) {
-                toast({ title: "Saved", description: "Authorization code updated." });
+                toast({ title: t('saved'), description: t('auth_code_updated') });
             } else {
                 throw new Error('Save failed');
             }
         } catch (e) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to save authorization code." });
+            toast({ variant: "destructive", title: t('error'), description: t('auth_code_update_failed') });
         } finally {
             setLoading(false);
         }
@@ -104,12 +104,12 @@ export default function AdminPage() {
 
             if (res.ok) {
                 setAuthRequired(val);
-                toast({ title: t('saved') || "Saved", description: t('always_require_auth') });
+                toast({ title: t('saved'), description: t('always_require_auth') });
             } else {
                 throw new Error('Save failed');
             }
         } catch (e) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to update preference." });
+            toast({ variant: "destructive", title: t('error'), description: t('pref_update_failed') });
         } finally {
             setIsSavingAuthRequired(false);
         }
@@ -131,12 +131,12 @@ export default function AdminPage() {
                 localStorage.setItem('admin_token', token);
                 setIsAuthenticated(true);
                 loadConfig(token);
-                toast({ title: "Authorized", description: "Welcome back, Admin." });
+                toast({ title: t('authorized_welcome'), description: "" });
             } else {
-                toast({ variant: "destructive", title: "Access Denied", description: "Invalid password." });
+                toast({ variant: "destructive", title: t('access_denied'), description: t('invalid_password') });
             }
         } catch (e) {
-            toast({ variant: "destructive", title: "Error", description: "Could not connect to server." });
+            toast({ variant: "destructive", title: t('error'), description: t('unknown_error') });
         } finally {
             setLoading(false);
         }

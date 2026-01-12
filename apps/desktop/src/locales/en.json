@@ -255,6 +255,9 @@
         "enter_auth_code": "Connect Shared Account",
         "system_drive_auth_required": "This drive requires an authorization code.",
         "connect": "Connect",
+        "auth_code_updated": "Authorization code updated.",
+        "auth_code_update_failed": "Failed to save authorization code.",
+        "pref_update_failed": "Failed to update preference.",
         "updater": {
             "check_for_updates": "Check for Updates",
             "checking": "Checking...",
