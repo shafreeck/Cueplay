@@ -175,7 +175,7 @@ export default function Home() {
               </div>
 
               <div className="text-sm text-zinc-600">
-                © 2025 Cueplay. All rights reserved.
+                © 2026 Cueplay. All rights reserved.
               </div>
             </div>
           </div>
