@@ -10,8 +10,24 @@ import Image from "next/image";
 
 export default function Home() {
   const { t, locale, setLocale } = useI18n();
-  const version = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
+  const version = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.2.0";
+  const [os, setOs] = useState<"mac" | "windows" | "android" | "other">("other");
   const [currentIdx, setCurrentIdx] = useState(0);
+
+  const releaseVersion = "0.2.0";
+  const baseUrl = `https://github.com/shafreeck/Cueplay/releases/download/v${releaseVersion}`;
+  const downloadUrls = {
+    mac: `${baseUrl}/Cueplay_${releaseVersion}_aarch64.dmg`, // Assuming ARM64 is default for Mac
+    windows: `${baseUrl}/Cueplay_${releaseVersion}_x64_zh-CN.msi`,
+    android: `${baseUrl}/app-release.apk`,
+  };
+
+  useEffect(() => {
+    const ua = window.navigator.userAgent.toLowerCase();
+    if (ua.indexOf("mac") !== -1) setOs("mac");
+    else if (ua.indexOf("win") !== -1) setOs("windows");
+    else if (ua.indexOf("android") !== -1) setOs("android");
+  }, []);
   const screenshots = [
     "/images/showcase/01.png",
     "/images/showcase/02.png",
@@ -100,7 +116,7 @@ export default function Home() {
                 className="h-12 px-8 text-base bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border-0 shadow-lg shadow-indigo-500/20"
                 asChild
               >
-                <Link href="#download">
+                <Link href={os !== "other" ? downloadUrls[os as keyof typeof downloadUrls] : "#download"}>
                   <Download className="mr-2 h-5 w-5" />
                   {t("hero.downloadFree")}
                 </Link>
@@ -241,25 +257,35 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row flex-wrap gap-4 justify-center items-center">
                 <Button
                   size="lg"
-                  className="h-14 px-8 text-lg bg-white text-black hover:bg-zinc-200"
+                  className={`h-14 px-8 text-lg ${os === "mac" ? "bg-white text-black hover:bg-zinc-200" : "border-white/20 hover:bg-white/10 hover:text-white bg-transparent"}`}
+                  variant={os === "mac" ? "default" : "outline"}
+                  asChild
                 >
-                  <Download className="mr-2 h-5 w-5" />
-                  {t("download.mac")}
+                  <Link href={downloadUrls.mac}>
+                    <Download className="mr-2 h-5 w-5" />
+                    {t("download.mac")}
+                  </Link>
                 </Button>
                 <Button
                   size="lg"
-                  variant="outline"
-                  className="h-14 px-8 text-lg border-white/20 hover:bg-white/10 hover:text-white bg-transparent"
+                  className={`h-14 px-8 text-lg ${os === "windows" ? "bg-white text-black hover:bg-zinc-200" : "border-white/20 hover:bg-white/10 hover:text-white bg-transparent"}`}
+                  variant={os === "windows" ? "default" : "outline"}
+                  asChild
                 >
-                  {t("download.windows")}
+                  <Link href={downloadUrls.windows}>
+                    {t("download.windows")}
+                  </Link>
                 </Button>
                 <Button
                   size="lg"
-                  variant="outline"
-                  className="h-14 px-8 text-lg border-white/20 hover:bg-white/10 hover:text-white bg-transparent"
+                  className={`h-14 px-8 text-lg ${os === "android" ? "bg-white text-black hover:bg-zinc-200" : "border-white/20 hover:bg-white/10 hover:text-white bg-transparent"}`}
+                  variant={os === "android" ? "default" : "outline"}
+                  asChild
                 >
-                  <Smartphone className="mr-2 h-5 w-5" />
-                  {t("download.android")}
+                  <Link href={downloadUrls.android}>
+                    <Smartphone className="mr-2 h-5 w-5" />
+                    {t("download.android")}
+                  </Link>
                 </Button>
               </div>
 
