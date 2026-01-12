@@ -10,22 +10,16 @@ const isProd = process.env.NODE_ENV === 'production';
 // const isProd = true;
 
 // 后端 API 地址
-export const API_BASE = isProd
-    //? 'https://cueplay-api.zeabur.app'
-    ? 'https://cueplay.preview.huawei-zeabur.cn'
-    : 'http://localhost:3000';
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:3000';
 
 // WebSocket 地址
-export const WS_BASE = isProd
-    //? 'wss://cueplay-api.zeabur.app'
-    ? 'wss://cueplay.preview.huawei-zeabur.cn'
-    : 'ws://localhost:3000';
+export const WS_BASE = process.env.NEXT_PUBLIC_WS_BASE || 'ws://localhost:3000';
 
 // 客户端本地代理地址 (始终指向客户端自己的 HTTP 服务)
 // 即使在生产环境，客户端代理通常也是运行在本地或相对于 UI 的路径
-export const PROXY_BASE = isProd
+export const PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_BASE || (isProd
     ? '' // 生产环境下通常使用相对路径，或者根据你的客户端架构定义
-    : 'http://localhost:3001';
+    : 'http://localhost:3001');
 
 // Dynamic Proxy Base for Tauri
 let dynamicProxyPort: number | null = null;

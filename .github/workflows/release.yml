@@ -50,6 +50,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT_PUBLIC_API_BASE: ${{ secrets.NEXT_PUBLIC_API_BASE }}
+          NEXT_PUBLIC_WS_BASE: ${{ secrets.NEXT_PUBLIC_WS_BASE }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "App ${{ github.ref_name }}"
@@ -105,6 +107,9 @@ jobs:
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > apps/desktop/src-tauri/release.keystore
 
       - name: Build Android APK
+        env:
+          NEXT_PUBLIC_API_BASE: ${{ secrets.NEXT_PUBLIC_API_BASE }}
+          NEXT_PUBLIC_WS_BASE: ${{ secrets.NEXT_PUBLIC_WS_BASE }}
         run: NDK_HOME=$ANDROID_NDK_HOME pnpm --filter @cueplay/desktop tauri android build --apk true
 
       - name: Sign Android Release
