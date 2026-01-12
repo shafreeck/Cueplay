@@ -5,6 +5,32 @@ import { loginSessionManager } from './login-session';
 import { DriveService } from '../drive/drive-service';
 
 export async function quarkRoutes(fastify: FastifyInstance) {
+    // Proxy for drive avatars to bypass Referer/CORS issues
+    fastify.get('/drive/avatar/proxy', async (req, reply) => {
+        const { url } = req.query as { url: string };
+        if (!url) return reply.code(400).send({ error: 'URL required' });
+
+        try {
+            const res = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://pan.quark.cn/'
+                }
+            });
+
+            if (!res.ok) throw new Error(`Avatar fetch failed: ${res.status}`);
+
+            const contentType = res.headers.get('content-type') || 'image/jpeg';
+            const buffer = await res.arrayBuffer();
+
+            reply.header('Content-Type', contentType);
+            reply.header('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+            return Buffer.from(buffer);
+        } catch (e: any) {
+            return reply.code(500).send({ error: e.message });
+        }
+    });
+
     // Existing file list endpoint
     fastify.get('/quark/list', async (req, reply) => {
         const query = req.query as { parentId?: string; cookie?: string; authCode?: string; driveId?: string };

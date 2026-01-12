@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { QuarkShareDialog } from './quark-share-dialog';
 import { DriveManager } from './drive-manager';
-import { cn } from '@/lib/utils';
+import { cn, getProxiedAvatarUrl } from '@/lib/utils';
 
 interface ResourceLibraryProps {
     open: boolean;
@@ -263,7 +263,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                                 onClick={() => handleDriveSelect(drive.id)}
                             >
                                 <div className={cn("h-6 w-6 rounded-full flex items-center justify-center mr-2 shrink-0", selectedDriveId === drive.id ? "bg-background" : "bg-primary/10")}>
-                                    {drive.avatar ? <img src={drive.avatar} className="h-full w-full rounded-full" referrerPolicy="no-referrer" /> : <User className="h-3 w-3" />}
+                                    {drive.avatar ? <img src={getProxiedAvatarUrl(drive.avatar)} className="h-full w-full rounded-full" referrerPolicy="no-referrer" /> : <User className="h-3 w-3" />}
                                 </div>
                                 <div className="flex flex-col items-start truncate leading-none gap-0.5">
                                     <span className="truncate text-sm">

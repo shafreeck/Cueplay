@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn, getProxiedAvatarUrl } from '@/lib/utils';
 import { QuarkLoginDialog } from './quark-login-dialog';
 import { ManualCookieDialog } from './manual-cookie-dialog';
 import {
@@ -273,7 +274,7 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                                             {/* Avatar or Default Icon */}
                                             <div className="h-8 w-8 rounded-full overflow-hidden bg-secondary/50 flex items-center justify-center shrink-0 border border-border/50">
                                                 {drive.avatar ? (
-                                                    <img src={drive.avatar} alt="Avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                                    <img src={getProxiedAvatarUrl(drive.avatar)} alt="Avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                                                 ) : (
                                                     <User className="h-4 w-4 text-muted-foreground" />
                                                 )}
