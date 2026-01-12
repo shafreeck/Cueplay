@@ -46,12 +46,19 @@ export default function Home() {
       {/* Navigation */}
       <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
+          <Link
+            href="#"
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            onClick={(e) => {
+              e.preventDefault();
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
               <Play className="h-4 w-4 text-white fill-white" />
             </div>
             <span className="text-xl font-bold tracking-tight">Cueplay</span>
-          </div>
+          </Link>
           <nav className="hidden md:flex items-center gap-8">
             <Link
               href="#features"
