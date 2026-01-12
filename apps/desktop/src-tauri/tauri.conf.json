@@ -47,6 +47,9 @@
         "upgradeCode": "9E1BDEC5-E4EE-42F6-B14C-F5C85709D084"
       }
     },
+    "iOS": {
+      "developmentTeam": "KBAR3ADGQJ"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
