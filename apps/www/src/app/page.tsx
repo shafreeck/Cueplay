@@ -4,10 +4,26 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { Download, MessageSquare, Monitor, Play, Shield } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 
 export default function Home() {
   const { t, locale, setLocale } = useI18n();
   const version = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const screenshots = [
+    "/images/showcase/01.png",
+    "/images/showcase/02.png",
+    "/images/showcase/03.png",
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentIdx((prev) => (prev + 1) % screenshots.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [screenshots.length]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -50,8 +66,14 @@ export default function Home() {
             >
               {t("nav.languageToggle")}
             </Button>
-            <Button size="sm" className="bg-white text-black hover:bg-zinc-200">
-              {t("nav.downloadBeta")}
+            <Button
+              size="sm"
+              className="bg-white text-black hover:bg-zinc-200"
+              asChild
+            >
+              <Link href="#download">
+                {t("nav.downloadBeta")}
+              </Link>
             </Button>
           </div>
         </div>
@@ -76,16 +98,22 @@ export default function Home() {
               <Button
                 size="lg"
                 className="h-12 px-8 text-base bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border-0 shadow-lg shadow-indigo-500/20"
+                asChild
               >
-                <Download className="mr-2 h-5 w-5" />
-                {t("hero.downloadFree")}
+                <Link href="#download">
+                  <Download className="mr-2 h-5 w-5" />
+                  {t("hero.downloadFree")}
+                </Link>
               </Button>
               <Button
                 size="lg"
                 variant="outline"
                 className="h-12 px-8 text-base border-white/10 hover:bg-white/5 hover:text-white"
+                asChild
               >
-                {t("hero.viewFeatures")}
+                <Link href="#features">
+                  {t("hero.viewFeatures")}
+                </Link>
               </Button>
             </div>
           </div>
@@ -97,13 +125,42 @@ export default function Home() {
         {/* App Showcase */}
         <section className="relative -mt-10 md:-mt-20 pb-32">
           <div className="container mx-auto px-4">
-            <div className="relative mx-auto max-w-5xl rounded-xl border border-white/10 bg-black/40 backdrop-blur-sm p-2 shadow-2xl shadow-indigo-500/10 transform md:rotate-x-12 perspective-1000">
-              <div className="relative aspect-video overflow-hidden rounded-lg bg-zinc-900 border border-white/5">
-                {/* Placeholder for App Screenshot */}
-                <div className="absolute inset-0 flex items-center justify-center text-zinc-700">
-                  <span className="text-sm">{t("showcase.preview")}</span>
+            <div className="relative mx-auto max-w-5xl group">
+              <div className="relative aspect-[1024/711] overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentIdx}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.5, ease: "easeInOut" }}
+                    className="absolute inset-0"
+                  >
+                    <Image
+                      src={screenshots[currentIdx]}
+                      alt={`${t("showcase.preview")} ${currentIdx + 1}`}
+                      fill
+                      unoptimized
+                      className="object-contain"
+                      priority
+                    />
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Progress Indicators */}
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                  {screenshots.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentIdx(i)}
+                      aria-label={`Go to screenshot ${i + 1}`}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${currentIdx === i
+                        ? "w-8 bg-white"
+                        : "w-1.5 bg-white/30 hover:bg-white/50"
+                        }`}
+                    />
+                  ))}
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
               </div>
             </div>
           </div>
@@ -219,21 +276,12 @@ export default function Home() {
               </div>
 
               <div className="flex gap-6 text-sm text-zinc-400">
-                <Link href="#" className="hover:text-white transition-colors">
-                  {t("footer.privacy")}
-                </Link>
-                <Link href="#" className="hover:text-white transition-colors">
-                  {t("footer.terms")}
-                </Link>
                 <Link
                   href="https://github.com/shafreeck/cueplay"
                   target="_blank"
                   className="hover:text-white transition-colors"
                 >
                   {t("nav.github")}
-                </Link>
-                <Link href="#" className="hover:text-white transition-colors">
-                  {t("footer.twitter")}
                 </Link>
               </div>
 
