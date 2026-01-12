@@ -201,7 +201,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               {/* Feature 1 */}
               <div className="group relative p-8 rounded-2xl border border-white/5 bg-zinc-900/50 hover:bg-zinc-900/80 transition-all duration-300 hover:border-indigo-500/30">
                 <div className="h-12 w-12 rounded-lg bg-indigo-500/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -238,6 +238,19 @@ export default function Home() {
                 </h3>
                 <p className="text-zinc-400 leading-relaxed">
                   {t("features.secureDesc")}
+                </p>
+              </div>
+
+              {/* Feature 4 (Quark Support) */}
+              <div className="group relative p-8 rounded-2xl border border-white/5 bg-zinc-900/50 hover:bg-zinc-900/80 transition-all duration-300 hover:border-emerald-500/30">
+                <div className="h-12 w-12 rounded-lg bg-emerald-500/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  <div className="h-6 w-6 text-emerald-400 flex items-center justify-center font-bold text-xl">Q</div>
+                </div>
+                <h3 className="text-xl font-bold text-white mb-3">
+                  {t("features.quarkTitle")}
+                </h3>
+                <p className="text-zinc-400 leading-relaxed">
+                  {t("features.quarkDesc")}
                 </p>
               </div>
             </div>

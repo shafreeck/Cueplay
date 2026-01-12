@@ -56,6 +56,9 @@ const translations = {
       secureTitle: "Private & Secure",
       secureDesc:
         "Your rooms are private by default. Direct P2P connection options for maximum privacy and lower latency.",
+      quarkTitle: "Quark Drive Support",
+      quarkDesc:
+        "Seamlessly access your Quark Drive collection. Stream high-quality content directly from the cloud with full synchronization.",
     },
     download: {
       title: "Ready to start watching?",
@@ -105,6 +108,8 @@ const translations = {
         "内置文字与语音聊天，让你无需离开应用即可实时互动，分享每个精彩瞬间。",
       secureTitle: "私密安全",
       secureDesc: "默认私密房间，可选 P2P 直连以获得更高隐私与更低延迟。",
+      quarkTitle: "夸克网盘支持",
+      quarkDesc: "无缝接入夸克网盘收藏。直接从云端串流高质量内容，支持完整同步体验。",
     },
     download: {
       title: "准备好开始观看了吗？",
