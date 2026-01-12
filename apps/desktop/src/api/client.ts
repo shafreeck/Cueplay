@@ -58,9 +58,11 @@ export class ApiClient {
     }
 
     // --- Drive Management ---
-    static async listDrives(roomId?: string, userId?: string): Promise<DriveAccount[]> {
+    static async listDrives(roomId?: string, userId?: string, isSystem?: boolean, authCode?: string): Promise<DriveAccount[]> {
         const params = new URLSearchParams();
         if (roomId) params.append('roomId', roomId);
+        if (isSystem) params.append('isSystem', 'true');
+        if (authCode) params.append('authCode', authCode);
 
         const headers: Record<string, string> = {};
         if (userId) headers['x-user-id'] = userId;

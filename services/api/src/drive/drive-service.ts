@@ -1,5 +1,6 @@
 import prisma from '../prisma';
 import { randomUUID } from 'crypto';
+import { ConfigStore } from '../config/store';
 
 export interface DriveAccount {
     id: string;
@@ -39,6 +40,8 @@ export class DriveService {
             console.error('[DriveService] Failed to load accounts:', e);
             this.accounts = [];
         } finally {
+            // Reload config store to ensure we have latest global settings
+            await ConfigStore.load();
             this.loaded = true;
         }
     }
@@ -55,13 +58,58 @@ export class DriveService {
         }
     }
 
-    static async getAccounts(filter: { roomId?: string; userId?: string } = {}): Promise<DriveAccount[]> {
+    static async getAccounts(filter: { roomId?: string; userId?: string; isSystem?: boolean } = {}): Promise<DriveAccount[]> {
         await this.ensureLoaded();
+
+        if (filter.isSystem) {
+            // Explicitly requesting system drives
+            const systemDrives = this.accounts.filter(a => a.isSystem || (!a.roomId && !a.userId && !a.isSystem));
+
+            // Check for legacy global cookie and inject as virtual system drive
+            const globalCookie = ConfigStore.getGlobalCookie();
+            if (globalCookie) {
+                // Ensure we don't duplicate if it's already converted to a real drive (naive check by cookie value)
+                // Actually, if we have a real drive with this cookie, we should prefer the real drive.
+                const exists = systemDrives.some(a => a.data.cookie === globalCookie);
+                if (!exists) {
+                    systemDrives.push({
+                        id: 'system-virtual-legacy',
+                        type: 'quark',
+                        name: 'Global Public Drive',
+                        isSystem: true,
+                        isShared: true,
+                        createdAt: Date.now(),
+                        data: { cookie: globalCookie, nickname: 'Global Shared' }
+                    });
+                }
+            }
+            return systemDrives;
+        }
 
         let accounts: DriveAccount[] = [];
 
         // 1. System Drives (Global fallback)
+        // 1. System Drives (Global fallback)
         const systemDrives = this.accounts.filter(a => a.isSystem);
+
+        // Inject virtual global drive here too
+        // Inject virtual global drive here too
+        const globalCookie = ConfigStore.getGlobalCookie();
+        if (globalCookie) {
+            const exists = systemDrives.some(a => a.data.cookie === globalCookie);
+            if (!exists) {
+                systemDrives.push({
+                    id: 'system-virtual-legacy',
+                    type: 'quark',
+                    name: 'Global Public Drive',
+                    isSystem: true,
+                    isShared: true,
+                    createdAt: Date.now(),
+                    data: { cookie: globalCookie, nickname: 'Global Shared' }
+                });
+            }
+        }
+
         accounts = accounts.concat(systemDrives);
 
         // 2. User Drives (Personal, available in any room user is in)
@@ -103,7 +151,26 @@ export class DriveService {
 
     static async getAccount(id: string): Promise<DriveAccount | undefined> {
         await this.ensureLoaded();
-        return this.accounts.find(a => a.id === id);
+        await this.ensureLoaded();
+        const account = this.accounts.find(a => a.id === id);
+        if (account) return account;
+
+        // Check virtual legacy
+        if (id === 'system-virtual-legacy') {
+            const globalCookie = ConfigStore.getGlobalCookie();
+            if (globalCookie) {
+                return {
+                    id: 'system-virtual-legacy',
+                    type: 'quark',
+                    name: 'Global Public Drive',
+                    isSystem: true,
+                    isShared: true,
+                    createdAt: Date.now(),
+                    data: { cookie: globalCookie, nickname: 'Global Shared' }
+                };
+            }
+        }
+        return undefined;
     }
 
     static async addAccount(account: Omit<DriveAccount, 'id' | 'createdAt'>): Promise<DriveAccount> {

@@ -248,6 +248,10 @@
         "drive_name": "云盘名称",
         "enter_new_name_for_drive": "输入新的云盘名称",
         "error_cookie_required": "需要 Cookie",
-        "error_id_required": "缺少 ID"
+        "error_id_required": "缺少 ID",
+        "manage_system_drives": "管理系统云盘",
+        "manage_system_drives_desc": "管理对所有房间可用的系统级云盘。",
+        "global_public_drive": "公共共享网盘",
+        "enter_auth_code": "连接共享账号"
     }
 }

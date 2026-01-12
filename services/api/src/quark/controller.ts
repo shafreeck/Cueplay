@@ -14,9 +14,20 @@ export async function quarkRoutes(fastify: FastifyInstance) {
 
         // NEW: Support driveId
         if (query.driveId) {
-            const driveCookie = await DriveService.getCookieForDrive(query.driveId);
-            if (driveCookie) {
-                cookie = driveCookie;
+            const driveAccount = await DriveService.getAccount(query.driveId);
+            if (driveAccount) {
+                // Check if this is a system drive (or global legacy) and enforce auth code
+                if (driveAccount.isSystem || (!driveAccount.roomId && !driveAccount.userId)) {
+                    // Ensure fresh config
+                    await ConfigStore.load();
+                    if (ConfigStore.isGlobalAuthRequired()) {
+                        const globalAuthCode = ConfigStore.getGlobalAuthCode();
+                        if (globalAuthCode && globalAuthCode !== query.authCode) {
+                            return reply.code(403).send({ error: 'system_login_required' });
+                        }
+                    }
+                }
+                cookie = driveAccount.data.cookie;
             } else {
                 return reply.code(404).send({ error: 'Drive not found' });
             }
@@ -185,9 +196,18 @@ export async function quarkRoutes(fastify: FastifyInstance) {
 
     // List all connected drives
     fastify.get('/drive/list', async (req, reply) => {
-        const query = req.query as { roomId?: string };
+        const query = req.query as { roomId?: string; isSystem?: string; authCode?: string };
         const userId = req.headers['x-user-id'] as string;
-        const accounts = await DriveService.getAccounts({ roomId: query.roomId, userId });
+
+        const accounts = await DriveService.getAccounts({
+            roomId: query.roomId,
+            userId,
+            isSystem: query.isSystem === 'true'
+        });
+
+        // Always return system drives so they are visible in the list
+        // Determining visibility/access is handled at the file access level (quark/list)
+
         const safeAccounts = accounts.map(a => ({
             id: a.id,
             name: a.name,
@@ -202,6 +222,7 @@ export async function quarkRoutes(fastify: FastifyInstance) {
             userId: a.userId,
             isSystem: a.isSystem,
         }));
+
         return { accounts: safeAccounts };
     });
 

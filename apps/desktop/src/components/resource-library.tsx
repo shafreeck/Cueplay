@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ApiClient, DriveFile, DriveAccount } from '@/api/client';
-import { FileIcon, FolderIcon, ChevronRight, Loader2, Plus, LayoutGrid, List as ListIcon, Search, HardDrive, Settings, User } from 'lucide-react';
+import { FileIcon, FolderIcon, ChevronRight, Loader2, Plus, LayoutGrid, List as ListIcon, Search, HardDrive, Settings, User, Lock } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,8 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
     const [isDrivesLoaded, setIsDrivesLoaded] = useState(false);
     const [selectedDriveId, setSelectedDriveId] = useState<string | undefined>(undefined);
     const [driveManagerOpen, setDriveManagerOpen] = useState(false);
+    const [authCodeRequired, setAuthCodeRequired] = useState(false); // Triggers the dialog
+    const [isAccessDenied, setIsAccessDenied] = useState(false); // Triggers the lock screen view
 
     const currentFolder = path[path.length - 1];
 
@@ -52,7 +54,8 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
 
     const loadDrives = async () => {
         try {
-            const list = await ApiClient.listDrives(roomId, userId);
+            const authCode = localStorage.getItem('cueplay_system_auth_code') || undefined;
+            const list = await ApiClient.listDrives(roomId, userId, undefined, authCode);
             setDrives(list);
 
             // Auto-select first drive if none selected, or if current selection is invalid
@@ -94,29 +97,43 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
 
     const loadFiles = async (parentId: string) => {
         setLoading(true);
+        setIsAccessDenied(false); // Reset denied state on new load attempt
         try {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
 
             // Determine credentials
             // Priority: Selected Drive ID -> Legacy Cookie
 
+            // Handle virtual system drive ID
+            const effectiveDriveId = (selectedDriveId === 'system-drive') ? undefined : selectedDriveId;
+
+            // When using system drive (id undefined), we might fallback to legacy cookie if present
+            const effectiveCookie = (!effectiveDriveId ? legacyCookie : undefined);
+
             const list = await ApiClient.listQuarkFiles(
                 parentId,
-                (!selectedDriveId ? legacyCookie : undefined),
+                effectiveCookie,
                 authCode,
-                selectedDriveId
+                effectiveDriveId
             );
 
             // Attach driveId to files so it carries over to the playlist
             const listWithDrive = list.map(f => ({ ...f, driveId: selectedDriveId }));
             setFiles(listWithDrive);
+            setFiles(listWithDrive);
         } catch (e: any) {
-            console.error(e);
-            toast({
-                variant: 'destructive',
-                title: t('resource_load_failed'),
-                description: e.message
-            });
+            if (e.message?.includes('system_login_required') || e.message?.includes('403')) {
+                // Instead of popping up immediately, we show the lock screen
+                setIsAccessDenied(true);
+            } else {
+                console.error(e);
+                toast({
+                    variant: 'destructive',
+                    title: t('resource_load_failed'),
+                    description: e.message
+                });
+            }
+            // Clear files so user sees empty/locked state
             setFiles([]);
         } finally {
             setLoading(false);
@@ -239,7 +256,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                                     {drive.avatar ? <img src={drive.avatar} className="h-full w-full rounded-full" /> : <User className="h-3 w-3" />}
                                 </div>
                                 <span className="truncate">
-                                    {drive.name === 'Quark Drive' ? (drive.data?.nickname || t('quark_drive')) : drive.name}
+                                    {drive.isSystem ? (t('global_public_drive') || drive.name) : (drive.name === 'Quark Drive' ? (drive.data?.nickname || t('quark_drive')) : drive.name)}
                                 </span>
                             </Button>
                         ))}
@@ -327,6 +344,19 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                                 <div className="flex flex-col items-center justify-center h-full gap-4">
                                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                     {isCollecting && <p className="text-sm text-muted-foreground animate-pulse">{t('collecting_episodes')}</p>}
+                                </div>
+                            ) : isAccessDenied ? (
+                                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
+                                    <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-2">
+                                        <Lock className="h-8 w-8 opacity-50" />
+                                    </div>
+                                    <div className="text-center">
+                                        <h3 className="font-semibold text-lg text-foreground mb-1">{t('access_denied') || 'Access Denied'}</h3>
+                                        <p className="text-sm max-w-xs mx-auto mb-4">{t('system_drive_auth_required') || 'This drive requires authorization code to access.'}</p>
+                                        <Button onClick={() => setAuthCodeRequired(true)}>
+                                            {t('enter_auth_code') || 'Enter Auth Code'}
+                                        </Button>
+                                    </div>
                                 </div>
                             ) : filteredFiles.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -467,7 +497,76 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                     if (!open) loadDrives(); // Refresh drives on close
                 }}
                 onSelect={handleDriveSelect}
+                initialShowAuthCode={authCodeRequired} // Pass this down? Or just handle locally?
+            // DriveManager doesn't expose just the auth dialog easily.
+            // Let's create a dedicated simplified AuthCodeDialog or rely on DriveManager to show it.
+            // DriveManager has logic to set localStorage.
             />
-        </Dialog>
+
+            {/* Simple Auth Code Prompt if accessed directly */}
+            <Dialog open={authCodeRequired} onOpenChange={setAuthCodeRequired}>
+                <DialogContent className="sm:max-w-[400px]">
+                    <DialogHeader>
+                        <DialogTitle>{t('system_auth_code_label')}</DialogTitle>
+                        <DialogDescription>
+                            {t('system_auth_code_desc')}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {/* We can re-use the logic from DriveManager really, but for now duplicate for speed */}
+                    <AuthCodeForm
+                        onSuccess={() => {
+                            setAuthCodeRequired(false);
+                            loadFiles(); // Retry loading
+                        }}
+                        onCancel={() => setAuthCodeRequired(false)}
+                    />
+                </DialogContent>
+            </Dialog>
+        </Dialog >
+    );
+}
+
+// Helper Component for Auth Code Form to avoid duplication if possible, or just inline
+function AuthCodeForm({ onSuccess, onCancel }: { onSuccess: () => void, onCancel: () => void }) {
+    const { t } = useTranslation('common');
+    const [code, setCode] = useState('');
+    const [verifying, setVerifying] = useState(false);
+    const { toast } = useToast();
+
+    const handleVerify = async () => {
+        if (!code) return;
+        setVerifying(true);
+        try {
+            const result = await ApiClient.verifyAuthCode(code);
+            if (result) {
+                localStorage.setItem('cueplay_system_auth_code', code);
+                toast({ title: t('auth_code_valid') });
+                onSuccess();
+            } else {
+                throw new Error(t('auth_code_invalid'));
+            }
+        } catch (e: any) {
+            toast({ variant: 'destructive', title: t('auth_code_invalid'), description: e.message });
+        } finally {
+            setVerifying(false);
+        }
+    };
+
+    return (
+        <>
+            <div className="py-4">
+                <Input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder={t('system_auth_code_placeholder')}
+                    type="password"
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+                />
+            </div>
+            <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={onCancel}>{t('cancel')}</Button>
+                <Button onClick={handleVerify} disabled={verifying}>{verifying ? t('verifying') : t('connect')}</Button>
+            </div>
+        </>
     );
 }

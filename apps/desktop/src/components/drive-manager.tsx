@@ -38,11 +38,14 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
     const [driveToUpdate, setDriveToUpdate] = useState<string | null>(null);
     const [driveToRename, setDriveToRename] = useState<string | null>(null);
     const [newName, setNewName] = useState('');
+    const [showAuthCodeInput, setShowAuthCodeInput] = useState(false);
+    const [authCode, setAuthCode] = useState('');
+    const [verifying, setVerifying] = useState(false);
 
     const loadDrives = async (silent = false) => {
         if (!silent) setLoading(true);
         try {
-            const list = await ApiClient.listDrives(roomId, userId);
+            const list = await ApiClient.listDrives(roomId, userId, isSystemMode);
             setDrives(list);
         } catch (e: any) {
             console.error(e);
@@ -68,8 +71,8 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                 await ApiClient.updateDrive(driveToUpdate, cookie);
                 toast({ title: t('drive_updated') });
             } else {
-                // Default isShared to false (Private)
-                await ApiClient.addDrive(cookie, undefined, roomId, userId, isSystemMode, false);
+                // Default isShared to false (Private), but for System Mode force it true
+                await ApiClient.addDrive(cookie, undefined, roomId, userId, isSystemMode, isSystemMode ? true : false);
                 toast({ title: t('drive_added') });
             }
             setShowLogin(false);
@@ -182,6 +185,36 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
         setShowManualLogin(true);
     };
 
+    const handleConnectAuthCode = async () => {
+        if (!authCode) return;
+        setVerifying(true);
+        try {
+            const success = await ApiClient.verifyAuthCode(authCode);
+            if (success) {
+                localStorage.setItem('cueplay_system_auth_code', authCode);
+                toast({ title: t('auth_code_valid'), description: t('drive_added') });
+                setShowAuthCodeInput(false);
+                setAuthCode('');
+                loadDrives(); // This might not add it to the list unless we handle it in listDrives or locally
+                // To ensure the UI updates, we can trigger an external update if needed, but for now relying on parent reload or local effect
+                if (onSelect) {
+                    onSelect('system-drive');
+                    onOpenChange(false);
+                }
+            } else {
+                throw new Error(t('auth_code_invalid'));
+            }
+        } catch (e: any) {
+            toast({
+                variant: 'destructive',
+                title: t('auth_code_invalid'),
+                description: e.message
+            });
+        } finally {
+            setVerifying(false);
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
@@ -230,7 +263,7 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
 
                                             <div className="flex flex-col overflow-hidden">
                                                 <span className="font-medium text-sm leading-none truncate" title={drive.name}>
-                                                    {drive.name === 'Quark Drive' ? t('quark_drive') : drive.name}
+                                                    {drive.isSystem ? (t('global_public_drive') || drive.name) : (drive.name === 'Quark Drive' ? t('quark_drive') : drive.name)}
                                                 </span>
                                                 <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground truncate">
                                                     {drive.data?.nickname && <span>•</span>}
@@ -328,6 +361,12 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                                 <Keyboard className="h-4 w-4" />
                                 <span>{t('manual_cookie_string') || 'Manual Input'}</span>
                             </DropdownMenuItem>
+                            {!isSystemMode && (
+                                <DropdownMenuItem onClick={() => setShowAuthCodeInput(true)} className="gap-2 cursor-pointer h-10">
+                                    <Users className="h-4 w-4" />
+                                    <span>{t('enter_auth_code') || 'Connect Shared Account'}</span>
+                                </DropdownMenuItem>
+                            )}
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
@@ -395,7 +434,35 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                         </div>
                     </DialogContent>
                 </Dialog>
-            </DialogContent>
-        </Dialog>
+
+                <Dialog open={showAuthCodeInput} onOpenChange={setShowAuthCodeInput}>
+                    <DialogContent className="sm:max-w-[400px]">
+                        <DialogHeader>
+                            <DialogTitle>{t('system_auth_code_label')}</DialogTitle>
+                            <DialogDescription>
+                                {t('system_auth_code_desc')}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4">
+                            <Input
+                                value={authCode}
+                                onChange={(e) => setAuthCode(e.target.value)}
+                                placeholder={t('system_auth_code_placeholder')}
+                                onKeyDown={(e) => e.key === 'Enter' && handleConnectAuthCode()}
+                                type="password"
+                            />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setShowAuthCodeInput(false)}>
+                                {t('cancel')}
+                            </Button>
+                            <Button onClick={handleConnectAuthCode} disabled={verifying}>
+                                {verifying ? t('verifying') : t('connect')}
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </DialogContent >
+        </Dialog >
     );
 }

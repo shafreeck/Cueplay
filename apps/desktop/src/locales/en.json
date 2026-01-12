@@ -248,6 +248,10 @@
         "drive_name": "Drive Name",
         "enter_new_name_for_drive": "Enter a new name for your drive",
         "error_cookie_required": "Cookie is required",
-        "error_id_required": "ID is required"
+        "error_id_required": "ID is required",
+        "manage_system_drives": "Manage System Drives",
+        "manage_system_drives_desc": "Manage system-wide drives accessible to all rooms.",
+        "global_public_drive": "Public Shared Drive",
+        "enter_auth_code": "Connect Shared Account"
     }
 }
