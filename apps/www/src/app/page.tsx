@@ -33,7 +33,7 @@ export default function Home() {
           <div className="container mx-auto px-4 relative z-10 flex flex-col items-center text-center">
             <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-zinc-300 mb-8 backdrop-blur-md">
               <span className="flex h-2 w-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-              v0.1.0 Beta is now available
+              v{process.env.NEXT_PUBLIC_APP_VERSION} Beta is now available
             </div>
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60 mb-6 max-w-4xl">
               Watch Together, <br className="hidden md:block" /> Anywhere.

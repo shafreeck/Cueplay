@@ -1,18 +1,18 @@
 {
-    "name": "cueplay-monorepo",
-    "version": "0.0.0",
-    "private": true,
-    "scripts": {
-        "dev": "pnpm -r --filter=\"./services/*\" --filter=\"./apps/*\" dev",
-        "build": "pnpm -r build",
-        "test": "pnpm -r test",
-        "lint": "pnpm -r lint"
-    },
-    "devDependencies": {
-        "@types/ws": "^8.18.1",
-        "eslint": "^8.0.0",
-        "prettier": "^3.0.0",
-        "typescript": "^5.0.0",
-        "ws": "^8.18.3"
-    }
+  "name": "cueplay-monorepo",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --filter=\"./services/*\" --filter=\"./apps/*\" dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "ws": "^8.18.3"
+  }
 }

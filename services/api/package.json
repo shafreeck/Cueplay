@@ -1,38 +1,38 @@
 {
-    "name": "@cueplay/api",
-    "version": "0.1.0",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "files": [
-        "dist",
-        "prisma",
-        "package.json"
-    ],
-    "scripts": {
-        "build": "tsc",
-        "dev": "tsx watch src/index.ts",
-        "start": "node dist/services/api/src/index.js",
-        "db:migrate": "prisma migrate dev",
-        "db:generate": "prisma generate"
-    },
-    "dependencies": {
-        "@cueplay/lease-core": "workspace:^",
-        "@cueplay/playback-core": "workspace:^",
-        "@cueplay/protocol": "workspace:^",
-        "@cueplay/room-core": "workspace:^",
-        "@cueplay/sync-core": "workspace:^",
-        "@fastify/cors": "^11.2.0",
-        "@fastify/websocket": "^11.2.0",
-        "@prisma/client": "^5.10.0",
-        "axios": "^1.13.2",
-        "fastify": "^5.6.2",
-        "prisma": "^5.10.0",
-        "zod": "^3.22.0"
-    },
-    "devDependencies": {
-        "@types/node": "^20.11.0",
-        "ts-node": "^10.9.0",
-        "tsx": "^4.21.0",
-        "typescript": "^5.3.0"
-    }
+  "name": "@cueplay/api",
+  "version": "0.2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "prisma",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/services/api/src/index.js",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@cueplay/lease-core": "workspace:^",
+    "@cueplay/playback-core": "workspace:^",
+    "@cueplay/protocol": "workspace:^",
+    "@cueplay/room-core": "workspace:^",
+    "@cueplay/sync-core": "workspace:^",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/websocket": "^11.2.0",
+    "@prisma/client": "^5.10.0",
+    "axios": "^1.13.2",
+    "fastify": "^5.6.2",
+    "prisma": "^5.10.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0"
+  }
 }
