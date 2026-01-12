@@ -63,7 +63,8 @@ const translations = {
         "Join thousands of users who are already enjoying perfectly synchronized movie nights with Cueplay.",
       mac: "Download for Mac",
       windows: "Download for Windows",
-      requirements: "Requires macOS 11+ or Windows 10/11",
+      android: "Download for Android",
+      requirements: "Requires macOS 11+, Windows 10/11 or Android 8.0+",
     },
     footer: {
       privacy: "Privacy",
@@ -110,7 +111,8 @@ const translations = {
       subtitle: "加入成千上万的用户，已经在 Cueplay 中享受完美同步的观影之夜。",
       mac: "下载 Mac 版",
       windows: "下载 Windows 版",
-      requirements: "需 macOS 11+ 或 Windows 10/11",
+      android: "下载 Android 版",
+      requirements: "需 macOS 11+、Windows 10/11 或 Android 8.0+",
     },
     footer: {
       privacy: "隐私",

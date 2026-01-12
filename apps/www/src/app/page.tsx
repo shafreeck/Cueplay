@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
-import { Download, MessageSquare, Monitor, Play, Shield } from "lucide-react";
+import { Download, MessageSquare, Monitor, Play, Shield, Smartphone } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -238,7 +238,7 @@ export default function Home() {
                 {t("download.subtitle")}
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-4 justify-center items-center">
                 <Button
                   size="lg"
                   className="h-14 px-8 text-lg bg-white text-black hover:bg-zinc-200"
@@ -252,6 +252,14 @@ export default function Home() {
                   className="h-14 px-8 text-lg border-white/20 hover:bg-white/10 hover:text-white bg-transparent"
                 >
                   {t("download.windows")}
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-14 px-8 text-lg border-white/20 hover:bg-white/10 hover:text-white bg-transparent"
+                >
+                  <Smartphone className="mr-2 h-5 w-5" />
+                  {t("download.android")}
                 </Button>
               </div>
 
