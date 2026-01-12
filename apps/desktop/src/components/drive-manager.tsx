@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DriveAccount, ApiClient } from '@/api/client';
-import { Trash2, Plus, HardDrive, User, RefreshCw, Unplug, QrCode, Keyboard, Edit2, Users, Lock } from 'lucide-react';
+import { Trash2, Plus, HardDrive, User, RefreshCw, Unplug, QrCode, Keyboard, Edit2, Users, Lock, Shield } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useTranslation } from 'react-i18next';
 import { Switch } from '@/components/ui/switch';
@@ -129,12 +129,30 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
 
     const confirmDelete = async () => {
         if (!driveToDelete) return;
+
+        const drive = drives.find(d => d.id === driveToDelete);
+
+        // CASE: User disconnecting from a System Drive (Auth Code Session)
+        // If we are NOT in Admin Mode (isSystemMode), "Removing" a system drive implies 
+        // disconnecting the local session (clearing the auth code), not deleting the drive from the server.
+        if (drive?.isSystem && !isSystemMode) {
+            localStorage.removeItem('cueplay_system_auth_code');
+            toast({
+                title: t('disconnected') || 'Disconnected',
+                description: t('auth_code_removed') || 'Authorization code cleared.',
+            });
+            setDriveToDelete(null);
+            loadDrives(true); // Refresh list
+            return;
+        }
+
+        // CASE: Admin Deleting Data (or User deleting Personal Drive)
         try {
             await ApiClient.removeDrive(driveToDelete);
             toast({
                 title: t('drive_removed'),
             });
-            loadDrives();
+            await loadDrives(); // Wait for reload to complete
         } catch (e: any) {
             toast({
                 variant: 'destructive',
@@ -262,9 +280,17 @@ export function DriveManager({ open, onOpenChange, onSelect, roomId, userId, isS
                                             </div>
 
                                             <div className="flex flex-col overflow-hidden">
-                                                <span className="font-medium text-sm leading-none truncate" title={drive.name}>
-                                                    {drive.isSystem ? (t('global_public_drive') || drive.name) : (drive.name === 'Quark Drive' ? t('quark_drive') : drive.name)}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-sm leading-none truncate" title={drive.name}>
+                                                        {drive.name === 'Quark Drive' ? (drive.data?.nickname || t('quark_drive')) : drive.name}
+                                                    </span>
+                                                    {drive.isSystem && (
+                                                        <span className="inline-flex items-center rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary ring-1 ring-inset ring-primary/20 shrink-0">
+                                                            <Shield className="mr-1 h-2.5 w-2.5" />
+                                                            {t('global_public_drive')}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground truncate">
                                                     {drive.data?.nickname && <span>•</span>}
                                                     <span>{t('drive_connected')}</span>

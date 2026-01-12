@@ -63,6 +63,7 @@ export class ApiClient {
         if (roomId) params.append('roomId', roomId);
         if (isSystem) params.append('isSystem', 'true');
         if (authCode) params.append('authCode', authCode);
+        params.append('_t', Date.now().toString()); // Prevent caching
 
         const headers: Record<string, string> = {};
         if (userId) headers['x-user-id'] = userId;

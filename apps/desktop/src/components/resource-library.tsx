@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ApiClient, DriveFile, DriveAccount } from '@/api/client';
-import { FileIcon, FolderIcon, ChevronRight, Loader2, Plus, LayoutGrid, List as ListIcon, Search, HardDrive, Settings, User, Lock } from 'lucide-react';
+import { FileIcon, FolderIcon, ChevronRight, Loader2, Plus, LayoutGrid, List as ListIcon, Search, HardDrive, Settings, User, Lock, Shield } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
@@ -93,7 +93,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
         } else {
             setFiles([]);
         }
-    }, [open, currentFolder.id, selectedDriveId, legacyCookie, drives.length, isDrivesLoaded]);
+    }, [open, currentFolder.id, selectedDriveId, legacyCookie, drives, isDrivesLoaded]);
 
     const loadFiles = async (parentId: string) => {
         setLoading(true);
@@ -108,7 +108,8 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
             const effectiveDriveId = (selectedDriveId === 'system-drive') ? undefined : selectedDriveId;
 
             // When using system drive (id undefined), we might fallback to legacy cookie if present
-            const effectiveCookie = (!effectiveDriveId ? legacyCookie : undefined);
+            // If authCode is present, we prioritize it and ignore legacyCookie to avoid confusion
+            const effectiveCookie = (!effectiveDriveId && !authCode ? legacyCookie : undefined);
 
             const list = await ApiClient.listQuarkFiles(
                 parentId,
@@ -255,9 +256,17 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                                 <div className={cn("h-6 w-6 rounded-full flex items-center justify-center mr-2 shrink-0", selectedDriveId === drive.id ? "bg-background" : "bg-primary/10")}>
                                     {drive.avatar ? <img src={drive.avatar} className="h-full w-full rounded-full" /> : <User className="h-3 w-3" />}
                                 </div>
-                                <span className="truncate">
-                                    {drive.isSystem ? (t('global_public_drive') || drive.name) : (drive.name === 'Quark Drive' ? (drive.data?.nickname || t('quark_drive')) : drive.name)}
-                                </span>
+                                <div className="flex flex-col items-start truncate leading-none gap-0.5">
+                                    <span className="truncate text-sm">
+                                        {drive.name === 'Quark Drive' ? (drive.data?.nickname || t('quark_drive')) : drive.name}
+                                    </span>
+                                    {drive.isSystem && (
+                                        <span className="text-[10px] bg-primary/20 text-primary px-1 rounded flex items-center gap-0.5 w-max">
+                                            <Shield className="h-2 w-2" />
+                                            {t('global_public_drive')}
+                                        </span>
+                                    )}
+                                </div>
                             </Button>
                         ))}
 
@@ -283,7 +292,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                             {/* Breadcrumbs */}
                             <div className="flex items-center overflow-x-auto whitespace-nowrap scrollbar-hide flex-1 min-w-0 mr-4">
                                 {path.map((item, index) => (
-                                    <div key={item.id} className="flex items-center text-sm">
+                                    <div key={item.id} className="flex items-center text-sm flex-shrink-0">
                                         {index > 0 && <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />}
                                         <Button
                                             variant="ghost"

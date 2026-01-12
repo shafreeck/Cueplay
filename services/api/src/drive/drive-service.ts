@@ -42,8 +42,36 @@ export class DriveService {
         } finally {
             // Reload config store to ensure we have latest global settings
             await ConfigStore.load();
+            // Perform migration
+            await this.migrateLegacyCookie();
             this.loaded = true;
         }
+    }
+
+    private static async migrateLegacyCookie() {
+        const globalCookie = ConfigStore.getGlobalCookie();
+        if (!globalCookie) return;
+
+        // Check if already exists in accounts (avoid duplicates during migration)
+        const exists = this.accounts.some(a => a.data.cookie === globalCookie);
+
+        if (!exists) {
+            console.log('[DriveService] Migrating legacy global cookie to DriveAccount...');
+            const newAccount: DriveAccount = {
+                id: randomUUID(),
+                type: 'quark',
+                name: 'Global Public Drive',
+                isSystem: true,
+                isShared: true,
+                createdAt: Date.now(),
+                data: { cookie: globalCookie, nickname: 'Global Shared' }
+            };
+            this.accounts.push(newAccount);
+            await this.save();
+        }
+
+        // Wipe legacy storage
+        await ConfigStore.save({ globalQuarkCookie: '' });
     }
 
     private static async save() {
@@ -63,53 +91,13 @@ export class DriveService {
 
         if (filter.isSystem) {
             // Explicitly requesting system drives
-            const systemDrives = this.accounts.filter(a => a.isSystem || (!a.roomId && !a.userId && !a.isSystem));
-
-            // Check for legacy global cookie and inject as virtual system drive
-            const globalCookie = ConfigStore.getGlobalCookie();
-            if (globalCookie) {
-                // Ensure we don't duplicate if it's already converted to a real drive (naive check by cookie value)
-                // Actually, if we have a real drive with this cookie, we should prefer the real drive.
-                const exists = systemDrives.some(a => a.data.cookie === globalCookie);
-                if (!exists) {
-                    systemDrives.push({
-                        id: 'system-virtual-legacy',
-                        type: 'quark',
-                        name: 'Global Public Drive',
-                        isSystem: true,
-                        isShared: true,
-                        createdAt: Date.now(),
-                        data: { cookie: globalCookie, nickname: 'Global Shared' }
-                    });
-                }
-            }
-            return systemDrives;
+            return this.accounts.filter(a => a.isSystem || (!a.roomId && !a.userId && !a.isSystem));
         }
 
         let accounts: DriveAccount[] = [];
 
-        // 1. System Drives (Global fallback)
-        // 1. System Drives (Global fallback)
+        // 1. System Drives
         const systemDrives = this.accounts.filter(a => a.isSystem);
-
-        // Inject virtual global drive here too
-        // Inject virtual global drive here too
-        const globalCookie = ConfigStore.getGlobalCookie();
-        if (globalCookie) {
-            const exists = systemDrives.some(a => a.data.cookie === globalCookie);
-            if (!exists) {
-                systemDrives.push({
-                    id: 'system-virtual-legacy',
-                    type: 'quark',
-                    name: 'Global Public Drive',
-                    isSystem: true,
-                    isShared: true,
-                    createdAt: Date.now(),
-                    data: { cookie: globalCookie, nickname: 'Global Shared' }
-                });
-            }
-        }
-
         accounts = accounts.concat(systemDrives);
 
         // 2. User Drives (Personal, available in any room user is in)
@@ -118,10 +106,7 @@ export class DriveService {
             accounts = accounts.concat(userDrives);
         }
 
-        // 3. Room Drives (Shared drives in this room OR private drives in this room owned by this user)
-        // If a drive is in a room, but isShared=false, it should only be seen if userId matches.
-        // However, "User Drives" logic (step 2) already adds ALL drives belonging to userId.
-        // So here we only need to add drives that are SHARED and NOT already added (i.e. owned by others).
+        // 3. Room Drives
         if (filter.roomId) {
             const roomDrives = this.accounts.filter(a =>
                 a.roomId === filter.roomId &&
@@ -130,13 +115,7 @@ export class DriveService {
             accounts = accounts.concat(roomDrives);
         }
 
-        // 4. Legacy/Global fallback (drives with no room, no user, not system - backward compat)
-        // If strict mode, maybe we strictly require "isSystem" for global?
-        // For backward compatibility, treat existing "orphaned" drives as User drives if they lack ID?
-        // Or keep current behavior: if no params, return global?
-        // Let's keep logic: if no filter provided, return NOTHING (or just system).
-        // But previously getAccounts({}) returned globals.
-        // Let's maintain: global drives (no roomId/userId/isSystem) are considered "Legacy Global".
+        // 4. Legacy/Global fallback
         const legacyGlobals = this.accounts.filter(a => !a.roomId && !a.userId && !a.isSystem);
         accounts = accounts.concat(legacyGlobals);
 
@@ -151,25 +130,8 @@ export class DriveService {
 
     static async getAccount(id: string): Promise<DriveAccount | undefined> {
         await this.ensureLoaded();
-        await this.ensureLoaded();
         const account = this.accounts.find(a => a.id === id);
         if (account) return account;
-
-        // Check virtual legacy
-        if (id === 'system-virtual-legacy') {
-            const globalCookie = ConfigStore.getGlobalCookie();
-            if (globalCookie) {
-                return {
-                    id: 'system-virtual-legacy',
-                    type: 'quark',
-                    name: 'Global Public Drive',
-                    isSystem: true,
-                    isShared: true,
-                    createdAt: Date.now(),
-                    data: { cookie: globalCookie, nickname: 'Global Shared' }
-                };
-            }
-        }
         return undefined;
     }
 
@@ -213,6 +175,13 @@ export class DriveService {
 
     static async removeAccount(id: string) {
         await this.ensureLoaded();
+
+        // Handle Virtual Legacy Drive
+        if (id === 'system-virtual-legacy') {
+            await ConfigStore.save({ globalQuarkCookie: '' });
+            return;
+        }
+
         this.accounts = this.accounts.filter(a => a.id !== id);
         await this.save();
     }
