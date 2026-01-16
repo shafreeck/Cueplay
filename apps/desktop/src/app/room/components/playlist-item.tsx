@@ -50,9 +50,23 @@ export function PlaylistItemRenderer({
             {/* eslint-disable-next-line */}
             <div
                 className={cn(
-                    "group flex items-center justify-between p-2 rounded-md border transition-all ml-[calc(var(--level)*16px)]",
+                    "cue-playlist-item group flex items-center justify-between p-2 rounded-md border transition-all ml-[calc(var(--level)*16px)] outline-none focus:ring-2 focus:ring-primary/50 focus:bg-white/10",
                     isPlaying ? "bg-primary/20 border-primary/50" : "bg-white/5 border-white/5 hover:bg-white/10 active:bg-white/10"
                 )}
+                tabIndex={0}
+                role="button"
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // Trigger the click logic manually
+                        if (isFolder) {
+                            if (isMobile) onToggleExpand();
+                            else onToggleExpand(); // Desktop/TV behavior for folder
+                        } else {
+                            handlePlay(e as any);
+                        }
+                    }
+                }}
                 style={{ '--level': level } as React.CSSProperties}
                 onClick={(e) => {
                     // On mobile, clicking the row expands folder
@@ -195,9 +209,18 @@ export function PlaylistItemRenderer({
                             <div
                                 key={child.id}
                                 className={cn(
-                                    "flex items-center justify-between p-2 rounded-md text-xs group/child transition-all",
+                                    "cue-playlist-item flex items-center justify-between p-2 rounded-md text-xs group/child transition-all outline-none focus:ring-2 focus:ring-primary/50 focus:bg-white/10",
                                     isChildPlaying ? 'bg-primary/15 text-primary font-medium' : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'
                                 )}
+                                tabIndex={0}
+                                role="button"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        onPlay(child.fileId, child.id);
+                                    }
+                                }}
                             >
                                 <div className="flex items-center gap-2 min-w-0 mr-2 flex-1">
                                     <span className="font-mono opacity-40 tabular-nums">{index + 1}.{childIdx + 1}</span>

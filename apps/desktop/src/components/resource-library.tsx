@@ -409,8 +409,22 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                                         {filteredFiles.map(file => (
                                             <div
                                                 key={file.id}
-                                                className="group flex flex-col p-3 rounded-lg border border-border/40 bg-card hover:bg-accent/50 hover:border-primary/50 transition-all cursor-pointer relative shadow-sm"
+                                                className="group flex flex-col p-3 rounded-lg border border-border/40 bg-card hover:bg-accent/50 hover:border-primary/50 transition-all cursor-pointer relative shadow-sm outline-none focus:ring-2 focus:ring-primary/80 focus:bg-accent"
+                                                tabIndex={0}
+                                                role="button"
                                                 onClick={() => file.type === 'folder' ? handleNavigate(file) : null}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        if (file.type === 'folder') {
+                                                            handleNavigate(file);
+                                                        } else {
+                                                            // For files, we default to the primary action if available
+                                                            if (onAdd) handleAdd(file);
+                                                        }
+                                                    }
+                                                }}
                                             >
                                                 <div className="flex items-start gap-3">
                                                     <div className={`p-2 rounded-md ${file.type === 'folder' ? 'bg-primary/10 text-primary' : 'bg-secondary text-secondary-foreground'}`}>
@@ -459,8 +473,21 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                                         {filteredFiles.map(file => (
                                             <div
                                                 key={file.id}
-                                                className="group flex items-center gap-4 p-2 rounded-lg border border-transparent hover:bg-accent/50 hover:border-sidebar-border transition-all cursor-pointer"
+                                                className="group flex items-center gap-4 p-2 rounded-lg border border-transparent hover:bg-accent/50 hover:border-sidebar-border transition-all cursor-pointer outline-none focus:ring-2 focus:ring-primary/80 focus:bg-accent"
+                                                tabIndex={0}
+                                                role="button"
                                                 onClick={() => file.type === 'folder' ? handleNavigate(file) : null}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        if (file.type === 'folder') {
+                                                            handleNavigate(file);
+                                                        } else {
+                                                            if (onAdd) handleAdd(file);
+                                                        }
+                                                    }
+                                                }}
                                             >
                                                 <div className={`p-1.5 rounded-md ${file.type === 'folder' ? 'bg-primary/10 text-primary' : 'bg-secondary text-secondary-foreground'}`}>
                                                     {file.type === 'folder' ? <FolderIcon className="h-4 w-4" /> : <FileIcon className="h-4 w-4" />}

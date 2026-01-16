@@ -157,7 +157,21 @@ function RoomItem({
       {/* Main Content (Foreground) */}
       <Link
         href={href}
-        className="block relative z-10 glass border-white/10 active:bg-white/10 transition-colors"
+        className="block relative z-10 glass border-white/10 active:bg-white/10 transition-colors outline-none focus:ring-2 focus:ring-primary/50 focus:bg-white/10 rounded-2xl"
+        tabIndex={0}
+        role="button"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            // Find and click the link programmatically or let NextJS Link handle it?
+            // Next/Link usually handles click. Enter key on an anchor usually triggers click.
+            // But let's be explicit if needed.
+            // Actually, for accessibility, native <a> tag handles Enter by default.
+            // But we added role="button", so we should handle it.
+            // Let's just ensure the event bubbles or triggers the click.
+            e.currentTarget.click();
+          }
+        }}
         onClick={(e) => {
           // If it was a long press, prevent navigation
           if (isLongPress || currentX !== 0) {

@@ -27,8 +27,15 @@ export function AppUpdater() {
     const [isAndroid, setIsAndroid] = useState(false);
 
     useEffect(() => {
-        const os = platform();
-        setIsAndroid(os === 'android');
+        // Safe check for Tauri environment
+        if (typeof window !== 'undefined' && '__TAURI__' in window) {
+            try {
+                const os = platform();
+                setIsAndroid(os === 'android');
+            } catch (e) {
+                console.warn('Failed to detect platform:', e);
+            }
+        }
     }, []);
 
     // Simple version comparison: 1 if v1 > v2, -1 if v1 < v2, 0 if equal

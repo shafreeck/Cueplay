@@ -1955,10 +1955,31 @@ function RoomContent() {
                             {isMobile ? roomId : t('room_title', { id: roomId })}
                         </h1>
                         <div
-                            className={`flex items-center gap-1.5 px-2 md:px-3 py-1 rounded-full text-xs font-bold border transition-all duration-300 ${canControl
+                            className={`flex items-center gap-1.5 px-2 md:px-3 py-1 rounded-full text-xs font-bold border transition-all duration-300 outline-none focus:ring-2 focus:ring-primary/50 ${canControl
                                 ? 'bg-primary/50 text-white border-primary/50 shadow-[0_0_15px_rgba(124,58,237,0.25)] cursor-default'
                                 : 'bg-muted/50 text-muted-foreground border-white/10 hover:bg-muted hover:text-foreground cursor-pointer'
                                 }`}
+                            tabIndex={0}
+                            role="button"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    if (canControl) return;
+
+                                    if (isLocked && !isOwner) {
+                                        toast({
+                                            title: t('control_locked'),
+                                            description: t('control_locked_desc'),
+                                            variant: "destructive"
+                                        });
+                                        return;
+                                    }
+
+                                    if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                        socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId: roomId || '' } }));
+                                        toast({ title: t('control_requested_title'), description: t('control_requested_desc') });
+                                    }
+                                }
+                            }}
                             onClick={() => {
                                 if (canControl) return;
 
@@ -2190,6 +2211,7 @@ function RoomContent() {
                         )}
                         tabIndex={0}
                         onKeyDown={handleKeyDown}
+                        onFocus={() => setShowControls(true)}
                         onTouchStart={handleTouchStart}
                         onMouseLeave={handleMouseLeave}
                         onDoubleClick={handleDoubleClick}
@@ -2219,10 +2241,21 @@ function RoomContent() {
                                 <div className="flex items-center gap-2 pointer-events-auto">
                                     {/* Control Status Indicator */}
                                     <div
-                                        className={`flex items-center justify-center h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 ${canControl
+                                        className={`flex items-center justify-center h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 outline-none focus:ring-2 focus:ring-primary/50 ${canControl
                                             ? 'text-primary border-primary/50 shadow-[0_0_10px_rgba(124,58,237,0.3)]'
                                             : 'text-white/70'
                                             }`}
+                                        tabIndex={0}
+                                        role="button"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                if (canControl) return;
+                                                if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                    socketRef.current.send(JSON.stringify({ type: 'TAKE_CONTROL', payload: { roomId: roomId || '' } }));
+                                                    toast({ title: t('control_requested_title'), description: t('control_requested_desc') });
+                                                }
+                                            }
+                                        }}
                                         onClick={(e) => {
                                             if (canControl) return;
                                             if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -2230,14 +2263,21 @@ function RoomContent() {
                                                 toast({ title: t('control_requested_title'), description: t('control_requested_desc') });
                                             }
                                         }}
+                                        onFocus={() => setShowControls(true)}
                                     >
                                         {canControl ? <Cast className="h-5 w-5" /> : (isLocked ? <Lock className="h-5 w-5" /> : <Eye className="h-5 w-5" />)}
                                     </div>
 
                                     {/* Resource Library Trigger */}
                                     <div
-                                        className="flex items-center justify-center h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/70 hover:text-primary hover:border-primary/50 hover:shadow-[0_0_10px_rgba(124,58,237,0.3)] transition-all cursor-pointer"
+                                        className="flex items-center justify-center h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 text-white/70 hover:text-primary hover:border-primary/50 hover:shadow-[0_0_10px_rgba(124,58,237,0.3)] transition-all cursor-pointer outline-none focus:ring-2 focus:ring-primary/50"
                                         onClick={() => setIsLibraryOpen(true)}
+                                        tabIndex={0}
+                                        role="button"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') setIsLibraryOpen(true);
+                                        }}
+                                        onFocus={() => setShowControls(true)}
                                         title={t('resource_library')}
                                     >
                                         <FolderSearch className="h-5 w-5" />
@@ -2419,7 +2459,7 @@ function RoomContent() {
                                             <button
                                                 key={res.id}
                                                 className={cn(
-                                                    "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90",
+                                                    "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90 outline-none focus:ring-2 focus:ring-primary/50",
                                                     currentResolution === res.id
                                                         ? "bg-white/20 text-white shadow-sm"
                                                         : "text-zinc-500 hover:text-white hover:bg-white/10"
@@ -2428,6 +2468,7 @@ function RoomContent() {
                                                     e.stopPropagation();
                                                     changeResolution(res);
                                                 }}
+                                                onFocus={() => setShowControls(true)}
                                             >
                                                 {getResolutionLabel(res.name)}
                                             </button>
@@ -2444,11 +2485,12 @@ function RoomContent() {
                                         {!isSubMenuOpen ? (
                                             // Subtitle Trigger Button
                                             <button
-                                                className="w-12 py-1.5 text-[10px] font-bold text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                                                className="w-12 py-1.5 text-[10px] font-bold text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-90 outline-none focus:ring-2 focus:ring-primary/50"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setIsSubMenuOpen(true);
                                                 }}
+                                                onFocus={() => setShowControls(true)}
                                             >
                                                 {t('sub_short')}
                                             </button>
@@ -2456,11 +2498,12 @@ function RoomContent() {
                                             // Subtitle Sub-menu Content
                                             <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col">
                                                 <button
-                                                    className="flex items-center gap-2 px-2 py-1.5 border-b border-white/5 mb-1 group hover:text-white transition-colors"
+                                                    className="flex items-center gap-2 px-2 py-1.5 border-b border-white/5 mb-1 group hover:text-white transition-colors outline-none focus:ring-2 focus:ring-primary/50 rounded-lg"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         setIsSubMenuOpen(false);
                                                     }}
+                                                    onFocus={() => setShowControls(true)}
                                                 >
                                                     <ArrowLeft className="w-3 h-3 text-zinc-500 group-hover:text-white transition-colors" />
                                                     <span className="text-[10px] uppercase tracking-tighter text-zinc-400 font-bold">
@@ -2472,7 +2515,7 @@ function RoomContent() {
                                                         <button
                                                             key={t.id}
                                                             className={cn(
-                                                                "px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap text-left flex justify-between items-center gap-4",
+                                                                "px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap text-left flex justify-between items-center gap-4 outline-none focus:ring-2 focus:ring-primary/50",
                                                                 selectedManualTrackId === t.id
                                                                     ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                                                                     : "text-zinc-400 hover:text-white hover:bg-white/10"
@@ -2481,6 +2524,7 @@ function RoomContent() {
                                                                 e.stopPropagation();
                                                                 setSelectedManualTrackId(t.id);
                                                             }}
+                                                            onFocus={() => setShowControls(true)}
                                                         >
                                                             <span className="truncate max-w-[120px]">{t.language ? t.language.toUpperCase() : `TRACK ${t.id}`}</span>
                                                             {selectedManualTrackId === t.id && <Check className="w-3 h-3 shrink-0" />}
@@ -2496,7 +2540,7 @@ function RoomContent() {
                                 <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-2">
                                     <button
                                         className={cn(
-                                            "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90 flex items-center justify-center gap-1",
+                                            "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90 flex items-center justify-center gap-1 outline-none focus:ring-2 focus:ring-primary/50",
                                             isDanmakuEnabled
                                                 ? "bg-white/20 text-white shadow-sm"
                                                 : "text-zinc-500 hover:text-white hover:bg-white/10"
@@ -2506,6 +2550,7 @@ function RoomContent() {
                                             setIsDanmakuEnabled(!isDanmakuEnabled);
                                             toast({ description: !isDanmakuEnabled ? t('danmaku_on') : t('danmaku_off'), duration: 1000 });
                                         }}
+                                        onFocus={() => setShowControls(true)}
                                         title={isDanmakuEnabled ? t('hide_danmaku') : t('show_danmaku')}
                                     >
                                         <span className="text-[12px]">{t('danmaku_short')}</span>
