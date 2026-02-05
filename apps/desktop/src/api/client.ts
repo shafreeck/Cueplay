@@ -196,11 +196,11 @@ export class ApiClient {
         return data.lease;
     }
 
-    static async resolveVideo(fileId: string, roomId?: string, authCode?: string, driveId?: string): Promise<any> {
+    static async resolveVideo(fileId: string, roomId?: string, authCode?: string, driveId?: string, isAudio?: boolean): Promise<any> {
         const res = await fetch(`${API_BASE}/playback/resolve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileId, roomId, authCode, driveId }),
+            body: JSON.stringify({ fileId, roomId, authCode, driveId, isAudio }),
         });
         if (!res.ok) {
             const err = await res.json();

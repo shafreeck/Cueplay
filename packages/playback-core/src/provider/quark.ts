@@ -4,6 +4,7 @@ interface QuarkContext {
     cookie: string;
     userAgent?: string;
     shareId?: string; // If playing from a share
+    isAudio?: boolean; // Hint to use download API directly
 }
 
 export interface DriveFile {
@@ -18,6 +19,7 @@ export interface DriveFile {
 
 export class QuarkProvider implements PlayableProvider {
     private static API_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/v2/play?pr=ucpro&fr=pc';
+    private static DOWNLOAD_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/download?pr=ucpro&fr=pc';
     private static LIST_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/sort';
     private static QR_TOKEN_URL = 'https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin';
     private static QR_STATUS_URL = 'https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken';
@@ -37,9 +39,44 @@ export class QuarkProvider implements PlayableProvider {
             'Content-Type': 'application/json'
         };
 
+        // Optimized path for Audio files: Skip the video play API (which fails with 400) and go straight to download
+        if (context.isAudio) {
+            console.log('[Quark] Audio file detected, using download API directly.');
+            const downloadResponse = await fetch(QuarkProvider.DOWNLOAD_URL, {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Origin': 'https://pan.quark.cn',
+                    'Referer': 'https://pan.quark.cn/',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                body: JSON.stringify({
+                    fids: [fileId],
+                    share_id: context.shareId,
+                })
+            });
+
+            if (downloadResponse.ok) {
+                const dlData = await downloadResponse.json() as any;
+                if ((dlData.code === 0 || dlData.code === 200) && dlData.data?.download_url) {
+                    return {
+                        id: fileId,
+                        url: dlData.data.download_url,
+                        type: 'audio',
+                        headers: {
+                            'User-Agent': headers['User-Agent'],
+                            'Referer': 'https://pan.quark.cn/',
+                            'Cookie': headers['Cookie']
+                        },
+                        meta: dlData.data
+                    };
+                }
+            }
+            // If direct download fails, we fall through to try standard video API (unlikely to help, but safe)
+            console.warn('[Quark] Direct audio download failed, falling back to standard flow.');
+        }
+
         // Assuming POST based on typical file/v2/play endpoints, but could be GET.
-        // Usually play endpoints take file_id in body or query. Given the URL has params, it might be a POST with body.
-        // Let's assume POST with body for now as it's common for these drives.
         const body = JSON.stringify({
             fid: fileId,
             share_id: context.shareId, // Optional
@@ -51,7 +88,8 @@ export class QuarkProvider implements PlayableProvider {
             body
         });
 
-        if (!response.ok) {
+        // If not OK and not 400 (which we handle as fallback), throw error
+        if (!response.ok && response.status !== 400) {
             const headerObj: Record<string, string> = {};
             response.headers.forEach((v, k) => { headerObj[k] = v; });
             console.error('[Quark] API Request Failed:', {
@@ -62,30 +100,60 @@ export class QuarkProvider implements PlayableProvider {
             throw new Error(`Quark API failed: ${response.status} ${response.statusText}`);
         }
 
+        const data = await response.json() as any;
+
+        // If standard play endpoint fails (code != 0/200), try fallback to download endpoint
+        // This often happens for audio files which don't support the video play endpoint
+        if (data.code !== 0 && data.code !== 200) {
+            console.warn(`[Quark] Play endpoint failed (code ${data.code}), trying download endpoint fallback...`);
+            
+            const downloadResponse = await fetch(QuarkProvider.DOWNLOAD_URL, {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Origin': 'https://pan.quark.cn',
+                    'Referer': 'https://pan.quark.cn/',
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                body: JSON.stringify({
+                    fids: [fileId], // Use fids array
+                    share_id: context.shareId,
+                })
+            });
+
+            if (downloadResponse.ok) {
+                const dlData = await downloadResponse.json() as any;
+                if ((dlData.code === 0 || dlData.code === 200) && dlData.data?.download_url) {
+                    // Use download URL as direct playback URL
+                    return {
+                        id: fileId,
+                        url: dlData.data.download_url,
+                        type: 'audio', // Assume audio/file for download links
+                        headers: {
+                            'User-Agent': headers['User-Agent'],
+                            'Referer': 'https://pan.quark.cn/',
+                            'Cookie': headers['Cookie']
+                        },
+                        meta: dlData.data
+                    };
+                }
+            }
+
+            // If fallback also fails, log and throw original error
+            console.error('[Quark] API Error Response:', JSON.stringify(data, null, 2));
+            throw new Error(`Quark API error: ${JSON.stringify(data)}`);
+        }
+
         // Capture new cookies (e.g. Video-Auth) from the response to use for playback
         const newCookies = (response.headers as any).getSetCookie
             ? (response.headers as any).getSetCookie().map((c: string) => c.split(';')[0]).join('; ')
             : (response.headers.get('set-cookie') ? this.parseCookieHeader(response.headers.get('set-cookie')!) : '');
-
-        const data = await response.json() as any;
-
-        if (data.code !== 0 && data.code !== 200) {
-            console.error('[Quark] API Error Response:', JSON.stringify(data, null, 2));
-            console.error('[Quark] Sent Cookie (First 50 chars):', headers.Cookie.substring(0, 50) + '...');
-            throw new Error(`Quark API error: ${JSON.stringify(data)}`);
-        }
-
-        // Attempt to extract HLS URL. The structure varies, usually in data.data.play_url or similar.
-        // I will look for common fields or update based on user feedback/error.
-        // Commonly: data.data.video_info.play_url or data.data.m3u8_url
-        // Let's look for a likely candidate.
 
         let playUrl = data.data?.url;
         let resolutions: Array<{ id: string; name: string; url: string; width?: number; height?: number }> = [];
 
         // Handle video_list response (new format)
         if (data.data?.video_list && Array.isArray(data.data.video_list)) {
-            console.log('[Quark Debug] Video List:', JSON.stringify(data.data.video_list, null, 2));
             const list = data.data.video_list;
 
             // Map resolutions
@@ -97,26 +165,26 @@ export class QuarkProvider implements PlayableProvider {
                     url: v.video_info.url,
                     width: v.video_info.width,
                     height: v.video_info.height,
-                    format_type: v.video_info?.format_type // Log this if possible
+                    format_type: v.video_info?.format_type
                 }));
-            console.log('[Quark Debug] Parsed Resolutions:', JSON.stringify(resolutions, null, 2));
 
             // Strategy: Find first with channels=2. If not found, fallback to first.
-        if (!playUrl) {
-            const stereoStream = list.find((v: any) => v.video_info?.audio?.channels === 2 && v.video_info?.url);
+            if (!playUrl) {
+                const stereoStream = list.find((v: any) => v.video_info?.audio?.channels === 2 && v.video_info?.url);
 
-            if (stereoStream) {
-                playUrl = stereoStream.video_info.url;
-            } else if (resolutions.length > 0) {
-                // Fallback to the first available URL (usually the highest quality or first in list)
-                playUrl = resolutions[0].url;
+                if (stereoStream) {
+                    playUrl = stereoStream.video_info.url;
+                } else if (resolutions.length > 0) {
+                    // Fallback to the first available URL (usually the highest quality or first in list)
+                    playUrl = resolutions[0].url;
+                }
             }
         }
 
         // Detect type (audio or mp4/hls)
         // If there's no resolution info but we have a playUrl, it might be an audio file
         let sourceType: 'mp4' | 'hls' | 'dash' | 'audio' = 'mp4';
-        if (playUrl.includes('.m3u8')) {
+        if (playUrl && playUrl.includes('.m3u8')) {
             sourceType = 'hls';
         } else if (data.data?.audio_info || (!data.data?.video_list && data.data?.url)) {
             // Simplified heuristic for audio
@@ -209,14 +277,6 @@ export class QuarkProvider implements PlayableProvider {
 
             allFiles = [...allFiles, ...mappedFiles];
 
-            // Termination condition:
-            // 1. If we have fetched all items according to 'total' (if total > 0)
-            // 2. Or if the returned list is absolutely empty (definitely no more data)
-            // Note: We DO NOT stop just because list.length < size, because server-side filtering (risk files)
-            // can result in a short page even if there are more items on next pages.
-            // However, we should be careful not to infinite loop if total is 0 or broken.
-            // The safest bet for Quark is: if list is empty, we are done. If list has items, we try next page 
-            // UNLESS we are sure we have everything.
             if ((total > 0 && allFiles.length >= total) || list.length === 0) {
                 hasMore = false;
             } else {
@@ -255,7 +315,6 @@ export class QuarkProvider implements PlayableProvider {
             passcode: options?.passCode || ''
         };
 
-        console.log('[Quark] Getting share token for', pwdId);
         const tokenRes = await fetch(QuarkProvider.SHARE_TOKEN_URL, {
             method: 'POST',
             headers,
@@ -272,14 +331,7 @@ export class QuarkProvider implements PlayableProvider {
         }
 
         const stoken = tokenData.data?.stoken;
-        if (!stoken) {
-            // Some public links might not return stoken or use a different flow?
-            // Or maybe stoken is blank for public? Let's check data structure.
-            // If stoken is missing, we can try to proceed with empty stoken or throw.
-            // Usually it is required.
-            console.warn('[Quark] No stoken returned, trying to proceed without distinct stoken or check response structure:', JSON.stringify(tokenData));
-        }
-
+        
         // 3. Save Files
         const saveBody = {
             pwd_id: pwdId,
@@ -290,7 +342,6 @@ export class QuarkProvider implements PlayableProvider {
             scene: 'link'
         };
 
-        console.log('[Quark] Saving share content...');
         const saveRes = await fetch(QuarkProvider.SHARE_SAVE_URL, {
             method: 'POST',
             headers,
@@ -311,7 +362,6 @@ export class QuarkProvider implements PlayableProvider {
 
     /**
      * Generate QR code for login
-     * Based on captured Quark API: https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin
      */
     async generateQRCode(): Promise<{ token: string; qrcodeUrl: string; cookies: string }> {
         const requestId = this.generateUUID();
@@ -341,14 +391,10 @@ export class QuarkProvider implements PlayableProvider {
             throw new Error('No token in response');
         }
 
-        // Capture session cookies from response
         const cookies = (response.headers as any).getSetCookie
             ? (response.headers as any).getSetCookie().map((c: string) => c.split(';')[0]).join('; ')
             : (response.headers.get('set-cookie') ? this.parseCookieHeader(response.headers.get('set-cookie')!) : '');
 
-        // The QR code URL can be generated from the token
-        // Use the exact format found in the official web client to avoid "Expired" errors on mobile
-        // Missing parameters (client_id, ssb, uc_biz_str) caused the mobile app to reject the token
         const qrcodeUrl = `https://su.quark.cn/4_eMHBJ?token=${token}&client_id=532&ssb=weblogin&uc_param_str=&uc_biz_str=S:custom%7COPT:SAREA@0%7COPT:IMMERSIVE@1%7COPT:BACK_BTN_STYLE@0`;
 
         return { token, qrcodeUrl, cookies };
@@ -356,7 +402,6 @@ export class QuarkProvider implements PlayableProvider {
 
     /**
      * Check QR code login status
-     * Based on captured Quark API: https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken
      */
     async checkQRCodeStatus(token: string, cookies?: string): Promise<{ status: 'pending' | 'success' | 'expired' | 'scanned'; cookie?: string; statusCode?: number }> {
         const requestId = this.generateUUID();
@@ -388,19 +433,15 @@ export class QuarkProvider implements PlayableProvider {
 
         const data = await response.json() as any;
 
-        // Status code 50004001 means "not scanned yet" or "pending"
         if (data.status === 50004001) {
             return { status: 'pending', statusCode: data.status };
         }
 
-        // Status code 50004002 means "scanned" (Waiting for confirmation)
         if (data.status === 50004002) {
             return { status: 'scanned', statusCode: data.status };
         }
 
-        // Status code 2000000 means success
         if (data.status === 2000000 && data.data?.members?.service_ticket) {
-            // Extract CAS cookies from the response (e.g. CASTGC)
             const setCookieHeader = (response.headers as any).getSetCookie
                 ? (response.headers as any).getSetCookie().map((c: string) => c.split(';')[0]).join('; ')
                 : (response.headers.get('set-cookie') ? this.parseCookieHeader(response.headers.get('set-cookie')!) : '');
@@ -409,7 +450,6 @@ export class QuarkProvider implements PlayableProvider {
             const ticket = data.data.members.service_ticket;
 
             try {
-                // Common headers for all requests to mimic browser behavior
                 const commonHeaders = {
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0',
                     'Referer': 'https://pan.quark.cn/',
@@ -422,8 +462,6 @@ export class QuarkProvider implements PlayableProvider {
                     return raw.map((c: string) => c.split(';')[0]).join('; ');
                 };
 
-                // Step 1: Account Info to get __pus directly using ticket (Simplified Flow)
-                // Skip /login callback as per user observation
                 const accountInfoUrl = `https://pan.quark.cn/account/info?st=${ticket}&lw=scan`;
                 const accountRes = await fetch(accountInfoUrl, {
                     method: 'GET',
@@ -446,7 +484,6 @@ export class QuarkProvider implements PlayableProvider {
                     currentCookies = currentCookies ? `${currentCookies}; ${step1Cookies}` : step1Cookies;
                 }
 
-                // Step 2: Config to get __puus (Final Session Cookie)
                 const configUrl = 'https://drive-pc.quark.cn/1/clouddrive/config?pr=ucpro&fr=pc&uc_param_str=';
                 const configRes = await fetch(configUrl, {
                     method: 'GET',
@@ -469,8 +506,6 @@ export class QuarkProvider implements PlayableProvider {
                     currentCookies = currentCookies ? `${currentCookies}; ${step2Cookies}` : step2Cookies;
                 }
 
-                console.log('[Quark] Login Complete. Captured cookies length:', currentCookies.length);
-
             } catch (error: any) {
                 console.error('[Quark] Failed to exchange service ticket for cookies:', error);
             }
@@ -483,17 +518,11 @@ export class QuarkProvider implements PlayableProvider {
         }
 
         console.warn(`[Quark] Check Status Error: ${data.status} ${data.message}`);
-
-        // Other status codes are considered expired or error
         return { status: 'expired', statusCode: data.status };
     }
 
-    /**
-     * Get account info (nickname, avatar)
-     */
     async getAccountInfo(cookie: string): Promise<{ nickname?: string; avatar?: string; id?: string }> {
         const url = 'https://pan.quark.cn/account/info?fr=pc&platform=pc';
-        // Headers mimicking the user's successful curl request
         const headers = {
             'Cookie': cookie,
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0',
@@ -520,7 +549,6 @@ export class QuarkProvider implements PlayableProvider {
             }
 
             const data = await response.json() as any;
-            // Quark API returns code: "OK" for success, or 0/200 for other endpoints
             if (data.code !== 0 && data.code !== 200 && data.code !== 'OK') {
                 console.warn('[Quark] Failed to get account info API error:', data);
                 return {};
@@ -529,7 +557,7 @@ export class QuarkProvider implements PlayableProvider {
             const user = data.data;
             return {
                 nickname: user.nickname,
-                avatar: user.avatar || user.avatarUri, // Some endpoints use avatarUri
+                avatar: user.avatar || user.avatarUri,
                 id: user.id
             };
         } catch (e) {
@@ -538,9 +566,6 @@ export class QuarkProvider implements PlayableProvider {
         }
     }
 
-    /**
-     * Generate a UUID for request tracking
-     */
     private generateUUID(): string {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
             const r = (Math.random() * 16) | 0;
@@ -549,53 +574,8 @@ export class QuarkProvider implements PlayableProvider {
         });
     }
 
-    /**
-     * Parse Set-Cookie header to extract cookie string
-     * Handles multiple cookies and ignores commas in Expires dates
-     */
     private parseCookieHeader(setCookieHeader: string): string {
         const cookies: string[] = [];
-
-        // Split by comma, but only if not followed by a space (which usually indicates a date like "Mon, 21 Oct")
-        // This is a simple heuristic. A more robust way is to use a regex or a proper parser.
-        // Given we want key=value; key=value, we can focus on extracting those.
-
-        // Better approach: regex to find key=value at the start of each cookie definition
-        // Set-Cookie header parts usually start with "Name=Value"
-
-        // If we treat the whole string as one long string, we can try to split by ", "
-        // but "Expires=..., " is tricky.
-
-        // Let's iterate and split carefully.
-        let start = 0;
-        let depth = 0;
-        const parts: string[] = [];
-
-        for (let i = 0; i < setCookieHeader.length; i++) {
-            if (setCookieHeader[i] === ',') {
-                // Check if this comma is likely a separator or part of a date
-                // Separators in Set-Cookie are typically followed by a non-space or end of string? 
-                // No, usually ", Name=Value".
-                // But date is "Mon, 01...". Comma followed by space.
-
-                // Let's fallback to a simpler regex that works for most standard cookies
-                // We mainly need the first part (Name=Value) of each Set-Cookie.
-            }
-        }
-
-        // Simpler regex approach: 
-        // Match "Key=Value;" or "Key=Value," or end of line.
-        // But headers might be merged.
-
-        // Actually, for Quark, we really only care about specific cookies or just forwarding everything intelligently.
-        // If we just want to extract "key=value", we can look for that pattern.
-
-        // Regex to split Set-Cookie string into individual cookies:
-        // Split by comma that is NOT inside a date (e.g. "Mon, 12-Jan")
-        // It's hard to be perfect without a library.
-
-        // Let's try `set-cookie-parser` logic simplified:
-        // Assume comma separation.
         const items = setCookieHeader.split(/,(?=\s*[a-zA-Z0-9_-]+=)/);
 
         for (const item of items) {

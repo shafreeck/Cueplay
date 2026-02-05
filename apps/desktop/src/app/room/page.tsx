@@ -741,7 +741,7 @@ function RoomContent() {
             const driveId = explicitDriveId || item?.driveId;
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, item?.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
             lastVideoCookieRef.current = cookie;
             addLog(`[ResolveSync] Source: ${JSON.stringify(source, null, 2)}`);
             setRawUrl(source.url);
@@ -794,7 +794,7 @@ function RoomContent() {
             const driveId = item?.driveId;
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, item?.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
 
             // Update metadata UI states
             setRawUrl(source.url);
@@ -858,7 +858,7 @@ function RoomContent() {
         try {
             console.log(`[Preload] Resolving next: ${nextItem.title || nextItem.fileId}, ID: ${fid}, Room: ${roomId}`);
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId, nextItem.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
             let nextUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
@@ -965,7 +965,7 @@ function RoomContent() {
             const driveId = explicitDriveId || item?.driveId;
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, item?.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
             lastVideoCookieRef.current = cookie;
             addLog(`[Resolve] Source: ${JSON.stringify(source, null, 2)}`);
             console.log("Resolve result (Full):", { source, cookieLen: cookie?.length });
@@ -1065,10 +1065,10 @@ function RoomContent() {
         try {
             // Resolve first to validate
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, undefined, fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
             const title = source.meta?.file_name || source.meta?.title || fid;
 
-            const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title };
+            const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title, isAudio: fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -1169,10 +1169,10 @@ function RoomContent() {
         setIsResolving(true);
         try {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId);
+            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId, file.name.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null || file.mimeType?.startsWith('audio/'));
             const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
 
-            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file', driveId: file.driveId };
+            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file', driveId: file.driveId, isAudio: file.name.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null || file.mimeType?.startsWith('audio/') };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -1460,7 +1460,7 @@ function RoomContent() {
                     const item = playlistRef.current.find(i => i.fileId === remoteFileId || i.id === playingItemId);
                     const driveId = item?.driveId;
 
-                    ApiClient.resolveVideo(remoteFileId, roomId || '', authCode, driveId).then(({ source }) => {
+                    ApiClient.resolveVideo(remoteFileId, roomId || '', authCode, driveId, remoteFileId.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null).then(({ source }) => {
                         setPlaylist(prev => prev.map(item =>
                             item.fileId === remoteFileId && item.title === 'Current Video'
                                 ? { ...item, title: source.meta?.file_name || source.meta?.title || remoteFileId }
