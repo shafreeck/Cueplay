@@ -102,18 +102,25 @@ export class QuarkProvider implements PlayableProvider {
             console.log('[Quark Debug] Parsed Resolutions:', JSON.stringify(resolutions, null, 2));
 
             // Strategy: Find first with channels=2. If not found, fallback to first.
-            if (!playUrl) {
-                const stereoStream = list.find((v: any) => v.video_info?.audio?.channels === 2 && v.video_info?.url);
+        if (!playUrl) {
+            const stereoStream = list.find((v: any) => v.video_info?.audio?.channels === 2 && v.video_info?.url);
 
-                if (stereoStream) {
-                    playUrl = stereoStream.video_info.url;
-                } else if (resolutions.length > 0) {
-                    // Fallback to the first available URL (usually the highest quality or first in list)
-                    playUrl = resolutions[0].url;
-                }
+            if (stereoStream) {
+                playUrl = stereoStream.video_info.url;
+            } else if (resolutions.length > 0) {
+                // Fallback to the first available URL (usually the highest quality or first in list)
+                playUrl = resolutions[0].url;
             }
-        } else {
-            console.log('[Quark Debug] No video_list found. Full Data:', JSON.stringify(data, null, 2));
+        }
+
+        // Detect type (audio or mp4/hls)
+        // If there's no resolution info but we have a playUrl, it might be an audio file
+        let sourceType: 'mp4' | 'hls' | 'dash' | 'audio' = 'mp4';
+        if (playUrl.includes('.m3u8')) {
+            sourceType = 'hls';
+        } else if (data.data?.audio_info || (!data.data?.video_list && data.data?.url)) {
+            // Simplified heuristic for audio
+            sourceType = 'audio';
         }
 
         if (!playUrl) {
@@ -123,7 +130,7 @@ export class QuarkProvider implements PlayableProvider {
         return {
             id: fileId,
             url: playUrl,
-            type: 'mp4', // The URL provided in the log is mp4, but sometimes m3u8. Check format extension if needed.
+            type: sourceType,
             headers: {
                 'User-Agent': headers['User-Agent'], // Important for playing the stream
                 'Referer': 'https://pan.quark.cn/',

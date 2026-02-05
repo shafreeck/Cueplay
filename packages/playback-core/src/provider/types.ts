@@ -1,7 +1,7 @@
 export interface PlayableSource {
     id: string; // usually fileId
     url: string; // The playback URL (HLS/mp4)
-    type: 'hls' | 'mp4' | 'dash';
+    type: 'hls' | 'mp4' | 'dash' | 'audio';
     headers?: Record<string, string>; // Headers required for playback (e.g. Cookie, User-Agent)
     expiresAt?: number; // Timestamp when the URL might expire
     meta?: any; // any extra provider-specific metadata

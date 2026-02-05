@@ -188,7 +188,7 @@ export function ResourceLibrary({ open, onOpenChange, cookie: legacyCookie, onAd
                 for (const item of list) {
                     if (item.type === 'folder') {
                         await collectVideos(item.id, currentPath ? `${currentPath} / ${item.name}` : item.name, depth + 1);
-                    } else if (item.mimeType?.startsWith('video/') || item.name.match(/\.(mp4|mkv|avi|flv|mov|wmv)$/i)) {
+                    } else if (item.mimeType?.startsWith('video/') || item.mimeType?.startsWith('audio/') || item.name.match(/\.(mp4|mkv|avi|flv|mov|wmv|mp3|flac|wav|m4a|ogg)$/i)) {
                         allVideos.push({
                             ...item,
                             name: currentPath ? `${currentPath} / ${item.name}` : item.name,
