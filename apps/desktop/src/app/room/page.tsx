@@ -33,6 +33,12 @@ import { MemberItem } from './components/member-item';
 import { SeamlessVideoPlayer } from './components/seamless-player';
 import { DanmakuOverlay } from './components/danmaku-overlay';
 
+// Helper function to determine if a file is an audio file
+const isAudioFile = (filename: string, mimeType?: string): boolean => {
+  if (mimeType?.startsWith('audio/')) return true;
+  return /\.(mp3|flac|wav|m4a|ogg)$/i.test(filename);
+};
+
 interface SortableItemProps {
     item: PlaylistItem;
     index: number;
