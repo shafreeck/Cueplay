@@ -13,6 +13,7 @@
         "creating": "Creating...",
         "my_rooms": "My Rooms",
         "visited_rooms": "Visited Rooms",
+        "host_paused": "Host paused",
         "room_title": "Room {{id}}",
         "members_count": "Members: {{count}}",
         "enter_room": "Enter Room",

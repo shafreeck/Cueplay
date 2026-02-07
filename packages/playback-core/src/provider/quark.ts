@@ -19,7 +19,7 @@ export interface DriveFile {
 
 export class QuarkProvider implements PlayableProvider {
     private static API_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/v2/play?pr=ucpro&fr=pc';
-    private static DOWNLOAD_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/download?pr=ucpro&fr=pc';
+    private static DOWNLOAD_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/download?pr=ucpro&fr=pc&uc_param_str=';
     private static LIST_URL = 'https://drive-pc.quark.cn/1/clouddrive/file/sort';
     private static QR_TOKEN_URL = 'https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin';
     private static QR_STATUS_URL = 'https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken';
@@ -39,19 +39,20 @@ export class QuarkProvider implements PlayableProvider {
             'Content-Type': 'application/json'
         };
 
-        // Aggressively check for audio type via fileId or metadata
+        // 0. Pre-fetch Metadata to determine type and get UI info
+        let meta: any = {};
         let isActuallyAudio = context.isAudio || fileId.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null;
 
         if (!isActuallyAudio) {
-            console.log(`[Quark] Probing metadata for ${fileId} to determine type...`);
             try {
                 const infoUrl = `https://drive-pc.quark.cn/1/clouddrive/file/get?fid=${fileId}&pr=ucpro&fr=pc`;
                 const infoRes = await fetch(infoUrl, { headers });
                 if (infoRes.ok) {
                     const infoData = await infoRes.json() as any;
                     if (infoData.code === 0 || infoData.code === 200) {
-                        const fileName = infoData.data?.file_name || '';
-                        const mimeType = infoData.data?.mime_type || '';
+                        meta = infoData.data || {};
+                        const fileName = meta.file_name || '';
+                        const mimeType = meta.mime_type || '';
                         if (fileName.match(/\.(mp3|flac|wav|m4a|ogg)$/i) || mimeType.startsWith('audio/')) {
                             console.log(`[Quark] Metadata confirmed AUDIO for ${fileId}: ${fileName} (${mimeType})`);
                             isActuallyAudio = true;
@@ -61,18 +62,35 @@ export class QuarkProvider implements PlayableProvider {
             } catch (e) {
                 console.warn('[Quark] Metadata probe failed.');
             }
+        } else {
+            // Still try to get metadata for UI if we don't have it, but it's optional
+            try {
+                const infoUrl = `https://drive-pc.quark.cn/1/clouddrive/file/get?fid=${fileId}&pr=ucpro&fr=pc`;
+                const infoRes = await fetch(infoUrl, { headers });
+                if (infoRes.ok) {
+                    const infoData = await infoRes.json() as any;
+                    if (infoData.code === 0 || infoData.code === 200) {
+                        meta = infoData.data || {};
+                    }
+                }
+            } catch (e) { /* ignore */ }
         }
 
-        // If it's audio, strictly use the download path and RETURN early
+        // 1. Audio Path
         if (isActuallyAudio) {
             console.log('[Quark] Audio path activated. Calling download API...');
+
             const downloadResponse = await fetch(QuarkProvider.DOWNLOAD_URL, {
                 method: 'POST',
                 headers: {
                     ...headers,
                     'Origin': 'https://pan.quark.cn',
                     'Referer': 'https://pan.quark.cn/',
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0'
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
+                    'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+                    'sec-ch-ua': '"Not(A:Brand";v="8", "Chromium";v="144", "Microsoft Edge";v="144"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"macOS"'
                 },
                 body: JSON.stringify({
                     fids: [fileId],
@@ -82,6 +100,14 @@ export class QuarkProvider implements PlayableProvider {
 
             if (downloadResponse.ok) {
                 const dlData = await downloadResponse.json() as any;
+
+                // Capture Set-Cookie
+                const newCookies = (downloadResponse.headers as any).getSetCookie
+                    ? (downloadResponse.headers as any).getSetCookie().map((c: string) => c.split(';')[0]).join('; ')
+                    : (downloadResponse.headers.get('set-cookie') ? this.parseCookieHeader(downloadResponse.headers.get('set-cookie')!) : '');
+
+                const finalCookie = this.mergeCookies(context.cookie, newCookies);
+
                 if ((dlData.code === 0 || dlData.code === 200) && dlData.data?.[0]?.download_url) {
                     const downloadUrl = dlData.data[0].download_url;
                     return {
@@ -91,7 +117,12 @@ export class QuarkProvider implements PlayableProvider {
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
                             'Referer': 'https://pan.quark.cn/',
-                            'Cookie': context.cookie
+                            'Cookie': finalCookie
+                        },
+                        meta: {
+                            ...meta,
+                            title: meta.file_name || '',
+                            thumbnail: meta.thumbnail || '',
                         }
                     };
                 } else if (dlData.code === 23018 || dlData.status === 400) {
@@ -106,6 +137,12 @@ export class QuarkProvider implements PlayableProvider {
                     });
                     if (mobileResponse.ok) {
                         const mbData = await mobileResponse.json() as any;
+
+                        const newMbCookies = (mobileResponse.headers as any).getSetCookie
+                            ? (mobileResponse.headers as any).getSetCookie().map((c: string) => c.split(';')[0]).join('; ')
+                            : (mobileResponse.headers.get('set-cookie') ? this.parseCookieHeader(mobileResponse.headers.get('set-cookie')!) : '');
+                        const finalMbCookie = this.mergeCookies(context.cookie, newMbCookies);
+
                         if ((mbData.code === 0 || mbData.code === 200) && mbData.data?.url) {
                             return {
                                 id: fileId,
@@ -114,7 +151,12 @@ export class QuarkProvider implements PlayableProvider {
                                 headers: {
                                     'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Quark/6.5.0.436',
                                     'Referer': 'https://pan.quark.cn/',
-                                    'Cookie': context.cookie
+                                    'Cookie': finalMbCookie
+                                },
+                                meta: {
+                                    ...meta,
+                                    title: meta.file_name || '',
+                                    thumbnail: meta.thumbnail || '',
                                 }
                             };
                         }
@@ -125,7 +167,7 @@ export class QuarkProvider implements PlayableProvider {
             throw new Error(`Failed to resolve audio source for ${fileId}`);
         }
 
-        // Standard Video Path
+        // 2. Standard Video Path
         console.log('[Quark] Standard video path activated.');
         const body = JSON.stringify({
             fid: fileId,
@@ -144,7 +186,7 @@ export class QuarkProvider implements PlayableProvider {
 
         const data = await response.json() as any;
 
-        // Fallback for unexpected video errors
+        // Fallback for unexpected video errors (e.g. 21005)
         if (data.code !== 0 && data.code !== 200) {
             console.warn(`[Quark] Video play failed (${data.code}), trying download fallback...`);
             const downloadResponse = await fetch(QuarkProvider.DOWNLOAD_URL, {
@@ -164,16 +206,21 @@ export class QuarkProvider implements PlayableProvider {
                     return {
                         id: fileId,
                         url: dlData.data[0].download_url,
-                        type: 'audio',
+                        type: 'mp4', // Video fallback is mp4
                         headers: {
                             'User-Agent': headers['User-Agent'],
                             'Referer': 'https://pan.quark.cn/',
                             'Cookie': headers['Cookie']
+                        },
+                        meta: {
+                            ...meta,
+                            title: meta.file_name || '',
+                            thumbnail: meta.thumbnail || '',
                         }
                     };
                 }
             }
-            throw new Error(`Quark API error: ${JSON.stringify(data)}`);
+            throw new Error(`Quark API error: ${JSON.stringify(data)} (Download Fallback also failed or returned unexpected data)`);
         }
 
         const newCookies = (response.headers as any).getSetCookie
@@ -207,7 +254,7 @@ export class QuarkProvider implements PlayableProvider {
             headers: {
                 'User-Agent': headers['User-Agent'],
                 'Referer': 'https://pan.quark.cn/',
-                'Cookie': newCookies ? `${headers.Cookie}; ${newCookies}` : headers.Cookie
+                'Cookie': this.mergeCookies(headers.Cookie, newCookies)
             },
             meta: data.data,
             resolutions
@@ -272,4 +319,27 @@ export class QuarkProvider implements PlayableProvider {
 
     private generateUUID(): string { return '123'; }
     private parseCookieHeader(s: string): string { return s; }
+
+    private mergeCookies(oldCookie: string, newCookie: string): string {
+        if (!newCookie) return oldCookie;
+        if (!oldCookie) return newCookie;
+
+        const cookieMap = new Map<string, string>();
+
+        // Parse old cookies first
+        oldCookie.split(';').forEach(part => {
+            const [key, ...val] = part.trim().split('=');
+            if (key) cookieMap.set(key, val.join('='));
+        });
+
+        // Parse new cookies (overwriting old ones)
+        newCookie.split(';').forEach(part => {
+            const [key, ...val] = part.trim().split('=');
+            if (key) cookieMap.set(key, val.join('='));
+        });
+
+        return Array.from(cookieMap.entries())
+            .map(([k, v]) => `${k}=${v}`)
+            .join('; ');
+    }
 }

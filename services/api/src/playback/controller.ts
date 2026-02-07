@@ -21,52 +21,63 @@ export async function playbackRoutes(fastify: FastifyInstance) {
 
         try {
             // Cookie Priority:
-            // 1. Room Cookie (if roomId provided)
-            // 2. User Cookie (Room Owner)
-            // 3. Global Fallback Cookie (Requires Auth Code)
+            // 1. Drive ID Cookie (Specific authorization for this resource)
+            // 2. Room Cookie (if roomId provided)
+            // 3. User Cookie (Room Owner)
+            // 4. Global Fallback Cookie (Requires Auth Code)
             let cookie = '';
 
-            if (body.roomId) {
+            // High Priority: Drive ID (Specific authorization for this resource)
+            // This overrides room/user cookies because the resource explicitly belongs to this drive.
+            if ((req.body as any).driveId) {
+                fastify.log.info({ msg: 'Attempting Drive cookie', driveId: (req.body as any).driveId });
+                const { DriveService } = await import('../drive/drive-service');
+                const driveCookie = await DriveService.getCookieForDrive((req.body as any).driveId);
+                if (driveCookie) {
+                    cookie = driveCookie;
+                    fastify.log.info({ msg: 'Selected Drive cookie', length: cookie.length });
+                } else {
+                    fastify.log.warn({ msg: 'Drive cookie not found', driveId: (req.body as any).driveId });
+                }
+            }
+
+            if (!cookie && body.roomId) {
+                fastify.log.info({ msg: 'Attempting Room/User cookie', roomId: body.roomId });
                 const room = await RoomManager.getRoom(body.roomId);
                 if (room) {
                     if (room.quarkCookie) {
                         cookie = room.quarkCookie;
+                        fastify.log.info({ msg: 'Selected Room cookie', length: cookie.length });
                     } else if (room.ownerId) {
                         // Check User Cookie
                         const user = await prisma.user.findUnique({ where: { id: room.ownerId } });
                         if (user && user.quarkCookie) {
                             cookie = user.quarkCookie;
+                            fastify.log.info({ msg: 'Selected User cookie', length: cookie.length });
                         }
                     }
                 }
             }
 
-            // High Priority: Drive ID (Specific authorization for this resource)
-            // This overrides room/user cookies because the resource explicitly belongs to this drive.
-            if ((req.body as any).driveId) {
-                const { DriveService } = await import('../drive/drive-service');
-                const driveCookie = await DriveService.getCookieForDrive((req.body as any).driveId);
-                if (driveCookie) {
-                    cookie = driveCookie;
-                }
-            }
-
             if (!cookie) {
+                fastify.log.info({ msg: 'Attempting Global fallback cookie' });
                 const globalAuthCode = ConfigStore.getGlobalAuthCode();
                 if (globalAuthCode && globalAuthCode !== body.authCode) {
+                    fastify.log.warn({ msg: 'Global auth mismatch', provided: body.authCode });
                     return reply.code(403).send({ error: 'system_login_required' });
                 }
                 cookie = ConfigStore.getGlobalCookie() || '';
+                if (cookie) fastify.log.info({ msg: 'Selected Global cookie', length: cookie.length });
             }
 
             if (cookie) cookie = cookie.trim();
 
             if (!cookie) {
-                fastify.log.warn({ msg: 'No cookie found for playback', fileId: body.fileId });
+                fastify.log.warn({ msg: 'No cookie found for playback', fileId: body.fileId, driveId: (req.body as any).driveId, roomId: body.roomId });
                 return reply.code(401).send({ error: 'No authorization cookie available. Please log in or set a system cookie.' });
             }
 
-            fastify.log.info({ msg: 'Resolving with cookie', length: cookie.length });
+            fastify.log.info({ msg: 'Final resolution cookie', length: cookie.length });
 
             const source = await provider.resolvePlayableSource(body.fileId, {
                 cookie,
@@ -77,6 +88,12 @@ export async function playbackRoutes(fastify: FastifyInstance) {
 
             // Return the cookie from source headers which may include fresh Video-Auth tokens
             const finalCookie = source.headers?.['Cookie'] || cookie;
+
+            // Inject driveId into meta so it can be broadcasted to other clients for sync
+            if ((req.body as any).driveId) {
+                source.meta = { ...source.meta, driveId: (req.body as any).driveId };
+            }
+
             return { source, cookie: finalCookie };
         } catch (e: any) {
             const logMsg = `[${new Date().toISOString()}] Resolve failed for ${body.fileId}: ${e.message}\n`;

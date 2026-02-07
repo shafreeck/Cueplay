@@ -32,24 +32,38 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             if (!roomConnections.has(currentRoomId)) {
                                 roomConnections.set(currentRoomId, new Map());
                             }
-                            roomConnections.get(currentRoomId)!.set(pUserId!, socket);
+                            const clients = roomConnections.get(currentRoomId)!;
+                            const existing = clients.get(pUserId!);
+                            if (existing && existing !== socket) {
+                                console.log(`[WS] Closing stale connection for user ${pUserId} in room ${currentRoomId}`);
+                                existing.close();
+                            }
+                            clients.set(pUserId!, socket);
                         }
 
                         fastify.log.info({ msg: 'User joined room', roomId: currentRoomId, userId: pUserId });
 
                         socket.send(JSON.stringify({ type: 'ack', payload: { status: 'joined', roomId: currentRoomId } }));
 
+                        // 1. Broadcast member update + ROOM_UPDATE (Carries quarkCookie)
+                        if (currentRoomId) await broadcastRoomUpdate(currentRoomId);
+
+                        // 2. Send current media to new joiner (With optimistic cookie)
                         if (room.media) {
-                            socket.send(JSON.stringify({ type: 'MEDIA_CHANGE', payload: room.media }));
+                            const mediaPayload = typeof room.media === 'string' ? JSON.parse(room.media) : room.media;
+                            socket.send(JSON.stringify({
+                                type: 'MEDIA_CHANGE',
+                                payload: {
+                                    ...mediaPayload,
+                                    quarkCookie: room.quarkCookie // Optimistic cookie for resolution
+                                }
+                            }));
                         }
 
-                        // Send current playlist to new joiner
+                        // 3. Send current playlist to new joiner
                         if (room.playlist && room.playlist.length > 0) {
                             socket.send(JSON.stringify({ type: 'PLAYLIST_UPDATE', payload: { playlist: room.playlist } }));
                         }
-
-                        // Broadcast member update
-                        if (currentRoomId) await broadcastRoomUpdate(currentRoomId);
                     } else {
                         socket.send(JSON.stringify({ type: 'error', payload: { msg: 'Room not found' } }));
                     }
@@ -139,10 +153,8 @@ export async function websocketRoutes(fastify: FastifyInstance) {
                             const progMsg = JSON.stringify({
                                 type: 'MEMBER_PROGRESS',
                                 payload: {
+                                    ...payload,
                                     userId: pUserId,
-                                    time: payload.time,
-                                    playingItemId: payload.playingItemId,
-                                    duration: payload.duration
                                 }
                             });
                             for (const [uid, client] of clients.entries()) {

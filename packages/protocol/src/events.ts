@@ -55,6 +55,9 @@ export interface MediaChangeEvent extends BaseEvent {
         title?: string;
         provider: 'quark' | 'hls' | 'local';
         playingItemId?: string;
+        driveId?: string;
+        meta?: any;
+        isAudio?: boolean;
     };
 }
 
@@ -66,6 +69,9 @@ export interface PlayerStateEvent extends BaseEvent {
         playbackRate: number;
         sentAt?: number; // Added for latency compensation
         playingItemId?: string;
+        fileId?: string;
+        isAudio?: boolean;
+        meta?: any;
     };
 }
 

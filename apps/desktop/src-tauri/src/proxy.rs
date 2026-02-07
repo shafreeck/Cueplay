@@ -65,6 +65,9 @@ struct ProxyParams {
     url: String,
     cookie: Option<String>,
     referer: Option<String>,
+    hint: Option<String>,
+    ua: Option<String>,
+    filename: Option<String>,
 }
 
 
@@ -82,11 +85,15 @@ async fn proxy_handler(
     let safe_url = url.chars().take(50).collect::<String>();
     println!("[Proxy] Requesting: {}...", safe_url);
 
-    let user_agent = headers
+    let user_agent = params.ua.unwrap_or_else(|| {
+        headers
         .get("user-agent")
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string());
+        .unwrap_or_else(|| "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string())
+    });
+    
+    println!("[Proxy] Using UA: {}...", user_agent.chars().take(30).collect::<String>());
 
     let mut req_builder = client.get(&url)
         .header("User-Agent", user_agent)
@@ -125,11 +132,45 @@ async fn proxy_handler(
                  return response_builder.body(Body::from(error_text)).unwrap();
             }
 
-            // Check for m3u8 playlist
+            // Check for m3u8 playlist or audio files
             let content_type = resp.headers().get("content-type")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("");
-                
+            
+            // Try to deduce if it's audio from URL path or hint
+            let hint = params.hint.unwrap_or_default().to_lowercase();
+            let filename = params.filename.unwrap_or_default().to_lowercase();
+            let mut is_audio = hint == "audio";
+            
+            if !is_audio {
+                if let Ok(u) = Url::parse(&url) {
+                    let path = u.path().to_lowercase();
+                    is_audio = path.ends_with(".mp3") || 
+                               path.ends_with(".flac") || 
+                               path.ends_with(".wav") || 
+                               path.ends_with(".m4a") ||
+                               path.ends_with(".ogg");
+                    
+                    if !is_audio {
+                        // Check explicit filename param first
+                        if filename.ends_with(".mp3") || filename.ends_with(".flac") || filename.ends_with(".wav") || filename.ends_with(".m4a") || filename.ends_with(".ogg") {
+                            is_audio = true;
+                        } else {
+                            // Check query params for filename (sometimes quark does this)
+                            for (k, v) in u.query_pairs() {
+                                if k == "filename" || k == "name" {
+                                    let v = v.to_lowercase();
+                                    if v.ends_with(".mp3") || v.ends_with(".flac") || v.ends_with(".wav") || v.ends_with(".m4a") || v.ends_with(".ogg") {
+                                        is_audio = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if content_type.contains("application/vnd.apple.mpegurl") || content_type.contains("application/x-mpegurl") {
                 // Buffer and rewrite m3u8
                 match resp.text().await {
@@ -203,6 +244,18 @@ async fn proxy_handler(
             // Stream body (Forward Content-Length for standard streams)
             if let Some(val) = resp.headers().get("content-length") {
                 response_builder = response_builder.header("content-length", val);
+            }
+
+            // Fix Content-Type for audio files if needed
+            if is_audio && (content_type.is_empty() || content_type == "application/octet-stream") {
+                let new_ct = if url.to_lowercase().contains(".mp3") || hint.contains("mp3") || filename.ends_with(".mp3") { "audio/mpeg" }
+                    else if url.to_lowercase().contains(".flac") || hint.contains("flac") || filename.ends_with(".flac") { "audio/flac" }
+                    else if url.to_lowercase().contains(".wav") || hint.contains("wav") || filename.ends_with(".wav") { "audio/wav" }
+                    else if url.to_lowercase().contains(".m4a") || hint.contains("m4a") || filename.ends_with(".m4a") { "audio/mp4" }
+                    else if url.to_lowercase().contains(".ogg") || hint.contains("ogg") || filename.ends_with(".ogg") { "audio/ogg" }
+                    else { "audio/mpeg" };
+                println!("[Proxy] Overriding Content-Type to {} for audio (hint: {}, ct: {})", new_ct, hint, content_type);
+                response_builder = response_builder.header("content-type", new_ct);
             }
             
             println!("[Proxy] Success: {}", status);

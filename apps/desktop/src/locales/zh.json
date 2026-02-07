@@ -13,6 +13,7 @@
         "creating": "创建中...",
         "my_rooms": "我的房间",
         "visited_rooms": "访问过的房间",
+        "host_paused": "房主已暂停",
         "room_title": "房间 {{id}}",
         "members_count": "成员: {{count}}",
         "enter_room": "进入房间",

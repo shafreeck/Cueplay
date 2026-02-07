@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Plus, Settings, Copy, Cast, Crown, Eye, EyeOff, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, ChevronLeft, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { Trash2, PlayCircle, Music, Plus, Settings, Copy, Cast, Crown, Eye, EyeOff, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, ChevronLeft, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug, PanelRightClose, PanelRightOpen, Play, Pause, RotateCcw, RotateCw } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -107,7 +107,271 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 
 
+
+// Internal component for Audio Visualizer/UI
+const AudioPlayer = ({ meta, filename, videoRef, isPlaying, onClose, isControllerPaused }: { meta?: any, filename?: string, videoRef: React.RefObject<HTMLVideoElement | null>, isPlaying: boolean, onClose?: () => void, isControllerPaused?: boolean }) => {
+    // Derive display title from metadata or fallback to filename (without extension)
+    const cleanFilename = filename ? filename.replace(/\.[^/.]+$/, '') : undefined;
+    const displayTitle = meta?.title || cleanFilename || 'Loading...';
+    const displayArtist = meta?.artist || (cleanFilename ? '' : '');
+    const { toast } = useToast();
+    const { t } = useTranslation('common');
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+
+    const lastUpdateRef = useRef(0);
+
+    useEffect(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        const updateState = () => {
+            // Throttle updates to every 250ms to reduce re-renders
+            const now = Date.now();
+            if (now - lastUpdateRef.current < 250) return;
+            lastUpdateRef.current = now;
+
+            setCurrentTime(video.currentTime);
+            setDuration(video.duration || meta?.duration || 0);
+        };
+
+        video.addEventListener('timeupdate', updateState);
+        video.addEventListener('play', updateState);
+        video.addEventListener('pause', updateState);
+        video.addEventListener('loadedmetadata', updateState);
+        // Initial sync
+        updateState();
+
+        return () => {
+            video.removeEventListener('timeupdate', updateState);
+            video.removeEventListener('play', updateState);
+            video.removeEventListener('pause', updateState);
+            video.removeEventListener('loadedmetadata', updateState);
+        };
+    }, [videoRef]);
+
+    const formatTime = (t: number) => {
+        if (!t || isNaN(t)) return "0:00";
+        const mins = Math.floor(t / 60);
+        const secs = Math.floor(t % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const handleSeek = (val: number[]) => {
+        if (videoRef.current) {
+            videoRef.current.currentTime = val[0];
+            setCurrentTime(val[0]);
+        }
+    };
+
+    const togglePlay = () => {
+        if (videoRef.current) {
+            if (videoRef.current.paused) {
+                videoRef.current.play().catch(e => {
+                    console.error("[AudioPlayer] Play failed:", e);
+                    if (e.name !== 'AbortError') {
+                        const v = videoRef.current;
+                        const err = v?.error;
+                        const src = v?.currentSrc || '';
+                        const safeSrc = src.length > 50 ? '...' + src.slice(-50) : src;
+                        toast({
+                            title: t('playback_error'),
+                            description: `${e.message} (MediaErr: ${err?.code}, NS:${v?.networkState}, URL:${safeSrc})`,
+                            variant: "destructive",
+                        });
+                    }
+                });
+            } else {
+                videoRef.current.pause();
+            }
+        } else {
+            console.error("[AudioPlayer] No videoRef found for togglePlay");
+            toast({
+                description: t('audio_loading_please_wait', 'Audio is loading, please wait...'),
+                duration: 2000,
+            });
+        }
+    };
+
+    return (
+        <div className="absolute inset-0 bg-zinc-950 overflow-hidden z-50 cursor-default">
+            {/* 1. Background Vinyl Layer (Centered, Behind Controls, Z-0) */}
+            <div className="absolute inset-0 flex items-center justify-center z-0 pb-32 md:pb-0">
+                {/* Fixed Size Container using vmin to ensure it never collapses/shrink to zero */}
+                <div className="relative w-[80vmin] h-[80vmin] max-w-[900px] max-h-[900px] aspect-square font-[0] select-none shadow-[0_40px_100px_-20px_rgba(0,0,0,0.95)] rounded-full transition-all duration-1000">
+
+                    {/* Simple ring glow - no blur for performance */}
+                    <div className={`absolute inset-[-4px] rounded-full ${isPlaying ? 'ring-2 ring-primary/40' : 'ring-1 ring-white/10'}`} style={{ transition: 'all 0.5s ease' }} />
+
+                    {/* Vinyl Disc Body */}
+                    <div className="relative w-full h-full rounded-full bg-[#0d0d0d] ring-1 ring-white/10 flex items-center justify-center overflow-hidden">
+
+                        {/* Grooves Texture (Realistic Vinyl Texture) */}
+                        <div
+                            className="absolute inset-0 rounded-full opacity-40 pointer-events-none"
+                            style={{
+                                background: 'repeating-radial-gradient(#1a1a1a 0, #0a0a0a 2px, #151515 3px, #0a0a0a 4px)'
+                            }}
+                        />
+
+                        {/* Rotating Art Label - GPU accelerated */}
+                        <div
+                            className={`relative w-[45%] h-[45%] rounded-full shadow-2xl ${isPlaying ? 'animate-spin-slow' : ''}`}
+                            style={{ willChange: 'transform' }}
+                        >
+                            {meta?.thumbnail ? (
+                                <div
+                                    className="w-full h-full rounded-full bg-cover bg-center ring-2 ring-black/40"
+                                    style={{ backgroundImage: `url(${meta.thumbnail})` }}
+                                />
+                            ) : (
+                                <div className="w-full h-full rounded-full bg-zinc-800 flex items-center justify-center text-primary/40 ring-1 ring-white/10">
+                                    <Music className="w-1/2 h-1/2" />
+                                </div>
+                            )}
+                            <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none" />
+                        </div>
+
+                        {/* Center Spindle */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[2.5%] h-[2.5%] bg-black rounded-full border border-zinc-700 shadow-inner z-20" />
+
+                        {/* Reflections/Gloss */}
+                        <div className="absolute inset-0 rounded-full opacity-30 pointer-events-none bg-gradient-to-tr from-transparent via-white/10 to-transparent" style={{ mixBlendMode: 'plus-lighter' }} />
+                        <div className="absolute inset-0 rounded-full opacity-10 pointer-events-none bg-gradient-to-bl from-transparent via-white/5 to-transparent" style={{ mixBlendMode: 'overlay' }} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Top Bar Actions */}
+            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30 pointer-events-none">
+                <Button variant="ghost" size="icon" className="text-white/40 hover:text-white pointer-events-auto backdrop-blur-md bg-black/40 rounded-full h-12 w-12 hover:bg-black/60 transition-all" onClick={() => {
+                    if (meta?.type === 'video') {
+                        onClose?.();
+                    } else {
+                        // For audio, maybe we do nothing or exit room?
+                        // Based on user feedback, don't just "become a video player" if it's audio.
+                        console.log("Audio device doesn't support exiting back to video for audio files.");
+                    }
+                }}>
+                    <ChevronLeft className="w-8 h-8" />
+                </Button>
+            </div>
+
+            {/* Controller Paused Indicator */}
+            {isControllerPaused && !isPlaying && (
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 bg-zinc-900/90 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 flex items-center gap-2 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
+                    <Pause className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    <span className="text-sm font-bold text-white tracking-wide">{t('host_paused')}</span>
+                </div>
+            )}
+
+            {/* 2. Controls Layer (Overlaid at Bottom, Z-20) */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-safe pt-48 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent pointer-events-none">
+                <div className="w-full max-w-2xl px-10 flex flex-col gap-8 md:gap-10 mb-10 md:mb-16 pointer-events-auto">
+
+                    {/* Meta Info */}
+                    <div className="text-center animate-in fade-in slide-in-from-bottom-6 duration-700">
+                        <h2 className="text-3xl md:text-6xl font-black text-white mb-3 line-clamp-2 drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] tracking-tight">
+                            {displayTitle}
+                        </h2>
+                        {displayArtist && (
+                            <p className="text-xl md:text-3xl text-zinc-400 font-semibold line-clamp-1 drop-shadow-md">
+                                {displayArtist}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Progress & Controls */}
+                    <div className="flex flex-col gap-6 md:gap-8">
+                        {/* Progress Bar Container */}
+                        <div className="flex items-center gap-5 w-full text-sm font-bold text-zinc-500 font-mono tracking-widest">
+                            <span className="w-14 text-right">{formatTime(currentTime)}</span>
+                            <div className="flex-1 relative h-8 flex items-center group/slider">
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={duration || 100}
+                                    value={currentTime}
+                                    onChange={(e) => handleSeek([parseFloat(e.target.value)])}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                />
+                                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden backdrop-blur-xl group-hover/slider:h-2 transition-all duration-300">
+                                    <div
+                                        className="h-full bg-primary shadow-[0_0_15px_theme(colors.primary.DEFAULT)]"
+                                        style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                                    />
+                                </div>
+                                <div
+                                    className="absolute h-5 w-5 bg-white rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] pointer-events-none transition-all scale-100 opacity-0 group-hover/slider:opacity-100 "
+                                    style={{ left: `${(currentTime / (duration || 1)) * 100}%`, transform: `translateX(-50%)` }}
+                                />
+                            </div>
+                            <span className="w-14">{formatTime(duration)}</span>
+                        </div>
+
+
+                        {/* Main Buttons - Higher z-index to overlap visualizer */}
+                        <div className="relative z-10 flex items-center justify-center gap-12 md:gap-20">
+                            <Button variant="ghost" size="icon" className="h-16 w-16 rounded-full text-white/50 hover:text-white hover:bg-white/5 active:scale-90 transition-all" onClick={() => videoRef.current && (videoRef.current.currentTime -= 10)}>
+                                <RotateCcw className="w-10 h-10" />
+                            </Button>
+
+                            <Button
+                                size="icon"
+                                className="h-24 w-24 md:h-28 md:w-28 rounded-full bg-white text-black hover:bg-zinc-200 hover:scale-105 active:scale-95 transition-all shadow-[0_0_50px_rgba(255,255,255,0.25)]"
+                                onClick={togglePlay}
+                            >
+                                {isPlaying ? <Pause className="w-12 h-12 md:w-14 md:h-14 fill-current" /> : <Play className="w-12 h-12 md:w-14 md:h-14 fill-current translate-x-1.5" />}
+                            </Button>
+
+                            <Button variant="ghost" size="icon" className="h-16 w-16 rounded-full text-white/50 hover:text-white hover:bg-white/5 active:scale-90 transition-all" onClick={() => videoRef.current && (videoRef.current.currentTime += 10)}>
+                                <RotateCw className="w-10 h-10" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Music Waves Visualizer - Only show when playing */}
+                {isPlaying && (
+                    <div className="absolute bottom-6 left-0 right-0 h-20 flex items-end justify-center gap-[2px] px-8 pointer-events-none">
+                        {[...Array(80)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="flex-1 rounded-t-sm bg-primary/40"
+                                style={{
+                                    minWidth: '3px',
+                                    maxWidth: '6px',
+                                    height: isPlaying ? `${10 + Math.sin(i * 0.4) * 5}px` : '3px',
+                                    animation: isPlaying ? `music-bar-${i % 8} 0.${3 + (i % 7)}s ease-in-out infinite` : 'none',
+                                }}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+
+
+            <style jsx>{`
+                ${[0, 1, 2, 3, 4, 5, 6, 7].map(n => `
+                    @keyframes music-bar-${n} {
+                        0%, 100% { height: ${6 + n * 2}px; }
+                        50% { height: ${30 + n * 8}px; }
+                    }
+                `).join('')}
+                .animate-spin-slow {
+                    animation: spin 12s linear infinite;
+                }
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
+        </div>);
+};
+
 function RoomContent() {
+    const [currentVideoMeta, setCurrentVideoMeta] = useState<any>(null);
     const searchParams = useSearchParams();
     const router = useRouter();
     const roomId = searchParams.get('id');
@@ -128,6 +392,19 @@ function RoomContent() {
     const [controllerId, setControllerId] = useState<string | null>(null);
     const controllerIdRef = useRef<string | null>(null);
     const [videoSrc, setVideoSrc] = useState<string>('');
+    const videoSrcRef = useRef(videoSrc);
+    useEffect(() => { videoSrcRef.current = videoSrc; }, [videoSrc]);
+    const [isAudio, setIsAudio] = useState<boolean>(false);
+    const [isPlaying, setIsPlaying] = useState<boolean>(false);
+    const [isControllerPaused, setIsControllerPaused] = useState(false);
+
+    // Clear controller paused state when local playback starts
+    useEffect(() => {
+        if (isPlaying) {
+            setIsControllerPaused(false);
+        }
+    }, [isPlaying]);
+
     const [rawUrl, setRawUrl] = useState<string>('');
     const [resolutions, setResolutions] = useState<Array<{ id: string, name: string, url: string }>>([]);
     const [currentResolution, setCurrentResolution] = useState<string>('Original');
@@ -143,6 +420,9 @@ function RoomContent() {
     const [playingItemId, setPlayingItemId] = useState<string | null>(null);
     const playingItemIdRef = useRef<string | null>(null);
     useEffect(() => { playingItemIdRef.current = playingItemId; }, [playingItemId]);
+
+    const fileIdRef = useRef(fileId);
+    useEffect(() => { fileIdRef.current = fileId; }, [fileId]);
 
 
     // Swipe Gesture Refs
@@ -276,6 +556,7 @@ function RoomContent() {
     const isBuffering = useRef(false);
     const lastVideoCookieRef = useRef<string>('');
     const pendingSeekTimeRef = useRef<number | null>(null);
+    const isResolvingRef = useRef<string | null>(null);
 
     // Danmaku Ref
     const danmakuRef = useRef<import('./components/danmaku-overlay').DanmakuOverlayHandle>(null);
@@ -730,21 +1011,48 @@ function RoomContent() {
         }
     };
 
-    const resolveAndPlayWithoutSync = async (fid: string, itemId?: string, explicitDriveId?: string) => {
+    const resolveAndPlayWithoutSync = async (fid: string, itemId?: string, explicitDriveId?: string, isAudioHint?: boolean) => {
         if (itemId) {
             lastResumedItemIdRef.current = null; // Prepare for resume
-            setPlayingItemId(itemId);
+            updatePlayingItemId(itemId);
         }
+        updateFileId(fid);
+
+        // Optimistic check (Hint from caller or extension check)
+        if (isAudioHint) setIsAudio(true);
 
         try {
-            const item = itemId ? findPlaylistItem(playlist, itemId) : null;
+            // Fix: Use playlistRef.current to avoid stale state
+            const item = itemId ? findPlaylistItem(playlistRef.current, itemId) : null;
             const driveId = explicitDriveId || item?.driveId;
+            console.log(`[DEBUG] resolveAndPlayWithoutSync: fid=${fid}, itemId=${itemId}, explicitDriveId=${explicitDriveId}, item?.driveId=${item?.driveId}, FINAL driveId=${driveId}`);
+            // Robust detection including HLS-audio hints
+            const isAudioCandidate = isAudioHint || !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
+
+            if (isAudioCandidate) {
+                setIsAudio(true);
+                addLog(`[Sync] Anticipating Audio UI for ${fid}`);
+            }
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, item?.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
             lastVideoCookieRef.current = cookie;
             addLog(`[ResolveSync] Source: ${JSON.stringify(source, null, 2)}`);
             setRawUrl(source.url);
+
+            // Authoritative state update
+            // Inject driveId into meta so it propagates through all heartbeats/broadcasts
+            const isActuallyAudio = source.type === 'audio' || (source.type === 'hls' && isAudioCandidate);
+            setIsAudio(isActuallyAudio);
+
+            // Fallback metadata from playlist item if API result is sparse
+            setCurrentVideoMeta({
+                title: source.meta?.title || item?.title,
+                duration: source.meta?.duration || item?.duration,
+                ...source.meta,
+                driveId,
+                type: source.type
+            });
 
             if (source.resolutions && Array.isArray(source.resolutions)) {
                 setResolutions(source.resolutions);
@@ -762,13 +1070,40 @@ function RoomContent() {
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
-                finalUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+
+                // Add filename hint
+                const title = source.meta?.title || item?.title || source.meta?.file_name || 'file';
+                if (title) {
+                    proxiedUrl += `&filename=${encodeURIComponent(title)}`;
+                }
+
+                // Aggressively hint audio to ensure Proxy sets Content-Type: audio/mpeg
+                // This is critical because the proxy URL has no extension, so browsers rely 100% on Content-Type.
+                if (source.type === 'audio' || (isAudioCandidate && source.type !== 'hls')) {
+                    proxiedUrl += `&hint=audio`;
+                }
+
+                if (source.headers?.['Referer']) proxiedUrl += `&referer=${encodeURIComponent(source.headers['Referer'])}`;
+                if (source.headers?.['User-Agent']) proxiedUrl += `&ua=${encodeURIComponent(source.headers['User-Agent'])}`;
+
+                // Pass filename hint if available (helper for proxy to guess type if hint=audio isn't enough)
+                const filename = source.meta?.title || item?.title;
+                if (filename) proxiedUrl += `&filename=${encodeURIComponent(filename)}`;
+
+                finalUrl = proxiedUrl;
             } else {
                 console.warn("No cookie returned from API for this video.");
             }
 
             // If the source is different or it's a new play, set it
             addLog(`[Sync] Final URL: ${finalUrl} (ProxyBase: ${await getProxyBase()})`);
+            console.log('[DEBUG] setVideoSrc called from resolveAndPlayWithoutSync:', finalUrl.slice(0, 80));
+            console.log('[DEBUG] Full proxiedUrl:', finalUrl);
+            console.log('[DEBUG] source.url:', source.url);
+            console.log('[DEBUG] source.type:', source.type);
+            console.log('[DEBUG] source.headers:', JSON.stringify(source.headers));
+            isResolvingRef.current = null; // Resolution finished
             setVideoSrc(finalUrl);
             if (itemId) {
                 addLog(`Resolving synced video: ${fid} (item: ${itemId})`);
@@ -776,25 +1111,35 @@ function RoomContent() {
         } catch (e: any) {
             console.warn("resolveAndPlayWithoutSync error:", e);
             addLog(`[Sync] Error: ${e.message}`);
-            if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
-                toast({
-                    variant: "destructive",
-                    title: t('error_quark_login_required'),
-                    description: t('error_no_cookie_configured'),
-                    action: <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button>
-                });
-            }
+            isResolvingRef.current = null; // CRITICAL: Reset lock on error so subsequent heartbeats can retry
         }
     }
 
-    // Helper: Resolve metadata effectively in background without changing videoSrc
+    const updatePlayingItemId = (id: string | null) => {
+        setPlayingItemId(id);
+        playingItemIdRef.current = id;
+    };
+
+    const updateFileId = (id: string) => {
+        setFileId(id);
+        fileIdRef.current = id;
+    };
+
     const resolveAndPlayMetadataOnly = async (fid: string, itemId?: string) => {
+        if (itemId) updatePlayingItemId(itemId);
+        updateFileId(fid);
         try {
-            const item = itemId ? findPlaylistItem(playlist, itemId) : null;
+            const item = itemId ? findPlaylistItem(playlistRef.current, itemId) : null;
             const driveId = item?.driveId;
+            const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
+            if (isAudioCandidate) setIsAudio(true);
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, item?.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
+
+            // Authorized metadata update
+            setCurrentVideoMeta(source.meta);
+            setIsAudio(source.type === 'audio' || (source.type === 'hls' && isAudioCandidate));
 
             // Update metadata UI states
             setRawUrl(source.url);
@@ -858,7 +1203,7 @@ function RoomContent() {
         try {
             console.log(`[Preload] Resolving next: ${nextItem.title || nextItem.fileId}, ID: ${fid}, Room: ${roomId}`);
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId, nextItem.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId, nextItem.isAudio || /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid));
             let nextUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
@@ -895,10 +1240,10 @@ function RoomContent() {
         const urlMatch = targetFileId.match(/video\/([a-zA-Z0-9]+)/);
         if (urlMatch) fid = urlMatch[1];
 
-        setFileId(fid); // Sync internal state
+        updateFileId(fid); // Sync internal state
         retryCount.current = 0; // Reset retry counter for new video
         lastResumedItemIdRef.current = null; // Prepare for resume
-        setPlayingItemId(itemId || null); // Track playlist item
+        updatePlayingItemId(itemId || null); // Track playlist item
         // setVideoSrc(''); // REMOVED: Do not clear source to allow seamless transition
 
         // Update lastPlayedId for parent folder if applicable
@@ -919,25 +1264,6 @@ function RoomContent() {
             }));
         }
 
-        // SEAMLESS SWITCH CHECK:
-        // If the requested video ID matches what we've already preloaded, use the CACHED URL.
-        // This ensures strict string equality for the SeamlessVideoPlayer to trigger the swap.
-        console.log(`[Seamless] Checking logic: ReqID=${fid}, NextID=${nextVideoId}, NextSrc=${!!nextVideoSrc}`);
-        if (fid === nextVideoId && nextVideoSrc) {
-            addLog(`[Seamless] Hit! Reusing preloaded URL for ${fid}`);
-            setVideoSrc(nextVideoSrc);
-
-            // Still resolve resolutions/meta in background to be safe/complete?
-            // For now, we trust the preload. But we might miss out on resolution list updates if we skip standard resolve.
-            // Let's do the standard resolve in background just to update metadata state, but not `videoSrc`.
-            resolveAndPlayMetadataOnly(fid, itemId);
-
-            // Trigger preload for *new* next item
-            if (itemId) {
-                resolveNextVideo(itemId);
-            }
-            return;
-        }
 
         // SEAMLESS SWITCH CHECK:
         // If the requested video ID matches what we've already preloaded, use the CACHED URL.
@@ -945,6 +1271,7 @@ function RoomContent() {
         if (fid === nextVideoId && nextVideoSrc) {
             addLog(`[Seamless] Hit! Reusing preloaded URL for ${fid}`);
             setVideoSrc(nextVideoSrc);
+            setIsAudio(/\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(nextVideoId)); // Approximation for hit
 
             // Still resolve resolutions/meta in background to be safe/complete?
             // For now, we trust the preload. But we might miss out on resolution list updates if we skip standard resolve.
@@ -963,14 +1290,21 @@ function RoomContent() {
             // Find item to get driveId
             const item = findPlaylistItem(playlist, itemId || '');
             const driveId = explicitDriveId || item?.driveId;
+            const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
+            if (isAudioCandidate) setIsAudio(true);
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, item?.isAudio || fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
             lastVideoCookieRef.current = cookie;
             addLog(`[Resolve] Source: ${JSON.stringify(source, null, 2)}`);
             console.log("Resolve result (Full):", { source, cookieLen: cookie?.length });
 
             setRawUrl(source.url); // Use raw URL for sharing
+            setIsAudio(source.type === 'audio' || (source.type === 'hls' && isAudioCandidate));
+
+            // CRITICAL: Ensure driveId is in the meta so it is broadcasted in heartbeats for newcomers
+            const authoritativeMeta = { ...source.meta, driveId, type: source.type };
+            setCurrentVideoMeta(authoritativeMeta);
 
             if (source.resolutions && Array.isArray(source.resolutions)) {
                 setResolutions(source.resolutions);
@@ -993,9 +1327,10 @@ function RoomContent() {
                         fileId: fid,
                         url: source.url,
                         provider: 'quark',
-                        meta: source.meta,
+                        meta: authoritativeMeta, // Use enriched meta
                         playingItemId: itemId || null,
-                        driveId: driveId
+                        driveId: driveId,
+                        isAudio: source.type === 'audio' || (source.type === 'hls' && isAudioCandidate) // Explicitly send audio status
                     }
                 }));
             }
@@ -1004,7 +1339,11 @@ function RoomContent() {
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
-                finalUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                if (source.type === 'audio') proxiedUrl += `&hint=audio`;
+                if (source.headers?.['Referer']) proxiedUrl += `&referer=${encodeURIComponent(source.headers['Referer'])}`;
+                if (source.headers?.['User-Agent']) proxiedUrl += `&ua=${encodeURIComponent(source.headers['User-Agent'])}`;
+                finalUrl = proxiedUrl;
             } else {
                 console.warn("No cookie available for proxy. Playback may fail.");
                 addLog("Warning: No cookie available. Please set a Global Cookie in Admin or Room Cookie in Settings.");
@@ -1024,8 +1363,16 @@ function RoomContent() {
 
             addLog(`Setting Video Src: ${finalUrl.slice(0, 50)}... (Proxy: ${finalUrl.includes('127.0.0.1')})`);
         } catch (e: any) {
-            console.warn(e);
-            addLog(`Resolve error: ${e.message}`);
+            console.error("Resolve failed", e);
+            addLog(`[Resolve Error] ${e.message}`);
+            // Auto-retry on resolve failure
+            if (retryCount.current < 3) {
+                retryCount.current += 1;
+                addLog(`[Resolve Retry] ${retryCount.current}/3 in 2s...`);
+                setTimeout(() => {
+                    if (fid) resolveAndPlay(fid, itemId);
+                }, 2000);
+            }
             if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
                 toast({
                     variant: "destructive",
@@ -1036,7 +1383,7 @@ function RoomContent() {
             } else {
                 toast({
                     variant: "destructive",
-                    title: t('failed_resolve_title'),
+                    title: t('invalid_video_title'),
                     description: e.message || t('unknown_error'),
                 });
             }
@@ -1065,10 +1412,12 @@ function RoomContent() {
         try {
             // Resolve first to validate
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, undefined, fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null);
+            // For addToPlaylist, we don't have an item yet, so we rely on fid for audio detection
+            const isAudioCandidate = /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, undefined, isAudioCandidate);
             const title = source.meta?.file_name || source.meta?.title || fid;
 
-            const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title, isAudio: fid.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null };
+            const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title, isAudio: isAudioCandidate };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -1132,7 +1481,7 @@ function RoomContent() {
                     }
                     return [...acc, { ...item, children: newChildren }];
                 }
-                return [...acc, item];
+                return acc;
             }, []);
         };
 
@@ -1150,7 +1499,7 @@ function RoomContent() {
                     type: 'MEDIA_CHANGE',
                     payload: { fileId: '', url: '', provider: 'quark' }
                 }));
-                setFileId('');
+                updateFileId('');
                 setRawUrl('');
                 setVideoSrc('');
             }
@@ -1169,10 +1518,11 @@ function RoomContent() {
         setIsResolving(true);
         try {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId, file.name.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null || file.mimeType?.startsWith('audio/'));
+            const isAudioCandidate = /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(file.name) || file.mimeType?.startsWith('audio/');
+            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId, isAudioCandidate);
             const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
 
-            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file', driveId: file.driveId, isAudio: file.name.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null || file.mimeType?.startsWith('audio/') };
+            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file', driveId: file.driveId, isAudio: isAudioCandidate };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -1231,7 +1581,8 @@ function RoomContent() {
             fileId: f.id,
             title: f.name,
             type: 'file',
-            driveId: f.driveId
+            driveId: f.driveId,
+            isAudio: /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(f.name) || f.mimeType?.startsWith('audio/')
         }));
 
         const newItem: PlaylistItem = {
@@ -1321,22 +1672,18 @@ function RoomContent() {
         }
     };
 
-    // Auto-play when source changes
-    useEffect(() => {
-        if (videoSrc && videoRef.current) {
-            videoRef.current.play().catch(e => {
-                console.warn("Auto-play failed:", e);
-            });
-        }
-    }, [videoSrc]);
+    // Auto-play when source changes (via unified control)
+    // The PLAYER_STATE handler will correctly set isPlaying once videoSrc is present.
 
     const sendState = useCallback(() => {
         const ws = socketRef.current;
         if (isRemoteUpdate.current || isLoadingSource.current || !videoRef.current || !ws || ws.readyState !== WebSocket.OPEN) return;
 
         // Enforce View Only: Only controller can broadcast state
-        if (controllerIdRef.current && controllerIdRef.current !== currentUserId) {
-            addLog(`Blocked Sync: Controller is ${controllerIdRef.current}`);
+        // Fixed: Ensure controllerIdRef.current is TRUTHY and matches currentUserId
+        const isMeController = !!controllerIdRef.current && controllerIdRef.current === currentUserId;
+        if (!isMeController) {
+            addLog(`Blocked Sync: Controller is ${controllerIdRef.current || 'Unknown'}`);
 
             // Rate limited toast
             const now = Date.now();
@@ -1360,7 +1707,10 @@ function RoomContent() {
                 time: video.currentTime,
                 playbackRate: video.playbackRate,
                 sentAt: Date.now(),
-                playingItemId: playingItemIdRef.current || undefined
+                fileId: fileIdRef.current,
+                playingItemId: playingItemIdRef.current || undefined,
+                isAudio: isAudio, // Explicitly sync audio mode
+                meta: currentVideoMeta
             }
         }));
     }, [currentUserId, t, toast]);
@@ -1389,7 +1739,12 @@ function RoomContent() {
 
         ws.onopen = () => {
             const payload = { roomId: roomId || '', userId, name };
-            console.log("JOIN_ROOM Payload:", payload); // Debug log
+            console.log(`[WS] JOIN_ROOM. My userId: ${userId}, Name: ${name}`);
+            setIsSynced(true); // Reset sync on join
+            // Clear stale sources to prevent 403 from expired cookies
+            setVideoSrc('');
+            setNextVideoSrc('');
+            setIsPlaying(false); // Ensure not playing stale source
             ws.send(JSON.stringify({ type: 'JOIN_ROOM', payload }));
         };
 
@@ -1419,63 +1774,53 @@ function RoomContent() {
                 return;
             }
             if (data.type === 'MEDIA_CHANGE') {
-                const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId } = data.payload;
+                const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId, meta, isAudio: remoteIsAudio } = data.payload;
 
                 // *** CONTROLLER GUARD ***
                 // If I am the controller and I already have this item playing, ignore the echo.
                 // This prevents AbortError caused by double resolution/setting video source.
-                const amIController = !controllerIdRef.current || controllerIdRef.current === userId;
+                // Fixed: controllerIdRef.current MUST be truthy to avoid race condition during loading.
+                const amIController = !!controllerIdRef.current && controllerIdRef.current === userId;
                 if (amIController && remotePlayingItemId && remotePlayingItemId === playingItemIdRef.current) {
                     addLog(`[WS] MEDIA_CHANGE ignored (already playing ${remotePlayingItemId})`);
                     return;
                 }
-                setFileId(remoteFileId || '');
+                updateFileId(remoteFileId || '');
                 setRawUrl(url || '');
                 lastResumedItemIdRef.current = null; // Prepare for resume
-                setPlayingItemId(remotePlayingItemId || null);
+                updatePlayingItemId(remotePlayingItemId || null);
 
-                if (!remoteFileId) {
-                    setVideoSrc('');
-                } else if (url) {
-                    // Peers need to resolve to get the cookie if they don't have one?
-                    // Currently MEDIA_CHANGE sends the raw URL.
-                    // If raw URL needs cookie, peer needs to get it.
-                    // IMPORTANT: Peers must also call resolve to get the Global Cookie if they don't have one.
-                    // But here we just setVideoSrc.
-                    // If we don't resolve, we don't get the global cookie.
-                    // So we must resolve on every MEDIA_CHANGE if we want to use Global Cookie.
-
-                    // Trigger resolution for self
-                    // @ts-ignore - payload might not have driveId in old clients, but we handle undefined
-                    resolveAndPlayWithoutSync(remoteFileId, remotePlayingItemId, data.payload.driveId);
+                // OPTIMISTIC COOKIE: If the server sent a cookie with the media change (Joiner case)
+                // use it immediately to avoid 403 race condition.
+                if (data.payload.quarkCookie) {
+                    addLog("[WS] Using optimistic Room Cookie from MEDIA_CHANGE");
+                    setRoomCookie(data.payload.quarkCookie);
                 }
-                setCurrentSubtitle('');
 
-                // Sync playlist metadata if needed (but don't set placeholder)
                 // Sync playlist metadata if needed (but don't set placeholder)
                 if (remoteFileId) {
                     const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-
-                    // Try to find driveId if possible (might be empty if playlist not synced yet)
-                    const item = playlistRef.current.find(i => i.fileId === remoteFileId || i.id === playingItemId);
+                    const item = remotePlayingItemId ? findPlaylistItem(playlistRef.current, remotePlayingItemId) : null;
                     const driveId = item?.driveId;
+                    const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (remoteFileId && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(remoteFileId)));
 
-                    ApiClient.resolveVideo(remoteFileId, roomId || '', authCode, driveId, remoteFileId.match(/\.(mp3|flac|wav|m4a|ogg)$/i) !== null).then(({ source }) => {
-                        setPlaylist(prev => prev.map(item =>
-                            item.fileId === remoteFileId && item.title === 'Current Video'
-                                ? { ...item, title: source.meta?.file_name || source.meta?.title || remoteFileId }
-                                : item
-                        ));
-                    }).catch((e) => {
-                        // Suppress ALL auth errors for background sync (metadata only)
-                        // We do not want to prompt login just because we synced a state from another user/drive
-                        if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
-                            console.warn("Background sync auth failed (suppressed)");
-                        }
-                    });
+                    if (isAudioCandidate) {
+                        setIsAudio(true);
+                        addLog(`[WS] Optimistic Audio detected for ${remoteFileId}`);
+                    }
+
+                    // Trigger resolution for self
+                    // CRITICAL: Prioritize driveId and isAudio from message payload to bypass playlist dependency
+                    const targetDriveId = data.payload.driveId || data.payload.meta?.driveId || driveId;
+                    const finalIsAudio = remoteIsAudio !== undefined ? remoteIsAudio : isAudioCandidate;
+
+                    addLog(`[WS] MEDIA_CHANGE starting resolution for ${remoteFileId} (Drive: ${targetDriveId}, Audio: ${finalIsAudio})`);
+
+                    // Lock resolution immediately to prevent heartbeats from double-triggering
+                    isResolvingRef.current = remotePlayingItemId || remoteFileId || null;
+                    resolveAndPlayWithoutSync(remoteFileId, remotePlayingItemId, targetDriveId, finalIsAudio);
                 }
-
-                // ... inside RoomContent component ...
+                setCurrentSubtitle('');
 
             } else if (data.type === 'ROOM_UPDATE') {
                 const { members, ownerId, controllerId, quarkCookie, hasGlobalCookie } = data.payload;
@@ -1485,6 +1830,7 @@ function RoomContent() {
                 setOwnerId(ownerId);
                 setControllerId(controllerId);
                 controllerIdRef.current = controllerId;
+                console.log(`[WS] ROOM_UPDATE. Controller: ${controllerId}, Me: ${userId}, canControl: ${controllerId === userId}`);
                 if (quarkCookie !== undefined) setRoomCookie(quarkCookie);
                 if (hasGlobalCookie !== undefined) setHasGlobalCookie(hasGlobalCookie);
 
@@ -1530,36 +1876,85 @@ function RoomContent() {
                         description: data.payload.description !== undefined ? data.payload.description : lastSyncedMetadata.current.description
                     });
                 }
+
+                // NEW: Optimistic capture of current playing state if provided in ROOM_UPDATE (Initial Join)
+                if (data.payload.playingItemId && !playingItemIdRef.current) {
+                    const pid = data.payload.playingItemId;
+                    const item = findPlaylistItem(playlistRef.current, pid);
+                    const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)));
+                    if (isAudioCandidate) setIsAudio(true);
+                }
             } else if (data.type === 'PLAYER_STATE') {
                 const video = videoRef.current;
                 if (!video) return;
 
                 // Independent Mode: Viewer disabled sync
-                const amIController = !controllerIdRef.current || controllerIdRef.current === userId;
+                // Fixed: controllerIdRef.current MUST be truthy to avoid race condition during loading.
+                // If it's null, we wait for ROOM_UPDATE before deciding if we are a controller.
+                const amIController = !!controllerIdRef.current && controllerIdRef.current === userId;
+
+                // CRITICAL FIX: If I am the controller, I am the source of truth.
+                // I must NEVER listen to PLAYER_STATE from others, or I will sync to their (paused) state.
+                if (amIController) return;
+
                 if (!amIController && !isSyncedRef.current) return;
 
-                const { state, time, playbackRate, sentAt, playingItemId: newPlayingItemId } = data.payload;
+                const { state, time, playbackRate, sentAt, fileId: remoteFileId, playingItemId: newPlayingItemId, meta: remoteMeta, isAudio: remoteIsAudio } = data.payload;
 
-                // 0. Auto-Switch Video (Priority)
-                // If the controller is on a different video, we MUST switch immediately.
-                if (newPlayingItemId && playingItemId && newPlayingItemId !== playingItemId) {
-                    addLog(`[Sync] Switching video to match controller: ${newPlayingItemId}`);
-                    // Only switch if we are NOT the controller
-                    if (!amIController) {
-                        resolveAndPlayWithoutSync(roomId || '', newPlayingItemId);
-                        // Abort state sync this turn to avoid fighting with the new video load
-                        return;
+                // Sync controller paused state
+                if (state === 'paused') {
+                    setIsControllerPaused(true);
+                } else if (state === 'playing') {
+                    setIsControllerPaused(false);
+                }
+
+                // 0. Authoritative Flags Sync (Always)
+                // We sync these BEFORE the ID-switch logic to ensure reloads/heartbeats are correct
+                if (remoteIsAudio !== undefined) {
+                    setIsAudio(remoteIsAudio);
+                }
+                if (remoteMeta) {
+                    setCurrentVideoMeta(remoteMeta);
+                    // Fallback if isAudio flag missing from payload (backward compatibility)
+                    if (remoteIsAudio === undefined) {
+                        setIsAudio(remoteMeta.type === 'audio' || (remoteMeta.file_name && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(remoteMeta.file_name)));
                     }
+                }
+
+                // 1. Auto-Switch Video / Reload Sync
+                // Switch if ID changed OR if we are supposed to be playing something but videoSrc is empty (Reload/Newcomer Case)
+                const isDifferentFile = (remoteFileId && remoteFileId !== fileIdRef.current);
+                const isDifferentItem = (newPlayingItemId && newPlayingItemId !== playingItemIdRef.current);
+                // CRITICAL: Check both state and Ref to prevent loop during render-delay, 
+                // and skip if we are already resolving this specific target.
+                const isSourceMissing = !videoSrcRef.current && !isResolvingRef.current;
+                const isNotResolvingThis = isResolvingRef.current !== (newPlayingItemId || remoteFileId);
+
+                if ((isDifferentFile || isDifferentItem || isSourceMissing) && isNotResolvingThis) {
+                    addLog(`[WS] PLAYER_STATE triggered resolution: ${newPlayingItemId || remoteFileId}`);
+                    const targetFid = remoteFileId || remoteMeta?.fileId || newPlayingItemId;
+                    if (targetFid) {
+                        isResolvingRef.current = newPlayingItemId || remoteFileId || null;
+                        // Store the seek time so once resolved, we jump to it
+                        pendingSeekTimeRef.current = time;
+                        const finalIsAudio = remoteIsAudio !== undefined ? remoteIsAudio : (remoteMeta?.isAudio);
+                        resolveAndPlayWithoutSync(targetFid, newPlayingItemId, remoteMeta?.driveId, finalIsAudio);
+                    }
+                    return; // Wait for resolution
                 }
 
                 // Update local playlist progress based on controller's authoritative time
                 // This keeps the progress bar in the playlist UI smooth for everyone
-                if (playingItemId) {
+                // This keeps the progress bar in the playlist UI smooth for everyone
+                // FIX: Only update playback progress from network if it's NOT the item we are currently playing.
+                // For the current item, our local video 'timeupdate' will drive the UI smoothly.
+                // Overwriting it with network state (1Hz) causes "Jumping/Back-and-Forth" artifacts.
+                if (playingItemIdRef.current && newPlayingItemId !== playingItemIdRef.current) {
                     setPlaylist(prev => {
                         let updated = false;
                         const update = (list: any[]): any[] => {
                             return list.map(item => {
-                                if (item.id === playingItemId) {
+                                if (item.id === newPlayingItemId) {
                                     updated = true;
                                     return { ...item, progress: time, duration: video.duration || item.duration };
                                 }
@@ -1583,50 +1978,85 @@ function RoomContent() {
                 // Latency Compensation
                 let compensatedTime = time;
                 if (sentAt) {
-                    const age = Date.now() - sentAt;
-                    // Reset if too old (> 1 min) or first time
-                    if (age < lastMinAgeRef.current || lastMinAgeRef.current === Number.MAX_SAFE_INTEGER) {
-                        lastMinAgeRef.current = age;
+                    const now = Date.now();
+                    const age = now - sentAt;
+
+                    // Sanity Check: If age is negative (future) or > 60s (clock skew/lag), ignore compensation
+                    // This prevents "Jumping" due to bad clocks.
+                    if (age >= 0 && age < 60000) {
+                        // Reset if too old (> 1 min relative to min) or first time
+                        if (age < lastMinAgeRef.current || lastMinAgeRef.current === Number.MAX_SAFE_INTEGER) {
+                            lastMinAgeRef.current = age;
+                        }
+                        // Relative latency: how much older this specific message is compared to the 'fastest' message seen
+                        // Plus a small constant base latency guess (50ms) to jump slightly ahead of what we received
+                        const relativeLatency = (age - lastMinAgeRef.current) / 1000;
+                        compensatedTime = time + relativeLatency + 0.05;
                     }
-                    // Relative latency: how much older this specific message is compared to the 'fastest' message seen
-                    // Plus a small constant base latency guess (50ms) to jump slightly ahead of what we received
-                    const relativeLatency = (age - lastMinAgeRef.current) / 1000;
-                    compensatedTime = time + relativeLatency + 0.05;
                 }
 
                 const now = video.currentTime;
                 const drift = now - compensatedTime;
 
                 isRemoteUpdate.current = true;
+                // Disable Resume for this item once synced
+                lastResumedItemIdRef.current = newPlayingItemId || playingItemIdRef.current;
 
                 // 1. Hard Sync: State Mismatch or Very Large Drift (> 3.0s)
                 // We use a larger threshold (3s) to avoid frequent seeking, which causes buffering/stuttering.
                 // Ignore mismatch if we are buffering (we might be "paused" waiting for data while controller is playing)
                 const isStateMismatch = !isBuffering.current && ((state === 'playing' && video.paused) || (state === 'paused' && !video.paused));
 
-                if (Math.abs(drift) > 2.0 || isStateMismatch) {
-                    addLog(`[Sync] Hard Sync: Drift=${drift.toFixed(3)}s, StateMismatch=${isStateMismatch}`);
-                    if (Math.abs(drift) > 0.5) { // Minimum seek threshold
-                        addLog(`[Sync] Seeking to ${compensatedTime.toFixed(2)}s`);
-                        video.currentTime = compensatedTime;
+                // 1. Hard Sync (Seek)
+                if (Math.abs(drift) > 3.0 || isStateMismatch) {
+                    if (Math.abs(drift) > 3.0) {
+                        addLog(`[Sync] Hard Sync: Drift=${drift.toFixed(3)}s`);
+                        // Only seek if drift is actually significant (avoid jitter)
+                        if (Math.abs(drift) > 0.5) {
+                            video.currentTime = compensatedTime;
+                        }
                     }
-                    if (state === 'playing') video.play().catch(() => { });
-                    else video.pause();
+
+                    if (isStateMismatch) {
+                        addLog(`[Sync] State Sync -> ${state}`);
+                        setIsPlaying(state === 'playing');
+                    }
 
                     // Reset rate on hard sync
-                    if (video.playbackRate !== playbackRate) {
+                    if (Math.abs(video.playbackRate - playbackRate) > 0.01) {
                         video.playbackRate = playbackRate;
                     }
                 }
                 // 2. Soft Sync: Drift Adjustment (Tiered)
+                // 2. Soft Sync: Drift Adjustment (Tiered)
                 else {
-                    // Soft Sync DISABLED - Just reset rate
-                    const targetRate = playbackRate || 1.0;
-                    if (Math.abs(video.playbackRate - targetRate) > 0.01) {
-                        video.playbackRate = targetRate;
-                        addLog(`[Sync] Reset Rate -> ${targetRate}`);
+                    // Always keep React state in sync with controller
+                    if (isPlaying !== (state === 'playing')) {
+                        setIsPlaying(state === 'playing');
                     }
 
+                    // Soft Sync ENABLED - Adjust rate to catch up or slow down
+                    // This prevents the "Sawtooth" behaviour where we drift until 3s then hard seek (Jump).
+                    const baseRate = playbackRate || 1.0;
+                    let targetRate = baseRate;
+
+                    if (drift < -0.5) { // Behind by > 0.5s -> Speed up
+                        // Cap at 1.1x speed boost relative to base
+                        targetRate = baseRate + 0.1;
+                        addLog(`[Sync] Soft Sync (Catchup): ${drift.toFixed(2)}s -> ${targetRate.toFixed(2)}x`);
+                    } else if (drift > 0.5) { // Ahead by > 0.5s -> Slow down
+                        // Cap at 0.9x speed relative to base
+                        targetRate = Math.max(0.25, baseRate - 0.1);
+                        addLog(`[Sync] Soft Sync (Slowdown): ${drift.toFixed(2)}s -> ${targetRate.toFixed(2)}x`);
+                    } else {
+                        // Within 0.5s -> Normal
+                        targetRate = baseRate;
+                    }
+
+                    // Only apply if different
+                    if (Math.abs(video.playbackRate - targetRate) > 0.01) {
+                        video.playbackRate = targetRate;
+                    }
                 }
 
                 // Debounce the remote update flag
@@ -1647,42 +2077,76 @@ function RoomContent() {
                     return [...prev, message];
                 });
             } else if (data.type === 'MEMBER_PROGRESS') {
-                const { userId, time, playingItemId: memberPlayingItemId, duration } = data.payload;
+                const { userId, time, playingItemId: memberPlayingItemId, duration, fileId: memberFileId, isAudio: memberIsAudio, meta: memberMeta, driveId: memberDriveId } = data.payload;
                 // Update members list progress
                 setMembers(prev => prev.map(m => m.userId === userId ? { ...m, currentProgress: time } : m));
 
-                // Update playlist progress if this is the controller (providing authoritative progress)
+                // Authoritative Sync from Controller
                 if (memberPlayingItemId && userId === controllerIdRef.current) {
-                    // Check for video mismatch and switch if needed (Backup for PLAYER_STATE)
-                    if (playingItemId && memberPlayingItemId !== playingItemId) {
-                        // Double check: assume PLAYER_STATE is primary, but if we missed it or it failed, this covers it.
-                        // Debounce slightly to avoid race with PLAYER_STATE
-                        if (!isRemoteUpdate.current && !isLoadingSource.current) {
-                            addLog(`[Sync] (Backup) Switching video to ${memberPlayingItemId}`);
-                            resolveAndPlayWithoutSync(roomId || '', memberPlayingItemId);
-                            return;
+                    if (memberIsAudio !== undefined) setIsAudio(memberIsAudio);
+                    if (memberMeta) {
+                        setCurrentVideoMeta(memberMeta);
+                        if (memberIsAudio === undefined) {
+                            setIsAudio(memberMeta.type === 'audio' || (memberMeta.file_name && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(memberMeta.file_name)));
                         }
                     }
 
-                    setPlaylist(prev => {
-                        let updated = false;
-                        const update = (list: any[]): any[] => {
-                            return list.map(item => {
-                                if (item.id === memberPlayingItemId) {
-                                    updated = true;
-                                    return { ...item, progress: time, duration: duration || item.duration };
-                                }
-                                if (item.children) {
-                                    const newChildren = update(item.children);
-                                    if (updated) return { ...item, children: newChildren };
-                                }
-                                return item;
-                            });
-                        };
-                        const newList = update(prev);
-                        return updated ? newList : prev;
-                    });
+                    // Source Sync (Mismatch or Reload)
+                    const shouldResolve = (memberPlayingItemId && memberPlayingItemId !== playingItemIdRef.current) || (memberPlayingItemId && !videoSrc);
+                    if (shouldResolve) {
+                        if (!isRemoteUpdate.current && !isLoadingSource.current) {
+                            addLog(`[Sync] (Backup) Resolving source: ${memberPlayingItemId}`);
+                            const targetFid = memberFileId || memberMeta?.fileId || memberPlayingItemId;
+                            const targetDriveId = memberDriveId || memberMeta?.driveId || undefined;
+
+                            // Lock resolution for backup path too
+                            isResolvingRef.current = memberPlayingItemId || targetFid || null;
+                            resolveAndPlayWithoutSync(targetFid, memberPlayingItemId, targetDriveId, memberIsAudio);
+                            return;
+                        }
+                    }
                 }
+
+                setPlaylist(prev => {
+                    let updated = false;
+                    const update = (list: any[]): any[] => {
+                        return list.map(item => {
+                            if (item.id === memberPlayingItemId) {
+                                updated = true;
+                                return { ...item, progress: time, duration: duration || item.duration };
+                            }
+                            if (item.children) {
+                                const newChildren = update(item.children);
+                                if (updated) return { ...item, children: newChildren };
+                            }
+                            return item;
+                        });
+                    };
+                    const newList = update(prev);
+                    return updated ? newList : prev;
+                });
+            } else if (data.type === 'MEMBER_JOINED') {
+                const { member } = data.payload;
+                setMembers(prev => {
+                    if (prev.some(m => m.userId === member.userId)) return prev;
+                    return [...prev, member];
+                });
+                toast({
+                    title: t('member_joined'),
+                    description: `${member.name} ${t('joined_room')}`,
+                });
+            } else if (data.type === 'MEMBER_LEFT') {
+                const { userId } = data.payload;
+                setMembers(prev => {
+                    const leavingMember = prev.find(m => m.userId === userId);
+                    if (leavingMember) {
+                        toast({
+                            title: t('member_left'),
+                            description: `${leavingMember.name} ${t('left_room')}`,
+                        });
+                    }
+                    return prev.filter(m => m.userId !== userId);
+                });
             }
         };
 
@@ -1738,8 +2202,11 @@ function RoomContent() {
                         payload: {
                             time: video.currentTime,
                             sentAt: now,
+                            fileId: fileIdRef.current,
+                            isAudio: isAudio,
                             playingItemId: playingItemIdRef.current || undefined,
-                            duration: video.duration || undefined
+                            duration: video.duration || undefined,
+                            driveId: currentVideoMeta?.driveId // Include driveId in progress too
                         }
                     }));
 
@@ -1747,52 +2214,63 @@ function RoomContent() {
                 }
 
                 // Update local member progress every 1s (independent of network throttle)
+                // This drives the "User Avatar" progress on the timeline
                 setMembers(prev => prev.map(m => m.userId === currentUserId ? { ...m, currentProgress: video.currentTime } : m));
+
+                // Update local playlist progress state smoothly for EVERYONE (Controller + Viewers)
+                // This ensures the sidebar progress bar updates at 60fps matches the video.
+                const currentPlayingId = playingItemIdRef.current;
+                if (currentPlayingId) {
+                    setPlaylist(prev => {
+                        let updated = false;
+                        const update = (list: any[]): any[] => {
+                            return list.map(item => {
+                                if (item.id === currentPlayingId) {
+                                    // Optimization: Don't update if diff is < 0.5s to avoid React thrashing? 
+                                    // No, we want smooth UI. But maybe throttle slightly? 
+                                    // Actually, React batching usually handles this fine.
+                                    updated = true;
+                                    return { ...item, progress: video.currentTime, duration: video.duration };
+                                }
+                                if (item.children) {
+                                    const newChildren = update(item.children);
+                                    if (updated) return { ...item, children: newChildren };
+                                }
+                                return item;
+                            });
+                        };
+                        const newList = update(prev);
+                        // Only return new obj if actually changed to avoid re-renders if ID not found
+                        return updated ? newList : prev;
+                    });
+                }
+
 
                 // 2. If Controller, broadcast authoritative state for Active Sync
                 // We do this every 1s to maintain tight sync.
-                if (controllerIdRef.current === currentUserId) {
+                // Fixed: Ensure controllerIdRef.current is TRUTHY and matches currentUserId
+                const isMeController = !!controllerIdRef.current && controllerIdRef.current === currentUserId;
+
+                if (isMeController) {
                     // Update local member progress to fix "Red" color (self-sync status)
                     setMembers(prev => prev.map(m => m.userId === currentUserId ? { ...m, currentProgress: video.currentTime } : m));
-
-                    // Update local playlist progress state so the controller sees their own bar move
-                    const currentPlayingId = playingItemIdRef.current;
-                    if (currentPlayingId) {
-                        setPlaylist(prev => {
-                            let updated = false;
-                            const update = (list: any[]): any[] => {
-                                return list.map(item => {
-                                    if (item.id === currentPlayingId) {
-                                        updated = true;
-                                        return { ...item, progress: video.currentTime, duration: video.duration };
-                                    }
-                                    if (item.children) {
-                                        const newChildren = update(item.children);
-                                        if (updated) return { ...item, children: newChildren };
-                                    }
-                                    return item;
-                                });
-                            };
-                            const newList = update(prev);
-                            return updated ? newList : prev;
-                        });
-                    }
-
                     ws.send(JSON.stringify({
                         type: 'PLAYER_STATE',
                         payload: {
                             state: video.paused ? 'paused' : 'playing',
                             time: video.currentTime,
-                            playingItemId: currentPlayingId || undefined,
                             playbackRate: video.playbackRate,
-                            sentAt: now
+                            sentAt: now,
+                            fileId: fileIdRef.current, // Include fileId in progress heartbeats too
+                            isAudio: isAudio, // Include audio mode
+                            meta: currentVideoMeta // Add meta to broadcaster state
                         }
                     }));
                 }
             }
         }, 1000);
         return () => clearInterval(interval);
-    }, [currentUserId]);
+    }, [currentUserId, currentVideoMeta]);
 
 
 
@@ -2239,7 +2717,16 @@ function RoomContent() {
                                 </div>
 
                                 <div className="flex items-center gap-2 pointer-events-auto">
-                                    {/* Control Status Indicator */}
+
+                                    {/* Controller Paused Indicator */}
+                                    {isControllerPaused && !isPlaying && (
+                                        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                                            <Pause className="w-4 h-4 text-white/70 fill-white/70" />
+                                            <span className="text-sm font-medium text-white/90">Host paused</span>
+                                        </div>
+                                    )}
+
+                                    {/* Meta/Controls Container (Bottom) */}
                                     <div
                                         className={`flex items-center justify-center h-10 w-10 rounded-full bg-black/40 backdrop-blur-md border border-white/10 outline-none focus:ring-2 focus:ring-primary/50 ${canControl
                                             ? 'text-primary border-primary/50 shadow-[0_0_10px_rgba(124,58,237,0.3)]'
@@ -2323,93 +2810,125 @@ function RoomContent() {
                             {/* Open Sidebar/Drawer in Landscape Mobile - REMOVED per user feedback (only use header button) */}
                         </div>
                         {videoSrc ? (
-                            <SeamlessVideoPlayer
-                                ref={videoRef}
-                                controls={showControls}
-                                onSeamlessStart={() => {
-                                    console.log("[Player] Seamless start. Hiding controls and locking.");
-                                    isSeamlessSwitchingRef.current = true;
-                                    setShowControls(false);
-                                }}
-                                children={
-                                    <>
-                                        {isDanmakuEnabled && <DanmakuOverlay ref={danmakuRef} />}
-                                    </>
-                                }
-                                onSubtitleChange={setCurrentSubtitle}
-                                autoPlay
-                                className="w-full h-full object-contain"
-                                src={videoSrc}
-                                nextSrc={nextVideoSrc}
-                                isPreloadEnabled={enablePreload}
-                                onEnded={playNext}
-                                onLoadStart={() => addLog(`[Video Event] LoadStart: ${videoSrc.slice(0, 50)}...`)}
-                                onLoadedMetadata={() => {
-                                    addLog(`[Video Event] LoadedMetadata: Duration ${videoRef.current?.duration}`);
-
-                                    // RESTORE TIME (Resolution Switch) - Execute as early as possible
-                                    if (videoRef.current && pendingSeekTimeRef.current !== null) {
-                                        addLog(`[Resolution] Restoring time to ${pendingSeekTimeRef.current.toFixed(1)}s`);
-                                        videoRef.current.currentTime = pendingSeekTimeRef.current;
-                                        pendingSeekTimeRef.current = null;
-                                        // Ensure it plays if it was playing, or if autoPlay is meant to be on
-                                        // For resolution switch, we generally want to resume.
-                                        videoRef.current.play().catch(e => console.warn("Auto-resume failed", e));
+                            <div className={cn("contents", isAudio ? "invisible absolute w-px h-px opacity-0 pointer-events-none" : "")}>
+                                <SeamlessVideoPlayer
+                                    ref={videoRef}
+                                    controls={showControls}
+                                    onSeamlessStart={() => {
+                                        console.log("[Player] Seamless start. Hiding controls and locking.");
+                                        isSeamlessSwitchingRef.current = true;
+                                        setShowControls(false);
+                                    }}
+                                    children={
+                                        <>
+                                            {/* Subtitles Overlay (Native-like) */}
+                                            {currentSubtitle && !isAudio && (
+                                                <div className="absolute bottom-16 left-0 right-0 text-center pointer-events-none p-4 z-40">
+                                                    <span className="inline-block bg-black/60 text-white px-3 py-1.5 rounded text-lg md:text-xl shadow-md backdrop-blur-sm">
+                                                        {currentSubtitle}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {/* Controller Paused Overlay for Video */}
+                                            {isControllerPaused && !isPlaying && (
+                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
+                                                    <div className="bg-zinc-900/90 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 flex items-center gap-3 shadow-2xl animate-in fade-in zoom-in duration-300">
+                                                        <Pause className="w-5 h-5 text-amber-500 fill-amber-500" />
+                                                        <span className="text-base font-bold text-white tracking-wide">{t('host_paused')}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
                                     }
-                                }}
-                                onCanPlay={() => {
-                                    addLog(`[Video Event] CanPlay`);
-
-                                    // Reset retry counter on success
-                                    retryCount.current = 0;
-
-                                    if (videoRef.current) {
-                                        // Restore Rate
-                                        if (Math.abs(videoRef.current.playbackRate - playbackRate) > 0.01) {
-                                            addLog(`[Rate] Restoring rate to ${playbackRate}`);
-                                            videoRef.current.playbackRate = playbackRate;
+                                    onTimeUpdate={() => {
+                                        // Optional: any top-level time sync logic
+                                    }}
+                                    onEnded={() => {
+                                        console.log("Video ended, auto-advancing...");
+                                        playNext();
+                                    }}
+                                    onPlay={() => {
+                                        setIsRoomLoading(false);
+                                        setIsPlaying(true);
+                                    }}
+                                    onPlayError={(e) => {
+                                        if (e.name === 'AbortError') return;
+                                        toast({
+                                            title: t('playback_error'),
+                                            description: e.message || t('operation_not_allowed'),
+                                            variant: "destructive",
+                                        });
+                                    }}
+                                    onPause={() => setIsPlaying(false)}
+                                    className="w-full h-full object-contain"
+                                    src={videoSrc}
+                                    isPlaying={isPlaying}
+                                    nextSrc={nextVideoSrc}
+                                    isPreloadEnabled={enablePreload}
+                                    onLoadStart={() => addLog(`[Video Event] LoadStart: ${videoSrc.slice(0, 50)}...`)}
+                                    onLoadedMetadata={() => {
+                                        addLog(`[Video Event] LoadedMetadata: Duration ${videoRef.current?.duration}`);
+                                        if (videoRef.current && pendingSeekTimeRef.current !== null) {
+                                            addLog(`[Resolution] Restoring time to ${pendingSeekTimeRef.current.toFixed(1)}s`);
+                                            videoRef.current.currentTime = pendingSeekTimeRef.current;
+                                            pendingSeekTimeRef.current = null;
+                                            // Note: isPlaying will be set by the next PLAYER_STATE heartbeat
                                         }
-                                    }
-                                }}
-                                onStalled={() => addLog(`[Video Event] Stalled`)}
-                                onWaiting={() => addLog(`[Video Event] Waiting`)}
-                                onError={(e) => {
-                                    const err = e.currentTarget.error;
-                                    const code = err?.code;
-                                    const msg = err?.message;
-                                    addLog(`[Video Error] Code: ${code}, Msg: ${msg}`);
-                                    console.error("[Video Error]", err);
-
-                                    // Auto-retry logic for network/source errors (Proxy restart or Expiry)
-                                    if (code === 2 || code === 4) { // MEDIA_ERR_NETWORK (2) or MEDIA_ERR_SRC_NOT_SUPPORTED (4)
-                                        if (retryCount.current < 3) {
-                                            retryCount.current += 1;
-                                            addLog(`[Retry] Attempt ${retryCount.current}/3... Resetting Proxy Cache.`);
-
-                                            // 1. Force new proxy port discovery
-                                            resetProxyCache();
-
-                                            // 2. Retry playback (re-resolve URL)
-                                            // Use setTimeout to avoid rapid loops if error is persistent
-                                            setTimeout(() => {
-                                                if (fileId) {
-                                                    resolveAndPlay(fileId, playingItemId || undefined);
-                                                }
-                                            }, 1000);
-                                        } else {
-                                            addLog(`[Retry] Max retries exceeded.`);
-                                            toast({
-                                                variant: "destructive",
-                                                title: t('playback_error'),
-                                                description: t('playback_error_desc')
-                                            });
+                                    }}
+                                    onCanPlay={() => {
+                                        addLog(`[Video Event] CanPlay`);
+                                        retryCount.current = 0;
+                                        if (videoRef.current) {
+                                            if (Math.abs(videoRef.current.playbackRate - playbackRate) > 0.01) {
+                                                videoRef.current.playbackRate = playbackRate;
+                                            }
                                         }
-                                    }
-                                }}
-                                onDebug={(msg) => addLog(msg)}
-                                onManualTracksDetected={handleManualTracks}
-                                manualTrackId={selectedManualTrackId}
-                            />
+                                    }}
+                                    onStalled={() => addLog(`[Video Event] Stalled`)}
+                                    onWaiting={() => addLog(`[Video Event] Waiting`)}
+                                    onError={(e) => {
+                                        const target = e.currentTarget as HTMLVideoElement;
+                                        if (!target.error) return; // Ignore null errors
+
+                                        const code = target.error?.code;
+                                        const msg = target.error?.message;
+                                        if (code === 20) return; // Cancelled
+
+                                        addLog(`[Video Error] Code: ${code}, Msg: ${msg}, URL: ${videoSrc.slice(0, 50)}...`);
+                                        // Silent log for debug
+                                        console.log("[Video Info] Non-fatal or preload error ignored in UI", { code, msg });
+
+                                        // Only fallback if it's the active player and a real error
+                                        // SeamlessVideoPlayer should handle wrapping this correctly.
+                                        if (!isAudio) {
+                                            addLog("[Recovery] Video playback failed. Falling back to Audio UI.");
+                                            setIsAudio(true);
+                                        }
+
+                                        // Auth Expiry Detection
+                                        // If it's a quark link and playback fails with 403 or specific error message.
+                                        const isQuark = (videoSrc && videoSrc.includes('quark.cn')) || (videoSrc && videoSrc.includes('ApiClient'));
+                                        const isForbidden = (target.error as any).code === 403 || code === 403 || (msg && (msg.includes('403') || msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('expired')));
+
+                                        if (isQuark && isForbidden) {
+                                            const now = Date.now();
+                                            if (now - lastTimeRef.current > 30000) {
+                                                addLog("[Auth] Quark session potentially expired.");
+                                                toast({
+                                                    variant: "destructive",
+                                                    title: t('error_quark_login_required'),
+                                                    description: t('error_no_cookie_configured'),
+                                                    action: isOwner ? <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button> : undefined
+                                                });
+                                                lastTimeRef.current = now;
+                                            }
+                                        }
+                                    }}
+                                    onDebug={(msg) => addLog(msg)}
+                                    onManualTracksDetected={handleManualTracks}
+                                    manualTrackId={selectedManualTrackId}
+                                />
+                            </div>
                         ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
                                 {isRoomLoading ? (
@@ -2426,6 +2945,18 @@ function RoomContent() {
                                     </>
                                 )}
                             </div>
+                        )}
+
+                        {/* Audio Mode Overlay */}
+                        {isAudio && videoSrc && (
+                            <AudioPlayer
+                                meta={currentVideoMeta}
+                                filename={playingItemId ? findPlaylistItem(playlist, playingItemId)?.title : undefined}
+                                videoRef={videoRef}
+                                isPlaying={isPlaying}
+                                onClose={() => setIsAudio(false)}
+                                isControllerPaused={isControllerPaused}
+                            />
                         )}
 
                         {currentSubtitle && (
@@ -2818,215 +3349,217 @@ function RoomContent() {
             </main >
 
             {/* Mobile Horizontal Drawer Overlay */}
-            {isLandscapeMobile && (
-                <div className={cn(
-                    "fixed inset-0 z-40 transition-all duration-300 ease-in-out pointer-events-none",
-                    isDrawerOpen ? "bg-black/60 pointer-events-auto" : "bg-transparent"
-                )} onClick={() => setIsDrawerOpen(false)}>
-                    <div
-                        className={cn(
-                            "absolute top-0 right-0 h-full w-[320px] bg-zinc-950 border-l border-white/10 shadow-2xl transition-transform duration-300 ease-out pointer-events-auto flex flex-col pt-safe",
-                            isDrawerOpen ? "translate-x-0" : "translate-x-full"
-                        )}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between p-4 border-b border-white/5">
-                            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                                <TabsList className="grid w-full grid-cols-4 bg-white/5 h-9 p-0.5 rounded-full border border-white/10">
-                                    <TabsTrigger value="playlist" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('playlist')}</TabsTrigger>
-                                    <TabsTrigger value="chat" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('chat')}</TabsTrigger>
-                                    <TabsTrigger value="members" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('members')}</TabsTrigger>
-                                    <TabsTrigger value="settings" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('settings')}</TabsTrigger>
-                                </TabsList>
-                            </Tabs>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 ml-2 shrink-0" onClick={() => setIsDrawerOpen(false)}>
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </div>
+            {
+                isLandscapeMobile && (
+                    <div className={cn(
+                        "fixed inset-0 z-40 transition-all duration-300 ease-in-out pointer-events-none",
+                        isDrawerOpen ? "bg-black/60 pointer-events-auto" : "bg-transparent"
+                    )} onClick={() => setIsDrawerOpen(false)}>
+                        <div
+                            className={cn(
+                                "absolute top-0 right-0 h-full w-[320px] bg-zinc-950 border-l border-white/10 shadow-2xl transition-transform duration-300 ease-out pointer-events-auto flex flex-col pt-safe",
+                                isDrawerOpen ? "translate-x-0" : "translate-x-full"
+                            )}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between p-4 border-b border-white/5">
+                                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                    <TabsList className="grid w-full grid-cols-4 bg-white/5 h-9 p-0.5 rounded-full border border-white/10">
+                                        <TabsTrigger value="playlist" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('playlist')}</TabsTrigger>
+                                        <TabsTrigger value="chat" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('chat')}</TabsTrigger>
+                                        <TabsTrigger value="members" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('members')}</TabsTrigger>
+                                        <TabsTrigger value="settings" className="rounded-full text-[10px] h-full data-[state=active]:bg-primary">{t('settings')}</TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 ml-2 shrink-0" onClick={() => setIsDrawerOpen(false)}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
 
-                        <div className="flex-1 overflow-hidden">
-                            {activeTab === 'playlist' && (
-                                <div className="flex flex-col h-full">
-                                    <div className="p-3 border-b border-white/5 flex gap-2">
-                                        <Input
-                                            placeholder={t('quark_url_or_id')}
-                                            value={inputValue}
-                                            onChange={(e) => setInputValue(e.target.value)}
-                                            className="h-8 flex-1 text-xs"
-                                        />
-                                        <Button onClick={addToPlaylist} disabled={isResolving} size="icon" variant="secondary" className="h-8 w-8 shrink-0">
-                                            {isResolving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                                        </Button>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto p-2 space-y-2 no-scrollbar">
-                                        {playlist.map((item, i) => (
-                                            <SortablePlaylistItem
-                                                key={item.id}
-                                                item={item}
-                                                index={i}
-                                                playingItemId={playingItemId}
-                                                onPlay={resolveAndPlay}
-                                                onRemove={removeFromPlaylist}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {activeTab === 'chat' && (
-                                <div className="flex flex-col h-full">
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-                                        {messages.map((msg) => (
-                                            <ChatMessageItem key={msg.id} message={msg} currentUserId={currentUserId} />
-                                        ))}
-                                    </div>
-                                    <div className="p-3 border-t border-white/5 bg-zinc-900/50 pb-safe">
-                                        <form onSubmit={sendChatMessage} className={cn(
-                                            "flex gap-2",
-                                            isMobile ? "" : "max-w-4xl mx-auto"
-                                        )}>
+                            <div className="flex-1 overflow-hidden">
+                                {activeTab === 'playlist' && (
+                                    <div className="flex flex-col h-full">
+                                        <div className="p-3 border-b border-white/5 flex gap-2">
                                             <Input
-                                                value={chatInput}
-                                                onChange={(e) => setChatInput(e.target.value)}
-                                                placeholder={t('type_message')}
-                                                className="h-8 text-xs bg-black/50 border-white/10 rounded-full pl-3"
+                                                placeholder={t('quark_url_or_id')}
+                                                value={inputValue}
+                                                onChange={(e) => setInputValue(e.target.value)}
+                                                className="h-8 flex-1 text-xs"
                                             />
-                                            <Button type="submit" size="icon" className="h-8 w-8 rounded-full bg-primary" disabled={!chatInput.trim()}>
-                                                <ArrowRightIcon className="w-4 h-4" />
+                                            <Button onClick={addToPlaylist} disabled={isResolving} size="icon" variant="secondary" className="h-8 w-8 shrink-0">
+                                                {isResolving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                                             </Button>
-                                        </form>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto p-2 space-y-2 no-scrollbar">
+                                            {playlist.map((item, i) => (
+                                                <SortablePlaylistItem
+                                                    key={item.id}
+                                                    item={item}
+                                                    index={i}
+                                                    playingItemId={playingItemId}
+                                                    onPlay={resolveAndPlay}
+                                                    onRemove={removeFromPlaylist}
+                                                />
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            {activeTab === 'members' && (
-                                <div className="flex-1 overflow-y-auto p-2 space-y-1 no-scrollbar">
-                                    {members.map((m: any) => (
-                                        <MemberItem
-                                            key={m.userId}
-                                            member={m}
-                                            currentUserId={currentUserId}
-                                            controllerId={controllerId}
-                                            ownerId={ownerId}
-                                            videoDuration={videoRef.current?.duration || 1}
-                                            controllerProgress={members.find((mem: any) => mem.userId === controllerId)?.currentProgress}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                            {activeTab === 'settings' && (
-                                <div className="flex-1 overflow-y-auto p-4 no-scrollbar origin-top scale-90 -mt-2 h-[110%] w-[110%] -ml-[5%]">
-                                    <div className="space-y-6 pb-safe origin-top scale-90 w-[110%] -ml-[5%]">
-                                        <div className="space-y-4">
-                                            <div className="grid gap-2">
-                                                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('room_settings')}</Label>
-                                                <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-4">
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="room-title-mobile" className="text-xs">{t('room_name')}</Label>
-                                                        <Input
-                                                            id="room-title-mobile"
-                                                            value={roomTitle}
-                                                            onChange={(e) => isOwner && setRoomTitle(e.target.value)}
-                                                            className="h-9 bg-black/40 border-white/10 rounded-xl text-sm"
-                                                            disabled={!isOwner}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="room-desc-mobile" className="text-xs">{t('room_description')}</Label>
-                                                        <Input
-                                                            id="room-desc-mobile"
-                                                            value={roomDescription}
-                                                            onChange={(e) => isOwner && setRoomDescription(e.target.value)}
-                                                            className="h-9 bg-black/40 border-white/10 rounded-xl text-sm"
-                                                            disabled={!isOwner}
-                                                        />
-                                                    </div>
-                                                    <div className="flex items-center justify-between pt-2">
-                                                        <div className="space-y-0.5">
-                                                            <Label className="text-sm font-medium">{t('lock_control')}</Label>
-                                                            <p className="text-[10px] text-muted-foreground">{t('lock_control_desc')}</p>
+                                )}
+                                {activeTab === 'chat' && (
+                                    <div className="flex flex-col h-full">
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                                            {messages.map((msg) => (
+                                                <ChatMessageItem key={msg.id} message={msg} currentUserId={currentUserId} />
+                                            ))}
+                                        </div>
+                                        <div className="p-3 border-t border-white/5 bg-zinc-900/50 pb-safe">
+                                            <form onSubmit={sendChatMessage} className={cn(
+                                                "flex gap-2",
+                                                isMobile ? "" : "max-w-4xl mx-auto"
+                                            )}>
+                                                <Input
+                                                    value={chatInput}
+                                                    onChange={(e) => setChatInput(e.target.value)}
+                                                    placeholder={t('type_message')}
+                                                    className="h-8 text-xs bg-black/50 border-white/10 rounded-full pl-3"
+                                                />
+                                                <Button type="submit" size="icon" className="h-8 w-8 rounded-full bg-primary" disabled={!chatInput.trim()}>
+                                                    <ArrowRightIcon className="w-4 h-4" />
+                                                </Button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                )}
+                                {activeTab === 'members' && (
+                                    <div className="flex-1 overflow-y-auto p-2 space-y-1 no-scrollbar">
+                                        {members.map((m: any) => (
+                                            <MemberItem
+                                                key={m.userId}
+                                                member={m}
+                                                currentUserId={currentUserId}
+                                                controllerId={controllerId}
+                                                ownerId={ownerId}
+                                                videoDuration={videoRef.current?.duration || 1}
+                                                controllerProgress={members.find((mem: any) => mem.userId === controllerId)?.currentProgress}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                {activeTab === 'settings' && (
+                                    <div className="flex-1 overflow-y-auto p-4 no-scrollbar origin-top scale-90 -mt-2 h-[110%] w-[110%] -ml-[5%]">
+                                        <div className="space-y-6 pb-safe origin-top scale-90 w-[110%] -ml-[5%]">
+                                            <div className="space-y-4">
+                                                <div className="grid gap-2">
+                                                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('room_settings')}</Label>
+                                                    <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-4">
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="room-title-mobile" className="text-xs">{t('room_name')}</Label>
+                                                            <Input
+                                                                id="room-title-mobile"
+                                                                value={roomTitle}
+                                                                onChange={(e) => isOwner && setRoomTitle(e.target.value)}
+                                                                className="h-9 bg-black/40 border-white/10 rounded-xl text-sm"
+                                                                disabled={!isOwner}
+                                                            />
                                                         </div>
-                                                        <Switch
-                                                            checked={isLocked}
-                                                            onCheckedChange={(checked) => {
-                                                                if (!isOwner) return;
-                                                                setIsLocked(checked);
-                                                                if (socketRef.current?.readyState === WebSocket.OPEN) {
-                                                                    socketRef.current.send(JSON.stringify({
-                                                                        type: 'UPDATE_ROOM',
-                                                                        payload: { isLocked: checked }
-                                                                    }));
-                                                                }
-                                                            }}
-                                                            disabled={!isOwner}
-                                                        />
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="room-desc-mobile" className="text-xs">{t('room_description')}</Label>
+                                                            <Input
+                                                                id="room-desc-mobile"
+                                                                value={roomDescription}
+                                                                onChange={(e) => isOwner && setRoomDescription(e.target.value)}
+                                                                className="h-9 bg-black/40 border-white/10 rounded-xl text-sm"
+                                                                disabled={!isOwner}
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between pt-2">
+                                                            <div className="space-y-0.5">
+                                                                <Label className="text-sm font-medium">{t('lock_control')}</Label>
+                                                                <p className="text-[10px] text-muted-foreground">{t('lock_control_desc')}</p>
+                                                            </div>
+                                                            <Switch
+                                                                checked={isLocked}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (!isOwner) return;
+                                                                    setIsLocked(checked);
+                                                                    if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                                        socketRef.current.send(JSON.stringify({
+                                                                            type: 'UPDATE_ROOM',
+                                                                            payload: { isLocked: checked }
+                                                                        }));
+                                                                    }
+                                                                }}
+                                                                disabled={!isOwner}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
 
-                                            {isOwner && (
-                                                <div className="grid gap-2">
-                                                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('cloud_storage')}</Label>
-                                                    <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className={`h-2.5 w-2.5 rounded-full ${roomCookie || userCookie ? 'bg-green-500' : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? 'bg-red-500' : 'bg-amber-500') : 'bg-red-500')}`} />
-                                                                <span className="text-sm font-medium">
-                                                                    {roomCookie ? t('quark_drive_connected') : (userCookie ? (t('user_cookie_connected') || 'User Connected') : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? t('quark_drive_disconnected') : t('using_global_connection')) : t('quark_drive_disconnected')))}
-                                                                </span>
+                                                {isOwner && (
+                                                    <div className="grid gap-2">
+                                                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t('cloud_storage')}</Label>
+                                                        <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-4">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`h-2.5 w-2.5 rounded-full ${roomCookie || userCookie ? 'bg-green-500' : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? 'bg-red-500' : 'bg-amber-500') : 'bg-red-500')}`} />
+                                                                    <span className="text-sm font-medium">
+                                                                        {roomCookie ? t('quark_drive_connected') : (userCookie ? (t('user_cookie_connected') || 'User Connected') : (hasGlobalCookie ? (globalAuthRequired && !localStorage.getItem('cueplay_system_auth_code') ? t('quark_drive_disconnected') : t('using_global_connection')) : t('quark_drive_disconnected')))}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                        <Button
-                                                            className={`w-full h-10 rounded-xl text-sm gap-2 ${roomCookie || userCookie ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-primary hover:bg-primary/90'}`}
-                                                            onClick={() => setShowQuarkLogin(true)}
-                                                        >
-                                                            <QrCode className="h-4 w-4" />
-                                                            {roomCookie || userCookie ? t('reconnect_login') : t('login_quark_scan')}
-                                                        </Button>
+                                                            <Button
+                                                                className={`w-full h-10 rounded-xl text-sm gap-2 ${roomCookie || userCookie ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-primary hover:bg-primary/90'}`}
+                                                                onClick={() => setShowQuarkLogin(true)}
+                                                            >
+                                                                <QrCode className="h-4 w-4" />
+                                                                {roomCookie || userCookie ? t('reconnect_login') : t('login_quark_scan')}
+                                                            </Button>
 
-                                                        <div className="flex gap-2">
-                                                            {roomCookie && (
+                                                            <div className="flex gap-2">
+                                                                {roomCookie && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="flex-1 h-8 bg-white/5 text-destructive hover:bg-destructive/10 text-[10px]"
+                                                                        onClick={() => updateRoomCookie('')}
+                                                                    >
+                                                                        <Unplug className="h-3 w-3 mr-2" />
+                                                                        {t('disconnect_cookie') || 'Disconnect'}
+                                                                    </Button>
+                                                                )}
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="sm"
-                                                                    className="flex-1 h-8 bg-white/5 text-destructive hover:bg-destructive/10 text-[10px]"
-                                                                    onClick={() => updateRoomCookie('')}
+                                                                    className={`flex-1 h-8 bg-white/5 hover:bg-white/10 text-[10px] text-muted-foreground`}
+                                                                    onClick={() => setShowManualInput(!showManualInput)}
                                                                 >
-                                                                    <Unplug className="h-3 w-3 mr-2" />
-                                                                    {t('disconnect_cookie') || 'Disconnect'}
+                                                                    <Settings className="h-3 w-3 mr-2" />
+                                                                    {showManualInput ? t('hide_manual_input') : t('manual_input') || 'Manual'}
                                                                 </Button>
-                                                            )}
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className={`flex-1 h-8 bg-white/5 hover:bg-white/10 text-[10px] text-muted-foreground`}
-                                                                onClick={() => setShowManualInput(!showManualInput)}
-                                                            >
-                                                                <Settings className="h-3 w-3 mr-2" />
-                                                                {showManualInput ? t('hide_manual_input') : t('manual_input') || 'Manual'}
-                                                            </Button>
-                                                        </div>
-
-                                                        {showManualInput && (
-                                                            <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
-                                                                <Input
-                                                                    value={roomCookie}
-                                                                    onChange={(e) => updateRoomCookie(e.target.value)}
-                                                                    className="h-8 text-[10px] font-mono bg-black/40 border-white/10 rounded-lg"
-                                                                    placeholder="Cookie string..."
-                                                                />
                                                             </div>
-                                                        )}
+
+                                                            {showManualInput && (
+                                                                <div className="pt-2 border-t border-white/5 animate-in slide-in-from-top-1 fade-in duration-200">
+                                                                    <Input
+                                                                        value={roomCookie}
+                                                                        onChange={(e) => updateRoomCookie(e.target.value)}
+                                                                        className="h-8 text-[10px] font-mono bg-black/40 border-white/10 rounded-lg"
+                                                                        placeholder="Cookie string..."
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }
 
