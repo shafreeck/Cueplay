@@ -68,6 +68,8 @@ struct ProxyParams {
     hint: Option<String>,
     ua: Option<String>,
     filename: Option<String>,
+    #[serde(flatten)]
+    extra: std::collections::HashMap<String, String>,
 }
 
 
@@ -80,12 +82,12 @@ async fn proxy_handler(
 ) -> impl IntoResponse {
     let url = params.url;
     let cookie = params.cookie;
-    let referer = params.referer.unwrap_or_else(|| "https://pan.quark.cn/".to_string());
+    let referer = params.referer.clone().unwrap_or_else(|| "https://pan.quark.cn/".to_string());
 
     let safe_url = url.chars().take(50).collect::<String>();
     println!("[Proxy] Requesting: {}...", safe_url);
 
-    let user_agent = params.ua.unwrap_or_else(|| {
+    let user_agent = params.ua.clone().unwrap_or_else(|| {
         headers
         .get("user-agent")
         .and_then(|h| h.to_str().ok())
@@ -93,21 +95,41 @@ async fn proxy_handler(
         .unwrap_or_else(|| "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string())
     });
     
-    println!("[Proxy] Using UA: {}...", user_agent.chars().take(30).collect::<String>());
+    println!("[Proxy] Using UA: {}", user_agent);
+    println!("[Proxy] Using Referer: {}", referer);
 
     let mut req_builder = client.get(&url)
         .header("User-Agent", user_agent)
         .header("Referer", referer);
 
     if let Some(c) = &cookie {
+        println!("[Proxy] Forwarding Cookie (len: {})", c.len());
+        // Log start and end of cookie to verify it's not truncated
+        let start = c.chars().take(20).collect::<String>();
+        let end = c.chars().rev().take(20).collect::<String>().chars().rev().collect::<String>();
+        println!("[Proxy] Cookie summary: {}...{}", start, end);
         req_builder = req_builder.header("Cookie", c);
     }
 
-    // Forward conditional headers
-    let forward_headers = ["range", "if-range", "if-match", "if-none-match", "if-modified-since", "if-unmodified-since"];
-    for key in forward_headers {
-        if let Some(val) = headers.get(key) {
-            req_builder = req_builder.header(key, val);
+    // Forward custom headers from query parameters (high priority)
+    for (name, val) in &params.extra {
+        if name.starts_with("x-u-") {
+            println!("[Proxy] Forwarding header from query: {} = {}", name, val);
+            req_builder = req_builder.header(name, val);
+        }
+    }
+
+    // Forward custom headers and quark auth headers from request headers
+    for name in headers.keys() {
+        let name_str = name.as_str();
+        if name_str.starts_with("x-u-") || name_str == "range" || name_str == "if-range" {
+            // Only add if not already added from query params
+            if !params.extra.contains_key(name_str) {
+                if let Some(val) = headers.get(name) {
+                    println!("[Proxy] Forwarding header from request: {} = {:?}", name, val);
+                    req_builder = req_builder.header(name, val);
+                }
+            }
         }
     }
 
@@ -118,15 +140,22 @@ async fn proxy_handler(
             let mut response_builder = Response::builder().status(status);
 
             // Forward response headers (Exclude content-length to handle it manually)
-            let headers_to_forward = ["content-type", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"];
-            for key in headers_to_forward {
-                 if let Some(val) = resp.headers().get(key) {
-                     response_builder = response_builder.header(key, val);
-                 }
-            }
+            let headers_to_forward = [
+                "content-range", "accept-ranges", 
+                "cache-control", "etag", "last-modified", "expires", "pragma",
+                "access-control-allow-origin", "access-control-expose-headers"
+            ];
+             for key in headers_to_forward {
+                  if let Some(val) = resp.headers().get(key) {
+                      response_builder = response_builder.header(key, val);
+                      if key == "content-range" {
+                          println!("[Proxy] Forwarding {}: {:?}", key, val);
+                      }
+                  }
+             }
 
             // If error, read body as text for debugging
-            if !status.is_success() && status != StatusCode::PARTIAL_CONTENT {
+            if !status.is_success() && status != StatusCode::PARTIAL_CONTENT && status != StatusCode::NOT_MODIFIED {
                  let error_text = resp.text().await.unwrap_or_default();
                  println!("[Proxy] Error {}: {}", status, error_text);
                  return response_builder.body(Body::from(error_text)).unwrap();
@@ -194,14 +223,20 @@ async fn proxy_handler(
                                          let rest = &line[start + 5..];
                                          if let Some(end) = rest.find("\"") {
                                             let uri_str = &rest[..end];
-                                            if let Ok(abs_url) = base_url.join(uri_str) {
+                                             if let Ok(abs_url) = base_url.join(uri_str) {
                                                 let mut encoded_proxy_url = format!("proxy?url={}", urlencoding::encode(abs_url.as_str()));
                                                 if let Some(c) = &cookie {
                                                      encoded_proxy_url.push_str(&format!("&cookie={}", urlencoding::encode(c)));
                                                 }
+                                                if let Some(ua) = &params.ua {
+                                                     encoded_proxy_url.push_str(&format!("&ua={}", urlencoding::encode(ua)));
+                                                }
+                                                if let Some(rf) = &params.referer {
+                                                     encoded_proxy_url.push_str(&format!("&referer={}", urlencoding::encode(rf)));
+                                                }
                                                 let new_line = format!("{}URI=\"{}\"{}", &line[..start + 5], encoded_proxy_url, &rest[end..]);
                                                 new_lines.push(new_line);
-                                            } else {
+                                             } else {
                                                 new_lines.push(line.to_string());
                                             }
                                          } else {
@@ -215,13 +250,19 @@ async fn proxy_handler(
                                  }
                              } else {
                                  // This is a segment URI
-                                 if let Ok(abs_url) = base_url.join(line) {
-                                     let mut proxy_url = format!("proxy?url={}", urlencoding::encode(abs_url.as_str()));
-                                     if let Some(c) = &cookie {
-                                          proxy_url.push_str(&format!("&cookie={}", urlencoding::encode(c)));
-                                     }
-                                     new_lines.push(proxy_url);
-                                 } else {
+                                  if let Ok(abs_url) = base_url.join(line) {
+                                      let mut proxy_url = format!("proxy?url={}", urlencoding::encode(abs_url.as_str()));
+                                      if let Some(c) = &cookie {
+                                           proxy_url.push_str(&format!("&cookie={}", urlencoding::encode(c)));
+                                      }
+                                      if let Some(ua) = &params.ua {
+                                           proxy_url.push_str(&format!("&ua={}", urlencoding::encode(ua)));
+                                      }
+                                      if let Some(rf) = &params.referer {
+                                           proxy_url.push_str(&format!("&referer={}", urlencoding::encode(rf)));
+                                      }
+                                      new_lines.push(proxy_url);
+                                  } else {
                                      new_lines.push(line.to_string());
                                  }
                              }
@@ -246,16 +287,32 @@ async fn proxy_handler(
                 response_builder = response_builder.header("content-length", val);
             }
 
-            // Fix Content-Type for audio files if needed
-            if is_audio && (content_type.is_empty() || content_type == "application/octet-stream") {
-                let new_ct = if url.to_lowercase().contains(".mp3") || hint.contains("mp3") || filename.ends_with(".mp3") { "audio/mpeg" }
-                    else if url.to_lowercase().contains(".flac") || hint.contains("flac") || filename.ends_with(".flac") { "audio/flac" }
-                    else if url.to_lowercase().contains(".wav") || hint.contains("wav") || filename.ends_with(".wav") { "audio/wav" }
-                    else if url.to_lowercase().contains(".m4a") || hint.contains("m4a") || filename.ends_with(".m4a") { "audio/mp4" }
-                    else if url.to_lowercase().contains(".ogg") || hint.contains("ogg") || filename.ends_with(".ogg") { "audio/ogg" }
-                    else { "audio/mpeg" };
-                println!("[Proxy] Overriding Content-Type to {} for audio (hint: {}, ct: {})", new_ct, hint, content_type);
-                response_builder = response_builder.header("content-type", new_ct);
+            // Fix Content-Type if needed
+            let mut final_ct = if content_type.is_empty() || content_type == "application/octet-stream" { None } else { Some(content_type) };
+            
+            let lower_url = url.to_lowercase();
+            let lower_filename = filename.to_lowercase();
+            
+            let deduced_ct = if lower_url.contains(".mp3") || lower_filename.ends_with(".mp3") || hint.contains("mp3") { Some("audio/mpeg") }
+                else if lower_url.contains(".flac") || lower_filename.ends_with(".flac") || hint.contains("flac") { Some("audio/mpeg") }
+                else if lower_url.contains(".wav") || lower_filename.ends_with(".wav") || hint.contains("wav") { Some("audio/wav") }
+                else if lower_url.contains(".m4a") || lower_filename.ends_with(".m4a") || hint.contains("m4a") { Some("audio/mp4") }
+                else if lower_url.contains(".ogg") || lower_filename.ends_with(".ogg") || hint.contains("ogg") { Some("audio/ogg") }
+                else if lower_url.contains(".mp4") || lower_filename.ends_with(".mp4") || hint.contains("mp4") { Some("video/mp4") }
+                else if lower_url.contains(".mkv") || lower_filename.ends_with(".mkv") || hint.contains("mkv") { Some("video/x-matroska") }
+                else if is_audio { Some("audio/mpeg") }
+                else { None };
+
+            // For audio/video, we prefer our deduced content-type if the original is generic
+            if let Some(ct) = deduced_ct {
+                if final_ct.is_none() || final_ct == Some("application/octet-stream") || is_audio {
+                    println!("[Proxy] Using Content-Type override: {} (orig: {:?})", ct, final_ct);
+                    final_ct = Some(ct);
+                }
+            }
+
+            if let Some(ct) = final_ct {
+                response_builder = response_builder.header("content-type", ct);
             }
             
             println!("[Proxy] Success: {}", status);

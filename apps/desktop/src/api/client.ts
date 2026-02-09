@@ -197,14 +197,23 @@ export class ApiClient {
     }
 
     static async resolveVideo(fileId: string, roomId?: string, authCode?: string, driveId?: string, isAudio?: boolean): Promise<any> {
+        console.log('[ApiClient] Resolving video:', fileId);
         const res = await fetch(`${API_BASE}/playback/resolve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fileId, roomId, authCode, driveId, isAudio }),
         });
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || 'Failed to resolve video');
+            const text = await res.text();
+            console.error('[ApiClient] Resolve failed with status:', res.status, 'Body:', text);
+            let errorMsg = 'Failed to resolve video';
+            try {
+                const err = JSON.parse(text);
+                errorMsg = err.error || errorMsg;
+            } catch (e) {
+                errorMsg = text || errorMsg;
+            }
+            throw new Error(errorMsg);
         }
         const data = await res.json();
         return { source: data.source, cookie: data.cookie };

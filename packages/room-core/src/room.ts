@@ -16,6 +16,7 @@ export interface RoomState {
         playingItemId?: string;
         meta?: any;
         isAudio?: boolean;
+        driveId?: string;
     };
     controllerId: string | null;
     playlist?: any[];

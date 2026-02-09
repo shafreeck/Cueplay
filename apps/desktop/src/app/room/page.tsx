@@ -555,6 +555,7 @@ function RoomContent() {
     const lastResumedItemIdRef = useRef<string | null>(null);
     const isBuffering = useRef(false);
     const lastVideoCookieRef = useRef<string>('');
+    const lastVideoHeadersRef = useRef<Record<string, string>>({});
     const pendingSeekTimeRef = useRef<number | null>(null);
     const isResolvingRef = useRef<string | null>(null);
 
@@ -1037,6 +1038,7 @@ function RoomContent() {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
             lastVideoCookieRef.current = cookie;
+            lastVideoHeadersRef.current = source.headers || {};
             addLog(`[ResolveSync] Source: ${JSON.stringify(source, null, 2)}`);
             setRawUrl(source.url);
 
@@ -1070,26 +1072,22 @@ function RoomContent() {
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
-                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                const ua = source.headers?.['User-Agent'] || '';
+                const referer = source.headers?.Referer || '';
+                const extraParams = Object.entries(source.headers || {})
+                    .filter(([k]) => k.toLowerCase().startsWith('x-u-'))
+                    .map(([k, v]) => `&${k}=${encodeURIComponent(String(v))}`)
+                    .join('');
 
-                // Add filename hint
-                const title = source.meta?.title || item?.title || source.meta?.file_name || 'file';
+                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}${extraParams}&cookie=${encodeURIComponent(cookie)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
+
+                const isFinalAudio = source.type === 'audio' || isAudioCandidate;
+                proxiedUrl += `&hint=${isFinalAudio ? 'audio' : 'video'}`;
+
+                const title = source.meta?.title || item?.title || source.meta?.file_name;
                 if (title) {
                     proxiedUrl += `&filename=${encodeURIComponent(title)}`;
                 }
-
-                // Aggressively hint audio to ensure Proxy sets Content-Type: audio/mpeg
-                // This is critical because the proxy URL has no extension, so browsers rely 100% on Content-Type.
-                if (source.type === 'audio' || (isAudioCandidate && source.type !== 'hls')) {
-                    proxiedUrl += `&hint=audio`;
-                }
-
-                if (source.headers?.['Referer']) proxiedUrl += `&referer=${encodeURIComponent(source.headers['Referer'])}`;
-                if (source.headers?.['User-Agent']) proxiedUrl += `&ua=${encodeURIComponent(source.headers['User-Agent'])}`;
-
-                // Pass filename hint if available (helper for proxy to guess type if hint=audio isn't enough)
-                const filename = source.meta?.title || item?.title;
-                if (filename) proxiedUrl += `&filename=${encodeURIComponent(filename)}`;
 
                 finalUrl = proxiedUrl;
             } else {
@@ -1156,14 +1154,7 @@ function RoomContent() {
             }
         } catch (e: any) {
             console.warn("Background metadata resolve failed", e);
-            if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
-                toast({
-                    variant: "destructive",
-                    title: t('error_quark_login_required'),
-                    description: t('error_no_cookie_configured'),
-                    action: <Button variant="outline" size="sm" onClick={() => setShowQuarkLogin(true)}>{t('login')}</Button>
-                });
-            }
+            // Suppress background toast to avoid spam. Main resolution will show toast if needed.
         }
     }
 
@@ -1203,11 +1194,24 @@ function RoomContent() {
         try {
             console.log(`[Preload] Resolving next: ${nextItem.title || nextItem.fileId}, ID: ${fid}, Room: ${roomId}`);
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId, nextItem.isAudio || /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid));
+            const isAudioCandidate = !!(nextItem.isAudio || (nextItem.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(nextItem.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId, isAudioCandidate);
             let nextUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
-                nextUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
+                const ua = source.headers?.['User-Agent'] || '';
+                const referer = source.headers?.Referer || '';
+                const extraParams = Object.entries(source.headers || {})
+                    .filter(([k]) => k.toLowerCase().startsWith('x-u-'))
+                    .map(([k, v]) => `&${k}=${encodeURIComponent(String(v))}`)
+                    .join('');
+
+                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}${extraParams}&cookie=${encodeURIComponent(cookie)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
+                proxiedUrl += `&hint=${isAudioCandidate ? 'audio' : 'video'}`;
+                if (source.meta?.file_name || source.meta?.title) {
+                    proxiedUrl += `&filename=${encodeURIComponent(source.meta.file_name || source.meta.title)}`;
+                }
+                nextUrl = proxiedUrl;
             }
             setNextVideoSrc(nextUrl);
             setNextVideoId(fid); // Store the ID we resolved for
@@ -1271,7 +1275,8 @@ function RoomContent() {
         if (fid === nextVideoId && nextVideoSrc) {
             addLog(`[Seamless] Hit! Reusing preloaded URL for ${fid}`);
             setVideoSrc(nextVideoSrc);
-            setIsAudio(/\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(nextVideoId)); // Approximation for hit
+            const isAudioCandidate = /\.(mp3|flac|wav|m4a|ogg)$/i.test(nextVideoId || '') || /\.(mp3|flac|wav|m4a|ogg)$/i.test(fid);
+            setIsAudio(isAudioCandidate);
 
             // Still resolve resolutions/meta in background to be safe/complete?
             // For now, we trust the preload. But we might miss out on resolution list updates if we skip standard resolve.
@@ -1296,6 +1301,7 @@ function RoomContent() {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
             const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
             lastVideoCookieRef.current = cookie;
+            lastVideoHeadersRef.current = source.headers || {};
             addLog(`[Resolve] Source: ${JSON.stringify(source, null, 2)}`);
             console.log("Resolve result (Full):", { source, cookieLen: cookie?.length });
 
@@ -1339,11 +1345,25 @@ function RoomContent() {
             let finalUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
-                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}&cookie=${encodeURIComponent(cookie)}`;
-                if (source.type === 'audio') proxiedUrl += `&hint=audio`;
-                if (source.headers?.['Referer']) proxiedUrl += `&referer=${encodeURIComponent(source.headers['Referer'])}`;
-                if (source.headers?.['User-Agent']) proxiedUrl += `&ua=${encodeURIComponent(source.headers['User-Agent'])}`;
+                const ua = source.headers?.['User-Agent'] || '';
+                const referer = source.headers?.Referer || '';
+                const extraParams = Object.entries(source.headers || {})
+                    .filter(([k]) => k.toLowerCase().startsWith('x-u-'))
+                    .map(([k, v]) => `&${k}=${encodeURIComponent(String(v))}`)
+                    .join('');
+
+                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}${extraParams}&cookie=${encodeURIComponent(cookie)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
+                const isFinalAudio = source.type === 'audio' || isAudioCandidate;
+                proxiedUrl += `&hint=${isFinalAudio ? 'audio' : 'video'}`;
+
+                const title = source.meta?.file_name || source.meta?.title;
+                if (title) {
+                    proxiedUrl += `&filename=${encodeURIComponent(title)}`;
+                }
+
                 finalUrl = proxiedUrl;
+                addLog(`[Resolve] Final URL ready. Type: ${source.type}, Hint: ${isFinalAudio ? 'audio' : 'video'}`);
+                console.log("[Resolve] Final URL:", finalUrl);
             } else {
                 console.warn("No cookie available for proxy. Playback may fail.");
                 addLog("Warning: No cookie available. Please set a Global Cookie in Admin or Room Cookie in Settings.");
@@ -1370,7 +1390,8 @@ function RoomContent() {
                 retryCount.current += 1;
                 addLog(`[Resolve Retry] ${retryCount.current}/3 in 2s...`);
                 setTimeout(() => {
-                    if (fid) resolveAndPlay(fid, itemId);
+                    const item = itemId ? findPlaylistItem(playlistRef.current, itemId) : null;
+                    if (fid) resolveAndPlay(fid, itemId, explicitDriveId || item?.driveId);
                 }, 2000);
             }
             if (e.message.includes('No authorization cookie') || e.message.includes('system_login_required')) {
@@ -1518,7 +1539,7 @@ function RoomContent() {
         setIsResolving(true);
         try {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const isAudioCandidate = /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(file.name) || file.mimeType?.startsWith('audio/');
+            const isAudioCandidate = !!(file.mimeType?.startsWith('audio/') || (file.name && /\.(mp3|flac|wav|m4a|ogg)$/i.test(file.name)) || (file.id && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(file.id)));
             const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId, isAudioCandidate);
             const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
 
@@ -1607,7 +1628,7 @@ function RoomContent() {
 
         // Auto play if empty
         if (playlist.length === 0 && children.length > 0) {
-            resolveAndPlay(children[0].fileId, children[0].id);
+            resolveAndPlay(children[0].fileId, children[0].id, children[0].driveId);
         }
     };
 
@@ -1648,7 +1669,7 @@ function RoomContent() {
         const nextItem = findNext(playlist);
         if (nextItem) {
             addLog(`Auto-playing next: ${nextItem.title || nextItem.fileId}`);
-            resolveAndPlay(nextItem.fileId, nextItem.id);
+            resolveAndPlay(nextItem.fileId, nextItem.id, nextItem.driveId);
         } else {
             addLog("Playlist ended.");
         }
@@ -1667,7 +1688,7 @@ function RoomContent() {
             const prevItem = allItems[currentIndex - 1];
             if (prevItem.type === 'file') {
                 addLog(`Auto-playing previous: ${prevItem.title || prevItem.fileId}`);
-                resolveAndPlay(prevItem.fileId, prevItem.id);
+                resolveAndPlay(prevItem.fileId, prevItem.id, prevItem.driveId);
             }
         }
     };
@@ -2383,7 +2404,19 @@ function RoomContent() {
         try {
             if (lastVideoCookieRef.current && lastVideoCookieRef.current.trim()) {
                 const proxyBase = await getProxyBase();
-                finalUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(res.url)}&cookie=${encodeURIComponent(lastVideoCookieRef.current)}`;
+                const ua = lastVideoHeadersRef.current?.['User-Agent'] || '';
+                const referer = lastVideoHeadersRef.current?.Referer || '';
+                const extraParams = Object.entries(lastVideoHeadersRef.current || {})
+                    .filter(([k]) => k.toLowerCase().startsWith('x-u-'))
+                    .map(([k, v]) => `&${k}=${encodeURIComponent(String(v))}`)
+                    .join('');
+
+                let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(res.url)}${extraParams}&cookie=${encodeURIComponent(lastVideoCookieRef.current)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
+                proxiedUrl += `&hint=${isAudio ? 'audio' : 'video'}`;
+                if (currentVideoMeta?.title || currentVideoMeta?.file_name) {
+                    proxiedUrl += `&filename=${encodeURIComponent(currentVideoMeta.title || currentVideoMeta.file_name)}`;
+                }
+                finalUrl = proxiedUrl;
             }
         } catch (e) {
             console.error("Failed to get proxy base", e);
@@ -2810,7 +2843,7 @@ function RoomContent() {
                             {/* Open Sidebar/Drawer in Landscape Mobile - REMOVED per user feedback (only use header button) */}
                         </div>
                         {videoSrc ? (
-                            <div className={cn("contents", isAudio ? "invisible absolute w-px h-px opacity-0 pointer-events-none" : "")}>
+                            <div className={cn("contents", isAudio ? "pointer-events-none" : "")}>
                                 <SeamlessVideoPlayer
                                     ref={videoRef}
                                     controls={showControls}

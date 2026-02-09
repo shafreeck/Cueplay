@@ -1,61 +1,48 @@
-# Quark Drive Playback Implementation Guide
 
-This document summarizes the technical requirements and implementation logic for robust audio and video playback from Quark Drive, based on verified PC client fingerprints and API behaviors.
+# Quark Playback Implementation Logic
 
-## 1. Request Fingerprint (Headers)
+This document outlines the current logic flow for resolving media from Quark Drive and explains the potential causes for the persistent 401 (31001) errors.
 
-To avoid `401 Unauthorized` and `403 Forbidden` errors, all API requests and stream playback must use the official PC client fingerprint.
+## 1. Resolution Flow
 
-- **User-Agent**: `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 QuarkPC/6.3.0.699 quark-cloud-drive/2.5.40`
-- **Referer**: `https://drive-pc.quark.cn/static/pc/index.html` (Use this for all resolution and playback requests).
-- **Origin**: `https://drive-pc.quark.cn`
+### A. Frontend Trigger (`room/page.tsx`)
+1. **On Entry**: If the room has a `currentFileId`, the app automatically calls `resolveAndPlay()`.
+2. **On Click**: When a user clicks a file in the playlist, it calls `resolveAndPlay()`.
+3. **Resolution**: Calls `ApiClient.resolveVideo(fileId, roomId, ...)` which makes a POST request to the backend `/playback/resolve`.
 
-## 2. Audio Playback Implementation
+### B. Backend Logic (`services/api/src/playback/controller.ts`)
+1. **Cookie Discovery**: The backend checks for a Quark cookie in this order:
+   - `Room` table (specific to this room)
+   - `User` table (associated with the requester)
+   - `GlobalConfig` table (The one set in Admin Settings -> Global Quark Cookie)
+2. **Provider Call**: Pass the cookie and `fileId` to `QuarkProvider`.
+3. **Persistence**: If Quark returns new cookies (via `Set-Cookie` or internal headers), the backend attempts to save them back to the database to keep the session alive.
 
-Audio files (MP3, FLAC, etc.) do **not** work with the standard `/v2/play` API. They must use the download API.
+### C. Provider Logic (`packages/playback-core/src/provider/quark.ts`)
+1. **Metadata Probe**: First, it calls `file/get` to check if the file exists and if it's audio or video.
+2. **Download/Play Call**: 
+   - For Video: Calls `video/play`.
+   - For Audio: Calls `download/url`.
+3. **Header Strategy (Multi-Origin)**: To bypass CORS restrictions, it tries multiple header combinations:
+   - `Origin: https://drive-pc.quark.cn`
+   - `Origin: https://pan.quark.cn`
+   - **No Origin**
 
-### Resolution Step
-- **Endpoint**: `https://drive-pc.quark.cn/1/clouddrive/file/download`
-- **Method**: `POST`
-- **Query Parameters**:
-  - `pr=ucpro`, `fr=mac` (or `pc`), `ud=[USER_DEVICE_ID]`, `ve=6.3.0.699`
-- **JSON Body**:
-  ```json
-  {
-    "fids": ["FILE_ID"],
-    "cn_sw": "open",
-    "ab_tag": "_"
-  }
-  ```
-  > [!IMPORTANT]
-  > `cn_sw` and `ab_tag` are mandatory for some files to resolve successfully.
-- **Response Parsing**: Access the URL via `data.data[0].download_url`.
+## 2. Why 401 (31001: require login [guest])?
 
-## 3. Video Playback Implementation
+The 401 error means Quark does not see a valid session. This happens even if a cookie is provided if:
 
-### Resolution Step
-- **Endpoint**: `https://drive-pc.quark.cn/1/clouddrive/file/v2/play?pr=ucpro&fr=pc`
-- **Method**: `POST`
-- **JSON Body**: `{"fid": "FILE_ID", "share_id": "OPTIONAL"}`
-- **Fallback Logic**:
-  - If the response returns code `21005` ("not video") or HTTP `400`, the file is likely an audio file misidentified as video or a raw file. **Immediately retry using the Audio/Download path described above.**
-- **Handling Multi-Resolutions**:
-  - Parse the `video_list` array.
-  - If the primary `url` is missing, find a stream in `video_list` where `video_info.audio.channels === 2`.
+1. **Incorrect Cookie Format**: The cookie string might be missing essential tokens. We currently pass the raw string.
+2. **Cookie Expiry**: The cookie stored in the database is no longer valid.
+3. **IP/UA Lockdown**: Quark may tie a session to a specific IP or User-Agent. Since the backend (Server) is making the request, its IP differs from your Browser IP. 
+   - *Current UA*: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36`
+4. **Session Splitting**: If you are logged in on your browser, and then use that same cookie on the server, Quark might invalidate one of them.
 
-## 4. Playback and Cookie Management
+## 3. Potential Fixes / Information Needed
 
-- **Cookie Cleaning**: When passing cookies to the player (CDN), only include `__kuus` and `__uus`. Other cookies may interfere with CDN caching or validation.
-- **Set-Cookie Capturing**: The resolution API (`v2/play`) often returns a `set-cookie: Video-Auth=...`. This cookie **must** be captured and appended to the playback request headers for the stream to play without a 401 error.
-- **Range Support**: The proxy/backend must ensure `Accept-Ranges: bytes` is present in the response to support seeking in large files.
+1. **Verification**: Can you confirm if you have set a **Global Quark Cookie** in the Admin panel or a **Room Cookie** in the Room Settings?
+2. **Cookie Source**: How did you obtain the cookie? (e.g., from `pan.quark.cn` or `drive-pc.quark.cn`?).
+3. **Debug Log V5**: I added specific logs. If the backend is running, it will print `[Quark Debug V5] Fetch failed for...`. Seeing the full response body there would confirm if *any* of the origins are even being considered valid.
 
-## 5. FLAC & WebKit Optimization
-
-Playback of FLAC (`audio/x-flac`, `.flac`) files on macOS/iOS (WebKit) is notoriously unstable in standard `<audio>` elements.
-
-### Optimization Strategy
-1.  **Tag Switching**: Force the frontend to render FLAC files using the **`<video>`** HTML element instead of `<audio>`.
-    - WebKit's video pipeline handles FLAC containers more robustly than the audio pipeline.
-    - This fixes "Operation not supported" (MediaError 4) and seeking issues.
-2.  **MIME Type Normalization**: Ensure the proxy returns `Content-Type: audio/flac` or `audio/x-flac`.
-3.  **Proxy Headers**: The local proxy must strip strictly checked headers (like `Content-Security-Policy`) that might block the "video" element from loading an audio source.
+## 4. Immediate Plan
+I will verify if the backend is correctly retrieving the cookie from the DB. If the DB is empty, the 401 is expected.

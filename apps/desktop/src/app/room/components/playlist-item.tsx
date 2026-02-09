@@ -9,7 +9,7 @@ interface PlaylistItemProps {
     item: PlaylistItem;
     index: number;
     playingItemId: string | null;
-    onPlay: (fileId: string, id: string) => void;
+    onPlay: (fileId: string, id: string, driveId?: string) => void;
     onRemove: (id: string) => void;
     isExpanded: boolean;
     onToggleExpand: () => void;
@@ -38,10 +38,10 @@ export function PlaylistItemRenderer({
         e.stopPropagation();
         if (isFolder) {
             const toPlay = item.children?.find(c => c.id === item.lastPlayedId) || item.children?.[0];
-            if (toPlay) onPlay(toPlay.fileId, toPlay.id);
+            if (toPlay) onPlay(toPlay.fileId, toPlay.id, toPlay.driveId);
             if (!isExpanded) onToggleExpand();
         } else {
-            onPlay(item.fileId, item.id);
+            onPlay(item.fileId, item.id, item.driveId);
         }
     };
 
@@ -218,7 +218,7 @@ export function PlaylistItemRenderer({
                                     if (e.key === 'Enter') {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        onPlay(child.fileId, child.id);
+                                        onPlay(child.fileId, child.id, child.driveId);
                                     }
                                 }}
                             >
@@ -251,7 +251,7 @@ export function PlaylistItemRenderer({
                                         className={cn("h-6 w-6", isMobile && "h-8 w-8")}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            onPlay(child.fileId, child.id);
+                                            onPlay(child.fileId, child.id, child.driveId);
                                         }}
                                     >
                                         <PlayCircle className={cn("h-3.5 w-3.5", isMobile && "h-4 w-4")} />

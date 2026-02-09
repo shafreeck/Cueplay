@@ -13,10 +13,19 @@ import { ConfigStore } from './config/store';
 // import { proxyRoutes } from './stream/proxy';
 
 const server = fastify({ logger: true });
+console.log('[API Server] Starting V6 (Quark Resolution Fixed)...');
 
 server.register(cors, {
-    origin: true, // Allow all origins (for dev)
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+    origin: (origin, cb) => {
+        // Log the origin to see what's actually being sent
+        console.log('[CORS] Request from origin:', origin);
+        cb(null, true);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: '*', // Allow all headers
+    preflight: true,
+    strictPreflight: false
 });
 server.register(websocket);
 server.register(websocketRoutes);
