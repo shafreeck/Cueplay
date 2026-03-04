@@ -108,268 +108,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 
 
-// Internal component for Audio Visualizer/UI
-const AudioPlayer = ({ meta, filename, videoRef, isPlaying, onClose, isControllerPaused }: { meta?: any, filename?: string, videoRef: React.RefObject<HTMLVideoElement | null>, isPlaying: boolean, onClose?: () => void, isControllerPaused?: boolean }) => {
-    // Derive display title from metadata or fallback to filename (without extension)
-    const cleanFilename = filename ? filename.replace(/\.[^/.]+$/, '') : undefined;
-    const displayTitle = meta?.title || cleanFilename || 'Loading...';
-    const displayArtist = meta?.artist || (cleanFilename ? '' : '');
-    const { toast } = useToast();
-    const { t } = useTranslation('common');
-    const [currentTime, setCurrentTime] = useState(0);
-    const [duration, setDuration] = useState(0);
-
-    const lastUpdateRef = useRef(0);
-
-    useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
-
-        const updateState = () => {
-            // Throttle updates to every 250ms to reduce re-renders
-            const now = Date.now();
-            if (now - lastUpdateRef.current < 250) return;
-            lastUpdateRef.current = now;
-
-            setCurrentTime(video.currentTime);
-            setDuration(video.duration || meta?.duration || 0);
-        };
-
-        video.addEventListener('timeupdate', updateState);
-        video.addEventListener('play', updateState);
-        video.addEventListener('pause', updateState);
-        video.addEventListener('loadedmetadata', updateState);
-        // Initial sync
-        updateState();
-
-        return () => {
-            video.removeEventListener('timeupdate', updateState);
-            video.removeEventListener('play', updateState);
-            video.removeEventListener('pause', updateState);
-            video.removeEventListener('loadedmetadata', updateState);
-        };
-    }, [videoRef]);
-
-    const formatTime = (t: number) => {
-        if (!t || isNaN(t)) return "0:00";
-        const mins = Math.floor(t / 60);
-        const secs = Math.floor(t % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const handleSeek = (val: number[]) => {
-        if (videoRef.current) {
-            videoRef.current.currentTime = val[0];
-            setCurrentTime(val[0]);
-        }
-    };
-
-    const togglePlay = () => {
-        if (videoRef.current) {
-            if (videoRef.current.paused) {
-                videoRef.current.play().catch(e => {
-                    console.error("[AudioPlayer] Play failed:", e);
-                    if (e.name !== 'AbortError') {
-                        const v = videoRef.current;
-                        const err = v?.error;
-                        const src = v?.currentSrc || '';
-                        const safeSrc = src.length > 50 ? '...' + src.slice(-50) : src;
-                        toast({
-                            title: t('playback_error'),
-                            description: `${e.message} (MediaErr: ${err?.code}, NS:${v?.networkState}, URL:${safeSrc})`,
-                            variant: "destructive",
-                        });
-                    }
-                });
-            } else {
-                videoRef.current.pause();
-            }
-        } else {
-            console.error("[AudioPlayer] No videoRef found for togglePlay");
-            toast({
-                description: t('audio_loading_please_wait', 'Audio is loading, please wait...'),
-                duration: 2000,
-            });
-        }
-    };
-
-    return (
-        <div className="absolute inset-0 bg-zinc-950 overflow-hidden z-50 cursor-default">
-            {/* 1. Background Vinyl Layer (Centered, Behind Controls, Z-0) */}
-            <div className="absolute inset-0 flex items-center justify-center z-0 pb-32 md:pb-0">
-                {/* Fixed Size Container using vmin to ensure it never collapses/shrink to zero */}
-                <div className="relative w-[80vmin] h-[80vmin] max-w-[900px] max-h-[900px] aspect-square font-[0] select-none shadow-[0_40px_100px_-20px_rgba(0,0,0,0.95)] rounded-full transition-all duration-1000">
-
-                    {/* Simple ring glow - no blur for performance */}
-                    <div className={`absolute inset-[-4px] rounded-full ${isPlaying ? 'ring-2 ring-primary/40' : 'ring-1 ring-white/10'}`} style={{ transition: 'all 0.5s ease' }} />
-
-                    {/* Vinyl Disc Body */}
-                    <div className="relative w-full h-full rounded-full bg-[#0d0d0d] ring-1 ring-white/10 flex items-center justify-center overflow-hidden">
-
-                        {/* Grooves Texture (Realistic Vinyl Texture) */}
-                        <div
-                            className="absolute inset-0 rounded-full opacity-40 pointer-events-none"
-                            style={{
-                                background: 'repeating-radial-gradient(#1a1a1a 0, #0a0a0a 2px, #151515 3px, #0a0a0a 4px)'
-                            }}
-                        />
-
-                        {/* Rotating Art Label - GPU accelerated */}
-                        <div
-                            className={`relative w-[45%] h-[45%] rounded-full shadow-2xl ${isPlaying ? 'animate-spin-slow' : ''}`}
-                            style={{ willChange: 'transform' }}
-                        >
-                            {meta?.thumbnail ? (
-                                <div
-                                    className="w-full h-full rounded-full bg-cover bg-center ring-2 ring-black/40"
-                                    style={{ backgroundImage: `url(${meta.thumbnail})` }}
-                                />
-                            ) : (
-                                <div className="w-full h-full rounded-full bg-zinc-800 flex items-center justify-center text-primary/40 ring-1 ring-white/10">
-                                    <Music className="w-1/2 h-1/2" />
-                                </div>
-                            )}
-                            <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none" />
-                        </div>
-
-                        {/* Center Spindle */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[2.5%] h-[2.5%] bg-black rounded-full border border-zinc-700 shadow-inner z-20" />
-
-                        {/* Reflections/Gloss */}
-                        <div className="absolute inset-0 rounded-full opacity-30 pointer-events-none bg-gradient-to-tr from-transparent via-white/10 to-transparent" style={{ mixBlendMode: 'plus-lighter' }} />
-                        <div className="absolute inset-0 rounded-full opacity-10 pointer-events-none bg-gradient-to-bl from-transparent via-white/5 to-transparent" style={{ mixBlendMode: 'overlay' }} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Top Bar Actions */}
-            <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30 pointer-events-none">
-                <Button variant="ghost" size="icon" className="text-white/40 hover:text-white pointer-events-auto backdrop-blur-md bg-black/40 rounded-full h-12 w-12 hover:bg-black/60 transition-all" onClick={() => {
-                    if (meta?.type === 'video') {
-                        onClose?.();
-                    } else {
-                        // For audio, maybe we do nothing or exit room?
-                        // Based on user feedback, don't just "become a video player" if it's audio.
-                        console.log("Audio device doesn't support exiting back to video for audio files.");
-                    }
-                }}>
-                    <ChevronLeft className="w-8 h-8" />
-                </Button>
-            </div>
-
-            {/* Controller Paused Indicator */}
-            {isControllerPaused && !isPlaying && (
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 bg-zinc-900/90 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 flex items-center gap-2 shadow-lg animate-in fade-in slide-in-from-top-4 duration-300">
-                    <Pause className="w-4 h-4 text-amber-500 fill-amber-500" />
-                    <span className="text-sm font-bold text-white tracking-wide">{t('host_paused')}</span>
-                </div>
-            )}
-
-            {/* 2. Controls Layer (Overlaid at Bottom, Z-20) */}
-            <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-safe pt-48 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent pointer-events-none">
-                <div className="w-full max-w-2xl px-10 flex flex-col gap-8 md:gap-10 mb-10 md:mb-16 pointer-events-auto">
-
-                    {/* Meta Info */}
-                    <div className="text-center animate-in fade-in slide-in-from-bottom-6 duration-700">
-                        <h2 className="text-3xl md:text-6xl font-black text-white mb-3 line-clamp-2 drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] tracking-tight">
-                            {displayTitle}
-                        </h2>
-                        {displayArtist && (
-                            <p className="text-xl md:text-3xl text-zinc-400 font-semibold line-clamp-1 drop-shadow-md">
-                                {displayArtist}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Progress & Controls */}
-                    <div className="flex flex-col gap-6 md:gap-8">
-                        {/* Progress Bar Container */}
-                        <div className="flex items-center gap-5 w-full text-sm font-bold text-zinc-500 font-mono tracking-widest">
-                            <span className="w-14 text-right">{formatTime(currentTime)}</span>
-                            <div className="flex-1 relative h-8 flex items-center group/slider">
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={duration || 100}
-                                    value={currentTime}
-                                    onChange={(e) => handleSeek([parseFloat(e.target.value)])}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                />
-                                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden backdrop-blur-xl group-hover/slider:h-2 transition-all duration-300">
-                                    <div
-                                        className="h-full bg-primary shadow-[0_0_15px_theme(colors.primary.DEFAULT)]"
-                                        style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                                    />
-                                </div>
-                                <div
-                                    className="absolute h-5 w-5 bg-white rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] pointer-events-none transition-all scale-100 opacity-0 group-hover/slider:opacity-100 "
-                                    style={{ left: `${(currentTime / (duration || 1)) * 100}%`, transform: `translateX(-50%)` }}
-                                />
-                            </div>
-                            <span className="w-14">{formatTime(duration)}</span>
-                        </div>
-
-
-                        {/* Main Buttons - Higher z-index to overlap visualizer */}
-                        <div className="relative z-10 flex items-center justify-center gap-12 md:gap-20">
-                            <Button variant="ghost" size="icon" className="h-16 w-16 rounded-full text-white/50 hover:text-white hover:bg-white/5 active:scale-90 transition-all" onClick={() => videoRef.current && (videoRef.current.currentTime -= 10)}>
-                                <RotateCcw className="w-10 h-10" />
-                            </Button>
-
-                            <Button
-                                size="icon"
-                                className="h-24 w-24 md:h-28 md:w-28 rounded-full bg-white text-black hover:bg-zinc-200 hover:scale-105 active:scale-95 transition-all shadow-[0_0_50px_rgba(255,255,255,0.25)]"
-                                onClick={togglePlay}
-                            >
-                                {isPlaying ? <Pause className="w-12 h-12 md:w-14 md:h-14 fill-current" /> : <Play className="w-12 h-12 md:w-14 md:h-14 fill-current translate-x-1.5" />}
-                            </Button>
-
-                            <Button variant="ghost" size="icon" className="h-16 w-16 rounded-full text-white/50 hover:text-white hover:bg-white/5 active:scale-90 transition-all" onClick={() => videoRef.current && (videoRef.current.currentTime += 10)}>
-                                <RotateCw className="w-10 h-10" />
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Music Waves Visualizer - Only show when playing */}
-                {isPlaying && (
-                    <div className="absolute bottom-6 left-0 right-0 h-20 flex items-end justify-center gap-[2px] px-8 pointer-events-none">
-                        {[...Array(80)].map((_, i) => (
-                            <div
-                                key={i}
-                                className="flex-1 rounded-t-sm bg-primary/40"
-                                style={{
-                                    minWidth: '3px',
-                                    maxWidth: '6px',
-                                    height: isPlaying ? `${10 + Math.sin(i * 0.4) * 5}px` : '3px',
-                                    animation: isPlaying ? `music-bar-${i % 8} 0.${3 + (i % 7)}s ease-in-out infinite` : 'none',
-                                }}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-
-
-
-            <style jsx>{`
-                ${[0, 1, 2, 3, 4, 5, 6, 7].map(n => `
-                    @keyframes music-bar-${n} {
-                        0%, 100% { height: ${6 + n * 2}px; }
-                        50% { height: ${30 + n * 8}px; }
-                    }
-                `).join('')}
-                .animate-spin-slow {
-                    animation: spin 12s linear infinite;
-                }
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
-        </div>);
-};
-
 function RoomContent() {
     const [currentVideoMeta, setCurrentVideoMeta] = useState<any>(null);
     const searchParams = useSearchParams();
@@ -394,7 +132,6 @@ function RoomContent() {
     const [videoSrc, setVideoSrc] = useState<string>('');
     const videoSrcRef = useRef(videoSrc);
     useEffect(() => { videoSrcRef.current = videoSrc; }, [videoSrc]);
-    const [isAudio, setIsAudio] = useState<boolean>(false);
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
     const [isControllerPaused, setIsControllerPaused] = useState(false);
 
@@ -1012,31 +749,21 @@ function RoomContent() {
         }
     };
 
-    const resolveAndPlayWithoutSync = async (fid: string, itemId?: string, explicitDriveId?: string, isAudioHint?: boolean) => {
+    const resolveAndPlayWithoutSync = async (fid: string, itemId?: string, explicitDriveId?: string) => {
         if (itemId) {
             lastResumedItemIdRef.current = null; // Prepare for resume
             updatePlayingItemId(itemId);
         }
         updateFileId(fid);
 
-        // Optimistic check (Hint from caller or extension check)
-        if (isAudioHint) setIsAudio(true);
-
         try {
             // Fix: Use playlistRef.current to avoid stale state
             const item = itemId ? findPlaylistItem(playlistRef.current, itemId) : null;
             const driveId = explicitDriveId || item?.driveId;
             console.log(`[DEBUG] resolveAndPlayWithoutSync: fid=${fid}, itemId=${itemId}, explicitDriveId=${explicitDriveId}, item?.driveId=${item?.driveId}, FINAL driveId=${driveId}`);
-            // Robust detection including HLS-audio hints
-            const isAudioCandidate = isAudioHint || !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
-
-            if (isAudioCandidate) {
-                setIsAudio(true);
-                addLog(`[Sync] Anticipating Audio UI for ${fid}`);
-            }
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
             lastVideoCookieRef.current = cookie;
             lastVideoHeadersRef.current = source.headers || {};
             addLog(`[ResolveSync] Source: ${JSON.stringify(source, null, 2)}`);
@@ -1044,8 +771,6 @@ function RoomContent() {
 
             // Authoritative state update
             // Inject driveId into meta so it propagates through all heartbeats/broadcasts
-            const isActuallyAudio = source.type === 'audio' || (source.type === 'hls' && isAudioCandidate);
-            setIsAudio(isActuallyAudio);
 
             // Fallback metadata from playlist item if API result is sparse
             setCurrentVideoMeta({
@@ -1081,7 +806,7 @@ function RoomContent() {
 
                 let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}${extraParams}&cookie=${encodeURIComponent(cookie)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
 
-                const isFinalAudio = source.type === 'audio' || isAudioCandidate;
+                const isFinalAudio = source.type === 'audio';
                 proxiedUrl += `&hint=${isFinalAudio ? 'audio' : 'video'}`;
 
                 const title = source.meta?.title || item?.title || source.meta?.file_name;
@@ -1129,15 +854,12 @@ function RoomContent() {
         try {
             const item = itemId ? findPlaylistItem(playlistRef.current, itemId) : null;
             const driveId = item?.driveId;
-            const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
-            if (isAudioCandidate) setIsAudio(true);
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
 
             // Authorized metadata update
             setCurrentVideoMeta(source.meta);
-            setIsAudio(source.type === 'audio' || (source.type === 'hls' && isAudioCandidate));
 
             // Update metadata UI states
             setRawUrl(source.url);
@@ -1194,8 +916,7 @@ function RoomContent() {
         try {
             console.log(`[Preload] Resolving next: ${nextItem.title || nextItem.fileId}, ID: ${fid}, Room: ${roomId}`);
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const isAudioCandidate = !!(nextItem.isAudio || (nextItem.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(nextItem.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId, isAudioCandidate);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, nextItem.driveId);
             let nextUrl = source.url;
             if (cookie && cookie.trim()) {
                 const proxyBase = await getProxyBase();
@@ -1207,7 +928,7 @@ function RoomContent() {
                     .join('');
 
                 let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}${extraParams}&cookie=${encodeURIComponent(cookie)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
-                proxiedUrl += `&hint=${isAudioCandidate ? 'audio' : 'video'}`;
+                proxiedUrl += `&hint=${source.type === 'audio' ? 'audio' : 'video'}`;
                 if (source.meta?.file_name || source.meta?.title) {
                     proxiedUrl += `&filename=${encodeURIComponent(source.meta.file_name || source.meta.title)}`;
                 }
@@ -1275,8 +996,6 @@ function RoomContent() {
         if (fid === nextVideoId && nextVideoSrc) {
             addLog(`[Seamless] Hit! Reusing preloaded URL for ${fid}`);
             setVideoSrc(nextVideoSrc);
-            const isAudioCandidate = /\.(mp3|flac|wav|m4a|ogg)$/i.test(nextVideoId || '') || /\.(mp3|flac|wav|m4a|ogg)$/i.test(fid);
-            setIsAudio(isAudioCandidate);
 
             // Still resolve resolutions/meta in background to be safe/complete?
             // For now, we trust the preload. But we might miss out on resolution list updates if we skip standard resolve.
@@ -1295,18 +1014,15 @@ function RoomContent() {
             // Find item to get driveId
             const item = findPlaylistItem(playlist, itemId || '');
             const driveId = explicitDriveId || item?.driveId;
-            const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (fid && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid)));
-            if (isAudioCandidate) setIsAudio(true);
 
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId, isAudioCandidate);
+            const { source, cookie } = await ApiClient.resolveVideo(fid, roomId || '', authCode, driveId);
             lastVideoCookieRef.current = cookie;
             lastVideoHeadersRef.current = source.headers || {};
             addLog(`[Resolve] Source: ${JSON.stringify(source, null, 2)}`);
             console.log("Resolve result (Full):", { source, cookieLen: cookie?.length });
 
             setRawUrl(source.url); // Use raw URL for sharing
-            setIsAudio(source.type === 'audio' || (source.type === 'hls' && isAudioCandidate));
 
             // CRITICAL: Ensure driveId is in the meta so it is broadcasted in heartbeats for newcomers
             const authoritativeMeta = { ...source.meta, driveId, type: source.type };
@@ -1335,8 +1051,7 @@ function RoomContent() {
                         provider: 'quark',
                         meta: authoritativeMeta, // Use enriched meta
                         playingItemId: itemId || null,
-                        driveId: driveId,
-                        isAudio: source.type === 'audio' || (source.type === 'hls' && isAudioCandidate) // Explicitly send audio status
+                        driveId: driveId
                     }
                 }));
             }
@@ -1353,7 +1068,7 @@ function RoomContent() {
                     .join('');
 
                 let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(source.url)}${extraParams}&cookie=${encodeURIComponent(cookie)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
-                const isFinalAudio = source.type === 'audio' || isAudioCandidate;
+                const isFinalAudio = source.type === 'audio';
                 proxiedUrl += `&hint=${isFinalAudio ? 'audio' : 'video'}`;
 
                 const title = source.meta?.file_name || source.meta?.title;
@@ -1433,12 +1148,10 @@ function RoomContent() {
         try {
             // Resolve first to validate
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            // For addToPlaylist, we don't have an item yet, so we rely on fid for audio detection
-            const isAudioCandidate = /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(fid);
-            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, undefined, isAudioCandidate);
+            const { source } = await ApiClient.resolveVideo(fid, roomId || '', authCode, undefined);
             const title = source.meta?.file_name || source.meta?.title || fid;
 
-            const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title, isAudio: isAudioCandidate };
+            const newItem = { id: Math.random().toString(36).slice(2), fileId: fid, title };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -1539,11 +1252,10 @@ function RoomContent() {
         setIsResolving(true);
         try {
             const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
-            const isAudioCandidate = !!(file.mimeType?.startsWith('audio/') || (file.name && /\.(mp3|flac|wav|m4a|ogg)$/i.test(file.name)) || (file.id && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(file.id)));
-            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId, isAudioCandidate);
+            const { source } = await ApiClient.resolveVideo(file.id, roomId || '', authCode, file.driveId);
             const title = source.meta?.file_name || source.meta?.title || file.name || file.id;
 
-            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file', driveId: file.driveId, isAudio: isAudioCandidate };
+            const newItem: PlaylistItem = { id: Math.random().toString(36).slice(2), fileId: file.id, title, type: 'file', driveId: file.driveId };
             const newPlaylist = [...playlist, newItem];
             setPlaylist(newPlaylist);
 
@@ -1602,8 +1314,7 @@ function RoomContent() {
             fileId: f.id,
             title: f.name,
             type: 'file',
-            driveId: f.driveId,
-            isAudio: /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(f.name) || f.mimeType?.startsWith('audio/')
+            driveId: f.driveId
         }));
 
         const newItem: PlaylistItem = {
@@ -1730,7 +1441,6 @@ function RoomContent() {
                 sentAt: Date.now(),
                 fileId: fileIdRef.current,
                 playingItemId: playingItemIdRef.current || undefined,
-                isAudio: isAudio, // Explicitly sync audio mode
                 meta: currentVideoMeta
             }
         }));
@@ -1795,7 +1505,7 @@ function RoomContent() {
                 return;
             }
             if (data.type === 'MEDIA_CHANGE') {
-                const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId, meta, isAudio: remoteIsAudio } = data.payload;
+                const { url, fileId: remoteFileId, provider, playingItemId: remotePlayingItemId, meta } = data.payload;
 
                 // *** CONTROLLER GUARD ***
                 // If I am the controller and I already have this item playing, ignore the echo.
@@ -1823,23 +1533,16 @@ function RoomContent() {
                     const authCode = localStorage.getItem('cueplay_system_auth_code') || '';
                     const item = remotePlayingItemId ? findPlaylistItem(playlistRef.current, remotePlayingItemId) : null;
                     const driveId = item?.driveId;
-                    const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)) || (remoteFileId && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(remoteFileId)));
-
-                    if (isAudioCandidate) {
-                        setIsAudio(true);
-                        addLog(`[WS] Optimistic Audio detected for ${remoteFileId}`);
-                    }
 
                     // Trigger resolution for self
-                    // CRITICAL: Prioritize driveId and isAudio from message payload to bypass playlist dependency
+                    // CRITICAL: Prioritize driveId
                     const targetDriveId = data.payload.driveId || data.payload.meta?.driveId || driveId;
-                    const finalIsAudio = remoteIsAudio !== undefined ? remoteIsAudio : isAudioCandidate;
 
-                    addLog(`[WS] MEDIA_CHANGE starting resolution for ${remoteFileId} (Drive: ${targetDriveId}, Audio: ${finalIsAudio})`);
+                    addLog(`[WS] MEDIA_CHANGE starting resolution for ${remoteFileId} (Drive: ${targetDriveId})`);
 
                     // Lock resolution immediately to prevent heartbeats from double-triggering
                     isResolvingRef.current = remotePlayingItemId || remoteFileId || null;
-                    resolveAndPlayWithoutSync(remoteFileId, remotePlayingItemId, targetDriveId, finalIsAudio);
+                    resolveAndPlayWithoutSync(remoteFileId, remotePlayingItemId, targetDriveId);
                 }
                 setCurrentSubtitle('');
 
@@ -1902,8 +1605,6 @@ function RoomContent() {
                 if (data.payload.playingItemId && !playingItemIdRef.current) {
                     const pid = data.payload.playingItemId;
                     const item = findPlaylistItem(playlistRef.current, pid);
-                    const isAudioCandidate = !!(item?.isAudio || (item?.title && /\.(mp3|flac|wav|m4a|ogg)$/i.test(item.title)));
-                    if (isAudioCandidate) setIsAudio(true);
                 }
             } else if (data.type === 'PLAYER_STATE') {
                 const video = videoRef.current;
@@ -1920,7 +1621,7 @@ function RoomContent() {
 
                 if (!amIController && !isSyncedRef.current) return;
 
-                const { state, time, playbackRate, sentAt, fileId: remoteFileId, playingItemId: newPlayingItemId, meta: remoteMeta, isAudio: remoteIsAudio } = data.payload;
+                const { state, time, playbackRate, sentAt, fileId: remoteFileId, playingItemId: newPlayingItemId, meta: remoteMeta } = data.payload;
 
                 // Sync controller paused state
                 if (state === 'paused') {
@@ -1929,17 +1630,8 @@ function RoomContent() {
                     setIsControllerPaused(false);
                 }
 
-                // 0. Authoritative Flags Sync (Always)
-                // We sync these BEFORE the ID-switch logic to ensure reloads/heartbeats are correct
-                if (remoteIsAudio !== undefined) {
-                    setIsAudio(remoteIsAudio);
-                }
                 if (remoteMeta) {
                     setCurrentVideoMeta(remoteMeta);
-                    // Fallback if isAudio flag missing from payload (backward compatibility)
-                    if (remoteIsAudio === undefined) {
-                        setIsAudio(remoteMeta.type === 'audio' || (remoteMeta.file_name && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(remoteMeta.file_name)));
-                    }
                 }
 
                 // 1. Auto-Switch Video / Reload Sync
@@ -1958,8 +1650,7 @@ function RoomContent() {
                         isResolvingRef.current = newPlayingItemId || remoteFileId || null;
                         // Store the seek time so once resolved, we jump to it
                         pendingSeekTimeRef.current = time;
-                        const finalIsAudio = remoteIsAudio !== undefined ? remoteIsAudio : (remoteMeta?.isAudio);
-                        resolveAndPlayWithoutSync(targetFid, newPlayingItemId, remoteMeta?.driveId, finalIsAudio);
+                        resolveAndPlayWithoutSync(targetFid, newPlayingItemId, remoteMeta?.driveId);
                     }
                     return; // Wait for resolution
                 }
@@ -2098,18 +1789,14 @@ function RoomContent() {
                     return [...prev, message];
                 });
             } else if (data.type === 'MEMBER_PROGRESS') {
-                const { userId, time, playingItemId: memberPlayingItemId, duration, fileId: memberFileId, isAudio: memberIsAudio, meta: memberMeta, driveId: memberDriveId } = data.payload;
+                const { userId, time, playingItemId: memberPlayingItemId, duration, fileId: memberFileId, meta: memberMeta, driveId: memberDriveId } = data.payload;
                 // Update members list progress
                 setMembers(prev => prev.map(m => m.userId === userId ? { ...m, currentProgress: time } : m));
 
                 // Authoritative Sync from Controller
                 if (memberPlayingItemId && userId === controllerIdRef.current) {
-                    if (memberIsAudio !== undefined) setIsAudio(memberIsAudio);
                     if (memberMeta) {
                         setCurrentVideoMeta(memberMeta);
-                        if (memberIsAudio === undefined) {
-                            setIsAudio(memberMeta.type === 'audio' || (memberMeta.file_name && /\.(mp3|flac|wav|m4a|ogg)(\?.*)?$/i.test(memberMeta.file_name)));
-                        }
                     }
 
                     // Source Sync (Mismatch or Reload)
@@ -2122,7 +1809,7 @@ function RoomContent() {
 
                             // Lock resolution for backup path too
                             isResolvingRef.current = memberPlayingItemId || targetFid || null;
-                            resolveAndPlayWithoutSync(targetFid, memberPlayingItemId, targetDriveId, memberIsAudio);
+                            resolveAndPlayWithoutSync(targetFid, memberPlayingItemId, targetDriveId);
                             return;
                         }
                     }
@@ -2224,7 +1911,6 @@ function RoomContent() {
                             time: video.currentTime,
                             sentAt: now,
                             fileId: fileIdRef.current,
-                            isAudio: isAudio,
                             playingItemId: playingItemIdRef.current || undefined,
                             duration: video.duration || undefined,
                             driveId: currentVideoMeta?.driveId // Include driveId in progress too
@@ -2283,7 +1969,6 @@ function RoomContent() {
                             playbackRate: video.playbackRate,
                             sentAt: now,
                             fileId: fileIdRef.current, // Include fileId in progress heartbeats too
-                            isAudio: isAudio, // Include audio mode
                             meta: currentVideoMeta // Add meta to broadcaster state
                         }
                     }));
@@ -2412,7 +2097,7 @@ function RoomContent() {
                     .join('');
 
                 let proxiedUrl = `${proxyBase}/api/stream/proxy?url=${encodeURIComponent(res.url)}${extraParams}&cookie=${encodeURIComponent(lastVideoCookieRef.current)}&ua=${encodeURIComponent(ua)}&referer=${encodeURIComponent(referer)}`;
-                proxiedUrl += `&hint=${isAudio ? 'audio' : 'video'}`;
+                proxiedUrl += `&hint=video`;
                 if (currentVideoMeta?.title || currentVideoMeta?.file_name) {
                     proxiedUrl += `&filename=${encodeURIComponent(currentVideoMeta.title || currentVideoMeta.file_name)}`;
                 }
@@ -2843,7 +2528,7 @@ function RoomContent() {
                             {/* Open Sidebar/Drawer in Landscape Mobile - REMOVED per user feedback (only use header button) */}
                         </div>
                         {videoSrc ? (
-                            <div className={cn("contents", isAudio ? "pointer-events-none" : "")}>
+                            <div className="contents">
                                 <SeamlessVideoPlayer
                                     ref={videoRef}
                                     controls={showControls}
@@ -2855,7 +2540,7 @@ function RoomContent() {
                                     children={
                                         <>
                                             {/* Subtitles Overlay (Native-like) */}
-                                            {currentSubtitle && !isAudio && (
+                                            {currentSubtitle && (
                                                 <div className="absolute bottom-16 left-0 right-0 text-center pointer-events-none p-4 z-40">
                                                     <span className="inline-block bg-black/60 text-white px-3 py-1.5 rounded text-lg md:text-xl shadow-md backdrop-blur-sm">
                                                         {currentSubtitle}
@@ -2931,13 +2616,6 @@ function RoomContent() {
                                         // Silent log for debug
                                         console.log("[Video Info] Non-fatal or preload error ignored in UI", { code, msg });
 
-                                        // Only fallback if it's the active player and a real error
-                                        // SeamlessVideoPlayer should handle wrapping this correctly.
-                                        if (!isAudio) {
-                                            addLog("[Recovery] Video playback failed. Falling back to Audio UI.");
-                                            setIsAudio(true);
-                                        }
-
                                         // Auth Expiry Detection
                                         // If it's a quark link and playback fails with 403 or specific error message.
                                         const isQuark = (videoSrc && videoSrc.includes('quark.cn')) || (videoSrc && videoSrc.includes('ApiClient'));
@@ -2978,18 +2656,6 @@ function RoomContent() {
                                     </>
                                 )}
                             </div>
-                        )}
-
-                        {/* Audio Mode Overlay */}
-                        {isAudio && videoSrc && (
-                            <AudioPlayer
-                                meta={currentVideoMeta}
-                                filename={playingItemId ? findPlaylistItem(playlist, playingItemId)?.title : undefined}
-                                videoRef={videoRef}
-                                isPlaying={isPlaying}
-                                onClose={() => setIsAudio(false)}
-                                isControllerPaused={isControllerPaused}
-                            />
                         )}
 
                         {currentSubtitle && (

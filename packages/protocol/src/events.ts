@@ -57,7 +57,6 @@ export interface MediaChangeEvent extends BaseEvent {
         playingItemId?: string;
         driveId?: string;
         meta?: any;
-        isAudio?: boolean;
     };
 }
 
@@ -70,7 +69,6 @@ export interface PlayerStateEvent extends BaseEvent {
         sentAt?: number; // Added for latency compensation
         playingItemId?: string;
         fileId?: string;
-        isAudio?: boolean;
         meta?: any;
     };
 }

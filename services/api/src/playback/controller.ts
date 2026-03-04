@@ -13,7 +13,7 @@ const provider = new QuarkProvider();
 // Force restart trigger
 export async function playbackRoutes(fastify: FastifyInstance) {
     fastify.post('/playback/resolve', async (req, reply) => {
-        const body = req.body as { fileId: string, roomId?: string, authCode?: string, isAudio?: boolean };
+        const body = req.body as { fileId: string, roomId?: string, authCode?: string };
 
         if (!body.fileId) {
             return reply.code(400).send({ error: 'fileId is required' });
@@ -96,8 +96,7 @@ export async function playbackRoutes(fastify: FastifyInstance) {
             fastify.log.info({ msg: 'Final resolution cookie', length: cookie.length });
 
             const source = await provider.resolvePlayableSource(body.fileId, {
-                cookie,
-                isAudio: body.isAudio
+                cookie
             });
 
             fastify.log.info({ msg: 'Resolved source', fileId: body.fileId, source });

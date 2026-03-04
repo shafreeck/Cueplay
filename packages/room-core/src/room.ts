@@ -15,7 +15,6 @@ export interface RoomState {
         provider: string;
         playingItemId?: string;
         meta?: any;
-        isAudio?: boolean;
         driveId?: string;
     };
     controllerId: string | null;

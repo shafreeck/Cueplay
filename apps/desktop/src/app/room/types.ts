@@ -5,7 +5,6 @@ export interface PlaylistItem {
     driveId?: string;
     title?: string;
     type?: 'file' | 'folder';
-    isAudio?: boolean;
     children?: PlaylistItem[];
     lastPlayedId?: string;
     progress?: number;
