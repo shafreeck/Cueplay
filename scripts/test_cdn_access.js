@@ -1,6 +1,6 @@
 const https = require('https');
 
-const COOKIES = '__uus=NxQy9X23QZUbTpmrmJnx3TUycLpVaexkusJMqP/rBzQxL23BrkB1C6EnuOVA5PPqCOo9OKB4BUDwitSVYq5IcFwLaHH53ib1Hljb23a044/tOg==; __kuus=NxQy9X23QZUbTpmrmJnx3TUyS/jylQ6oaA0o6Kgq9M35oRRObid2+30fPrqAeH5LW5p0lDAqZMMJIVjW59ocIm5K0N+WoMI524AZr7Fpilk3OA==';
+const COOKIES = require('fs').readFileSync('./quark_cookie.txt', 'utf8').trim();
 const FID = 'c7271d773e6245e4ab446a1593581c14';
 const SIGN_HEADERS = {
     'x-u-kps-wg': 'NxQket6jCywZUfDoszEg4tX3wZAMqrAKCZlKaxP1YYHMI8UoExn/tZWKb//iy9GbIFMfjNYUAvMiBA3zydcu4TTfbLIqn0F4fNOmGQtrBgjpLg==',
