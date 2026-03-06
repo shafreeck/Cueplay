@@ -61,7 +61,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           projectPath: ./apps/desktop
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
 
   release-android:
     runs-on: ubuntu-latest
