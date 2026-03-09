@@ -1,6 +1,6 @@
 {
   "name": "cueplay-monorepo",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "scripts": {
     "dev": "pnpm -r --filter=\"./services/*\" --filter=\"./apps/*\" dev",
@@ -9,9 +9,7 @@
     "lint": "pnpm -r lint"
   },
   "pnpm": {
-    "patchedDependencies": {},
-    "injectWorkspacePackages": true,
-    "forceLegacyDeploy": true
+    "patchedDependencies": {}
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
