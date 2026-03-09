@@ -3,3 +3,5 @@
 /target/
 /gen/schemas
 *.keystore
+*.key
+*.key.pub
