@@ -1215,7 +1215,7 @@ function RoomContent() {
                     }
                     return [...acc, { ...item, children: newChildren }];
                 }
-                return acc;
+                return [...acc, item];
             }, []);
         };
 
