@@ -11,9 +11,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useTranslation } from 'react-i18next';
 import { ApiClient, DriveFile } from '@/api/client';
 import { WS_BASE, getProxyBase, resetProxyCache } from '@/api/config';
+import { SubtitleTrackInfo } from '@/utils/subtitle-extractor';
 import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
@@ -128,6 +135,58 @@ function RoomContent() {
     const [members, setMembers] = useState<any[]>([]);
     const [ownerId, setOwnerId] = useState<string>('');
     const [controllerId, setControllerId] = useState<string | null>(null);
+
+    const [subtitleTracks, setSubtitleTracks] = useState<(SubtitleTrackInfo & { type: 'native' | 'manual' })[]>([]);
+    const [activeTrackId, setActiveTrackId] = useState<string>('off');
+
+    const handleTracksChanged = useCallback((tracks: (SubtitleTrackInfo & { type: 'native' | 'manual' })[]) => {
+        setSubtitleTracks(tracks);
+
+        const savedLabel = localStorage.getItem('cueplay_preferred_subtitle');
+        const appLang = i18n.language;
+
+        let targetTrack: any = null;
+
+        if (savedLabel && savedLabel !== 'off') {
+            targetTrack = tracks.find(t => t.name === savedLabel);
+        } else if (savedLabel === 'off') {
+            setActiveTrackId('off');
+            return;
+        }
+
+        if (!targetTrack && tracks.length > 0) {
+            if (appLang === 'zh') {
+                targetTrack = tracks.find(t =>
+                    t.name.includes('中') ||
+                    t.name.toLowerCase().includes('cn') ||
+                    t.name.toLowerCase().includes('chinese') ||
+                    t.language.toLowerCase().startsWith('zh')
+                );
+            } else if (appLang === 'en') {
+                targetTrack = tracks.find(t =>
+                    t.name.toLowerCase().includes('en') ||
+                    t.name.toLowerCase().includes('english') ||
+                    t.language.toLowerCase().startsWith('en')
+                );
+            }
+        }
+
+        if (targetTrack) {
+            setActiveTrackId(`${targetTrack.type}-${targetTrack.id}`);
+        }
+    }, [i18n.language]);
+
+    const handleTrackSelect = (trackId: string) => {
+        setActiveTrackId(trackId);
+        if (trackId === 'off') {
+            localStorage.setItem('cueplay_preferred_subtitle', 'off');
+        } else {
+            const track = subtitleTracks.find(t => `${t.type}-${t.id}` === trackId);
+            if (track) {
+                localStorage.setItem('cueplay_preferred_subtitle', track.name);
+            }
+        }
+    };
     const controllerIdRef = useRef<string | null>(null);
     const [videoSrc, setVideoSrc] = useState<string>('');
     const videoSrcRef = useRef(videoSrc);
@@ -277,29 +336,6 @@ function RoomContent() {
 
     // UI State for Mobile/Responsive Layout
     const [activeTab, setActiveTab] = useState('playlist');
-    const [manualTracks, setManualTracks] = useState<any[]>([]);
-    const [selectedManualTrackId, setSelectedManualTrackId] = useState<number | undefined>(undefined);
-    const [isSubMenuOpen, setIsSubMenuOpen] = useState(false);
-
-    const handleManualTracks = useCallback((tracks: any[]) => {
-        setManualTracks(tracks);
-        // Auto-select first track if nothing selected
-        if (tracks.length > 0 && selectedManualTrackId === undefined) {
-            const best = tracks.find(t => {
-                const lang = (t.language || '').toLowerCase();
-                return lang === 'chi' || lang === 'zho' || lang === 'zh';
-            }) || tracks.find(t => (t.language || '').toLowerCase() === 'eng')
-                || tracks[0];
-            setSelectedManualTrackId(best.id);
-        }
-    }, [selectedManualTrackId]);
-
-    // Reset manual tracks on video change
-    useEffect(() => {
-        setManualTracks([]);
-        setSelectedManualTrackId(undefined);
-        setIsSubMenuOpen(false);
-    }, [videoSrc]);
     const [isInputFocused, setIsInputFocused] = useState(false);
     const lastTapRef = useRef<number>(0);
 
@@ -2666,8 +2702,8 @@ function RoomContent() {
                                         }
                                     }}
                                     onDebug={(msg) => addLog(msg)}
-                                    onManualTracksDetected={handleManualTracks}
-                                    manualTrackId={selectedManualTrackId}
+                                    onTracksChanged={handleTracksChanged}
+                                    activeTrackId={activeTrackId}
                                     currentSubtitle={currentSubtitle}
                                     onSubtitleChange={setCurrentSubtitle}
                                 />
@@ -2793,6 +2829,60 @@ function RoomContent() {
                                                     </div>
                                                 </div>
 
+                                                {/* Subtitle Tracks */}
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-center">
+                                                        <Label className="text-xs text-zinc-400 uppercase tracking-widest font-bold">{t('subtitle_track') || '字幕轨道'}</Label>
+                                                    </div>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="w-full justify-between bg-white/5 border border-white/10 h-10 px-3 hover:bg-white/10 hover:border-white/20 transition-all group rounded-xl"
+                                                            >
+                                                                <span className="truncate text-xs text-zinc-300">
+                                                                    {activeTrackId === 'off' ? (t('off') || '关闭') : (subtitleTracks.find(t => `${t.type}-${t.id}` === activeTrackId)?.name || (t('off') || '关闭'))}
+                                                                </span>
+                                                                <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent className="w-[calc(var(--radix-dropdown-menu-trigger-width))] bg-zinc-900/95 border-white/10 backdrop-blur-xl rounded-xl p-1 z-[120]">
+                                                            <DropdownMenuItem
+                                                                className={cn(
+                                                                    "text-xs focus:bg-white/10 focus:text-white rounded-lg transition-colors cursor-pointer",
+                                                                    activeTrackId === 'off' ? "bg-white/5 text-white font-medium" : "text-zinc-400"
+                                                                )}
+                                                                onClick={() => handleTrackSelect('off')}
+                                                            >
+                                                                {t('off') || '关闭'}
+                                                            </DropdownMenuItem>
+                                                            {subtitleTracks.map((track) => {
+                                                                const id = `${track.type}-${track.id}`;
+                                                                return (
+                                                                    <DropdownMenuItem
+                                                                        key={id}
+                                                                        className={cn(
+                                                                            "text-xs focus:bg-white/10 focus:text-white rounded-lg transition-colors cursor-pointer group",
+                                                                            activeTrackId === id ? "bg-white/5 text-white font-medium" : "text-zinc-400"
+                                                                        )}
+                                                                        onClick={() => handleTrackSelect(id)}
+                                                                    >
+                                                                        <div className="flex items-center justify-between w-full">
+                                                                            <span className="truncate flex-1">{track.name}</span>
+                                                                            {track.language && (
+                                                                                <span className="ml-2 px-1 py-0.5 text-[8px] rounded-md bg-white/5 text-zinc-500 font-mono uppercase group-hover:bg-white/10 group-hover:text-zinc-300 transition-colors">
+                                                                                    {track.language}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </DropdownMenuItem>
+                                                                );
+                                                            })}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </div>
+
                                                 {/* Font Size */}
                                                 <div className="space-y-3">
                                                     <div className="flex justify-between items-center">
@@ -2876,65 +2966,6 @@ function RoomContent() {
                                     </Popover>
                                 </div>
 
-                                {/* Group 2: Subtitles (Independent Triggered Menu) */}
-                                {manualTracks.length > 1 && (
-                                    <div className={cn(
-                                        "bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl transition-all duration-300 overflow-hidden flex flex-col",
-                                        isSubMenuOpen ? "p-2 min-w-[120px]" : "p-1.5"
-                                    )}>
-                                        {!isSubMenuOpen ? (
-                                            // Subtitle Trigger Button
-                                            <button
-                                                className="w-12 py-1.5 text-[10px] font-bold text-zinc-500 hover:text-white hover:bg-white/10 rounded-xl transition-all active:scale-90 outline-none focus:ring-2 focus:ring-primary/50"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsSubMenuOpen(true);
-                                                }}
-                                                onFocus={() => setShowControls(true)}
-                                            >
-                                                {t('sub_short')}
-                                            </button>
-                                        ) : (
-                                            // Subtitle Sub-menu Content
-                                            <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col">
-                                                <button
-                                                    className="flex items-center gap-2 px-2 py-1.5 border-b border-white/5 mb-1 group hover:text-white transition-colors outline-none focus:ring-2 focus:ring-primary/50 rounded-lg"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setIsSubMenuOpen(false);
-                                                    }}
-                                                    onFocus={() => setShowControls(true)}
-                                                >
-                                                    <ArrowLeft className="w-3 h-3 text-zinc-500 group-hover:text-white transition-colors" />
-                                                    <span className="text-[10px] uppercase tracking-tighter text-zinc-400 font-bold">
-                                                        {t('subtitles')}
-                                                    </span>
-                                                </button>
-                                                <div className="flex flex-col gap-1 max-h-[30vh] overflow-y-auto no-scrollbar py-0.5">
-                                                    {manualTracks.map((t) => (
-                                                        <button
-                                                            key={t.id}
-                                                            className={cn(
-                                                                "px-3 py-2 text-xs font-medium rounded-xl transition-all duration-200 active:scale-95 whitespace-nowrap text-left flex justify-between items-center gap-4 outline-none focus:ring-2 focus:ring-primary/50",
-                                                                selectedManualTrackId === t.id
-                                                                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                                                                    : "text-zinc-400 hover:text-white hover:bg-white/10"
-                                                            )}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedManualTrackId(t.id);
-                                                            }}
-                                                            onFocus={() => setShowControls(true)}
-                                                        >
-                                                            <span className="truncate max-w-[120px]">{t.language ? t.language.toUpperCase() : `TRACK ${t.id}`}</span>
-                                                            {selectedManualTrackId === t.id && <Check className="w-3 h-3 shrink-0" />}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
 
                                 {/* Group 3: Danmaku Toggle */}
                                 <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-2">

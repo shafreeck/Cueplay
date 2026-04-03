@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useImperativeHandle, forwardRef } f
 import Hls from 'hls.js';
 import { cn } from '@/lib/utils';
 import { SubtitleExtractor, SubtitleTrackInfo } from '@/utils/subtitle-extractor';
+import { useTranslation } from 'react-i18next';
 
 export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTMLVideoElement> {
     nextSrc?: string;
@@ -9,8 +10,8 @@ export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTML
     isPreloadEnabled?: boolean;
     onSeamlessStart?: () => void;
     onSubtitleChange?: (text: string) => void;
-    onManualTracksDetected?: (tracks: SubtitleTrackInfo[]) => void;
-    manualTrackId?: number;
+    onTracksChanged?: (tracks: (SubtitleTrackInfo & { type: 'native' | 'manual' })[]) => void;
+    activeTrackId?: string; // Format: "type-id" e.g., "native-0", "manual-1", "off"
     onDebug?: (msg: string) => void;
     onPlayError?: (err: any) => void;
     children?: React.ReactNode;
@@ -29,7 +30,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
     ({ className, src, nextSrc, nextStartTime, isPreloadEnabled = false, onSeamlessStart,
         onTimeUpdate, onEnded, onCanPlay, onLoadedMetadata,
         onError, onWaiting, onStalled, onLoadStart, onPlay, onPause, onDebug, onSubtitleChange,
-        onManualTracksDetected, manualTrackId, isPlaying, children, currentSubtitle,
+        onTracksChanged, activeTrackId, isPlaying, children, currentSubtitle,
         ...props }, ref) => {
         const videoRefA = useRef<HTMLVideoElement>(null);
         const videoRefB = useRef<HTMLVideoElement>(null);
@@ -45,6 +46,49 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
 
         const [stateA, setStateA] = useState<PlayerState>({ id: 'A', src: undefined, isActive: true });
         const [stateB, setStateB] = useState<PlayerState>({ id: 'B', src: undefined, isActive: false });
+        const { t } = useTranslation('common');
+
+        const getLanguageName = (code?: string) => {
+            if (!code) return '';
+            const c = code.toLowerCase();
+            const map: Record<string, string> = {
+                'zh': '中文', 'chi': '中文', 'zho': '中文', 'chs': '简体中文', 'cht': '繁体中文',
+                'en': '英语', 'eng': '英语',
+                'ja': '日语', 'jpn': '日语',
+                'ko': '韩语', 'kor': '韩语',
+                'fr': '法语', 'fre': '法语', 'fra': '法语',
+                'de': '德语', 'ger': '德语', 'deu': '德语',
+                'es': '西班牙语', 'spa': '西班牙语',
+                'ru': '俄语', 'rus': '俄语',
+                'it': '意大利语', 'ita': '意大利语',
+                'pt': '葡萄语', 'por': '葡萄语',
+                'no': '挪威语', 'nor': '挪威语',
+                'da': '丹麦语', 'dan': '丹麦语',
+                'nl': '荷兰语', 'dut': '荷兰语', 'nld': '荷兰语',
+                'sv': '瑞典语', 'swe': '瑞典语',
+            };
+            return map[c] || c.toUpperCase();
+        };
+
+        const getTrackName = (track: { label?: string, language?: string }, index: number, isManual = false) => {
+            const langName = getLanguageName(track.language);
+            const nativeSub = t('native_sub');
+            const manualSub = t('manual_sub');
+            const subShort = t('sub_short');
+
+            const prefix = isManual 
+                ? (manualSub !== 'manual_sub' ? manualSub : '外挂') 
+                : (nativeSub !== 'native_sub' ? nativeSub : '内置');
+            
+            const trackLabel = subShort !== 'sub_short' ? subShort : '轨道';
+            
+            if (track.label && !track.label.toLowerCase().includes('track')) return track.label;
+            
+            if (langName) {
+                return `${langName} (${prefix} ${index + 1})`;
+            }
+            return `${prefix}${trackLabel} ${index + 1}`;
+        };
 
         const getActiveRef = () => activePlayerIdRef.current === 'A' ? videoRefA : videoRefB;
         const getInactiveRef = () => activePlayerIdRef.current === 'A' ? videoRefB : videoRefA;
@@ -252,7 +296,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
             controls: props.controls && !tempHideControls,
             ...Object.fromEntries(Object.entries(props).filter(([k]) => ![
                 'autoPlay', 'preload', 'src', 'controls', 'isPlaying',
-                'onSubtitleChange', 'onDebug', 'onManualTracksDetected', 'manualTrackId', 'onPlayError', 'currentSubtitle'
+                'onSubtitleChange', 'onDebug', 'onTracksChanged', 'activeTrackId', 'onPlayError', 'currentSubtitle'
             ].includes(k)))
         };
 
@@ -310,11 +354,36 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
                     if (currentExtractor && (currentExtractor as any).url === currentSrc) return;
                     const extractor = new SubtitleExtractor(currentSrc, {
                         onLog: (msg) => onDebug?.(msg),
-                        onTracksDetected: (tracks) => onManualTracksDetected?.(tracks)
+                        onTracksDetected: (manualTracks) => {
+                                // Merge with native tracks
+                                const nativeTracks = Array.from(activeVideo.textTracks || []).map((t, i) => ({
+                                    id: i,
+                                    language: t.language,
+                                    name: getTrackName(t, i, false),
+                                    codec: '',
+                                    nb_samples: 0,
+                                    type: 'native' as const
+                                }));
+                                onTracksChanged?.([
+                                    ...nativeTracks,
+                                    ...manualTracks.map((t, i) => ({ ...t, name: getTrackName(t, i, true), type: 'manual' as const }))
+                                ]);
+                        }
                     });
                     if (activePlayerIdRef.current === 'A') extractorARef.current = extractor;
                     else extractorBRef.current = extractor;
                     await extractor.initialize(activeVideo.currentTime);
+                } else {
+                    // Only native tracks found
+                    const nativeTracks = Array.from(activeVideo.textTracks || []).map((t, i) => ({
+                        id: i,
+                        language: t.language,
+                        name: getTrackName(t, i, false),
+                        codec: '',
+                        nb_samples: 0,
+                        type: 'native' as const
+                    }));
+                    onTracksChanged?.(nativeTracks);
                 }
             };
 
@@ -340,12 +409,40 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
         }, [activePlayerId, onSubtitleChange]);
 
         useEffect(() => {
-            if (manualTrackId !== undefined) {
+            if (!activeTrackId) return;
+
+            const activeVideo = getActiveRef().current;
+            if (!activeVideo) return;
+
+            const [type, idStr] = activeTrackId.split('-');
+            const id = parseInt(idStr);
+
+            if (type === 'native') {
+                const tracks = activeVideo.textTracks;
+                if (!tracks) return;
+                for (let i = 0; i < tracks.length; i++) {
+                    tracks[i].mode = (i === id) ? 'hidden' : 'disabled';
+                }
+                // When native track is selected, disable manual extractor
                 const extractor = activePlayerIdRef.current === 'A' ? extractorARef.current : extractorBRef.current;
-                const activeVideo = activePlayerIdRef.current === 'A' ? videoRefA.current : videoRefB.current;
-                if (extractor && activeVideo) extractor.setTrack(manualTrackId, activeVideo.currentTime);
+                if (extractor) extractor.setTrack(-1); // Assuming -1 or non-existent ID disables it
+            } else if (type === 'manual') {
+                // Disable all native tracks
+                const tracks = activeVideo.textTracks;
+                if (tracks) {
+                    for (let i = 0; i < tracks.length; i++) tracks[i].mode = 'disabled';
+                }
+                const extractor = activePlayerIdRef.current === 'A' ? extractorARef.current : extractorBRef.current;
+                if (extractor) extractor.setTrack(id, activeVideo.currentTime);
+            } else if (activeTrackId === 'off') {
+                const tracks = activeVideo.textTracks;
+                if (tracks) {
+                    for (let i = 0; i < tracks.length; i++) tracks[i].mode = 'disabled';
+                }
+                const extractor = activePlayerIdRef.current === 'A' ? extractorARef.current : extractorBRef.current;
+                if (extractor) extractor.setTrack(-1);
             }
-        }, [manualTrackId]);
+        }, [activeTrackId, activePlayerId]);
 
         return (
             <div className={cn("relative w-full h-full bg-black overflow-hidden", className)}>
