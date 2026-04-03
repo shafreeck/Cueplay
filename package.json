@@ -1,6 +1,6 @@
 {
   "name": "cueplay-monorepo",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "private": true,
   "scripts": {
     "dev": "pnpm -r --filter=\"./services/*\" --filter=\"./apps/*\" dev",
