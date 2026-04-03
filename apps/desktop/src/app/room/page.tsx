@@ -680,12 +680,28 @@ function RoomContent() {
     }, []);
 
     const handleContainerClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+        // If the event was already handled by a child (e.g. Radix UI), ignore
+        if (e.defaultPrevented) return;
+        
+        const target = e.target as HTMLElement;
+        // If the target element is detached from the DOM tree, it's almost certainly 
+        // a UI component that re-rendered or unmounted on click (e.g. Radix UI).
+        if (!target.isConnected) {
+            resetTimer('Click (Detached)');
+            return;
+        }
+
         // User Interaction explicitly breaks Seamless Mode
         isSeamlessSwitchingRef.current = false;
 
         // If clicking on a control element, just reset the timer and don't toggle
-        const target = e.target as HTMLElement;
-        if (target.closest('button, [role="button"], a, input, select, textarea')) {
+        const isControl = target.closest(
+            'button, [role="button"], [role="menuitem"], [role="option"], ' +
+            'a, input, select, textarea, [data-radix-collection-item], ' +
+            '[data-state], .PopoverContent'
+        );
+        
+        if (isControl) {
             resetTimer('Click (Controls)');
             return;
         }
@@ -2360,7 +2376,11 @@ function RoomContent() {
                                             <Settings className="h-5 w-5" />
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-80">
+                                    <PopoverContent 
+                                        className="w-80"
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
                                         <div className="grid gap-4">
                                             <div className="space-y-2">
                                                 <h4 className="font-medium leading-none">{t('settings')}</h4>
@@ -2376,6 +2396,7 @@ function RoomContent() {
                                                             id="room-title"
                                                             value={roomTitle}
                                                             onChange={(e) => {
+                                                                resetTimer();
                                                                 if (isOwner) setRoomTitle(e.target.value);
                                                             }}
                                                             placeholder={t('enter_room_name')}
@@ -2389,6 +2410,7 @@ function RoomContent() {
                                                             id="room-desc"
                                                             value={roomDescription}
                                                             onChange={(e) => {
+                                                                resetTimer();
                                                                 if (isOwner) setRoomDescription(e.target.value);
                                                             }}
                                                             placeholder={t('enter_room_description')}
@@ -2408,6 +2430,7 @@ function RoomContent() {
                                                         <Switch
                                                             checked={isLocked}
                                                             onCheckedChange={(checked) => {
+                                                                resetTimer();
                                                                 if (!isOwner) return;
                                                                 setIsLocked(checked);
                                                                 if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -2432,7 +2455,10 @@ function RoomContent() {
                                                         </div>
                                                         <Switch
                                                             checked={enablePreload}
-                                                            onCheckedChange={togglePreload}
+                                                            onCheckedChange={(checked) => {
+                                                                resetTimer();
+                                                                togglePreload(checked);
+                                                            }}
                                                         />
                                                     </div>
                                                 </div>
@@ -2587,9 +2613,12 @@ function RoomContent() {
                             <Button
                                 variant="secondary"
                                 size="icon"
-                                onClick={() => {
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    resetTimer('Exit Immersive');
                                     if (isImmersiveMode) setIsImmersiveMode(false);
                                 }}
+                                onPointerDown={(e) => e.stopPropagation()}
                                 className={cn(
                                     "h-10 w-10 rounded-full shadow-2xl bg-black/50 backdrop-blur-xl border border-white/10 hover:bg-black/70 text-white",
                                     isLandscapeMobile && !isImmersiveMode ? "hidden" : ""
@@ -2777,9 +2806,10 @@ function RoomContent() {
                                                 )}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
+                                                    resetTimer('Resolution Change');
                                                     changeResolution(res);
                                                 }}
-                                                onFocus={() => setShowControls(true)}
+                                                onPointerDown={(e) => e.stopPropagation()}
                                             >
                                                 {getResolutionLabel(res.name)}
                                             </button>
@@ -2803,7 +2833,14 @@ function RoomContent() {
                                                 {t('subtitle_style_short') || 'SUB'}
                                             </button>
                                         </PopoverTrigger>
-                                        <PopoverContent side="left" align="center" sideOffset={16} className="w-80 bg-black/85 backdrop-blur-2xl border-white/10 rounded-3xl p-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[110]">
+                                        <PopoverContent 
+                                            side="left" 
+                                            align="center" 
+                                            sideOffset={16} 
+                                            className="w-80 bg-black/85 backdrop-blur-2xl border-white/10 rounded-3xl p-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[110]"
+                                            onPointerDown={(e) => e.stopPropagation()}
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
                                             <div className="space-y-6">
                                                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
                                                     <h4 className="text-sm font-bold text-white uppercase tracking-widest">
@@ -2814,7 +2851,10 @@ function RoomContent() {
                                                             <span className="text-[10px] text-zinc-500 font-medium">{t('font_bold') || 'Bold'}</span>
                                                             <Switch
                                                                 checked={subtitleStyle.fontWeight === 'bold'}
-                                                                onCheckedChange={(val) => updateSubtitleStyle({ fontWeight: val ? 'bold' : 'normal' })}
+                                                                onCheckedChange={(val) => {
+                                                                    resetTimer();
+                                                                    updateSubtitleStyle({ fontWeight: val ? 'bold' : 'normal' });
+                                                                }}
                                                                 className="scale-75"
                                                             />
                                                         </div>
@@ -2822,7 +2862,10 @@ function RoomContent() {
                                                             <span className="text-[10px] text-zinc-500 font-medium">{t('show_border') || 'Border'}</span>
                                                             <Switch
                                                                 checked={subtitleStyle.showBorder}
-                                                                onCheckedChange={(val) => updateSubtitleStyle({ showBorder: val })}
+                                                                onCheckedChange={(val) => {
+                                                                    resetTimer();
+                                                                    updateSubtitleStyle({ showBorder: val });
+                                                                }}
                                                                 className="scale-75"
                                                             />
                                                         </div>
@@ -2834,12 +2877,17 @@ function RoomContent() {
                                                     <div className="flex justify-between items-center">
                                                         <Label className="text-xs text-zinc-400 uppercase tracking-widest font-bold">{t('subtitle_track') || '字幕轨道'}</Label>
                                                     </div>
-                                                    <DropdownMenu>
+                                                    <DropdownMenu modal={false}>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 className="w-full justify-between bg-white/5 border border-white/10 h-10 px-3 hover:bg-white/10 hover:border-white/20 transition-all group rounded-xl"
+                                                                onPointerDown={(e) => e.stopPropagation()}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    resetTimer('Track Trigger');
+                                                                }}
                                                             >
                                                                 <span className="truncate text-xs text-zinc-300">
                                                                     {activeTrackId === 'off' ? (t('off') || '关闭') : (subtitleTracks.find(t => `${t.type}-${t.id}` === activeTrackId)?.name || (t('off') || '关闭'))}
@@ -2847,16 +2895,25 @@ function RoomContent() {
                                                                 <ChevronDown className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
-                                                        <DropdownMenuContent className="w-[calc(var(--radix-dropdown-menu-trigger-width))] bg-zinc-900/95 border-white/10 backdrop-blur-xl rounded-xl p-1 z-[120]">
-                                                            <DropdownMenuItem
-                                                                className={cn(
-                                                                    "text-xs focus:bg-white/10 focus:text-white rounded-lg transition-colors cursor-pointer",
-                                                                    activeTrackId === 'off' ? "bg-white/5 text-white font-medium" : "text-zinc-400"
-                                                                )}
-                                                                onClick={() => handleTrackSelect('off')}
-                                                            >
-                                                                {t('off') || '关闭'}
-                                                            </DropdownMenuItem>
+                                                        <DropdownMenuContent 
+                                                            className="w-[calc(var(--radix-dropdown-menu-trigger-width))] bg-zinc-900/95 border-white/10 backdrop-blur-xl rounded-xl p-1 z-[120]"
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                                <DropdownMenuItem
+                                                                    className={cn(
+                                                                        "text-xs focus:bg-white/10 focus:text-white rounded-lg transition-colors cursor-pointer",
+                                                                        activeTrackId === 'off' ? "bg-white/5 text-white font-medium" : "text-zinc-400"
+                                                                    )}
+                                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        resetTimer('Track Off');
+                                                                        handleTrackSelect('off');
+                                                                    }}
+                                                                >
+                                                                    {t('off') || '关闭'}
+                                                                </DropdownMenuItem>
                                                             {subtitleTracks.map((track) => {
                                                                 const id = `${track.type}-${track.id}`;
                                                                 return (
@@ -2866,7 +2923,12 @@ function RoomContent() {
                                                                             "text-xs focus:bg-white/10 focus:text-white rounded-lg transition-colors cursor-pointer group",
                                                                             activeTrackId === id ? "bg-white/5 text-white font-medium" : "text-zinc-400"
                                                                         )}
-                                                                        onClick={() => handleTrackSelect(id)}
+                                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            resetTimer('Track Select');
+                                                                            handleTrackSelect(id);
+                                                                        }}
                                                                     >
                                                                         <div className="flex items-center justify-between w-full">
                                                                             <span className="truncate flex-1">{track.name}</span>
@@ -2895,7 +2957,11 @@ function RoomContent() {
                                                         max="72"
                                                         step="1"
                                                         value={subtitleStyle.fontSize}
-                                                        onChange={(e) => updateSubtitleStyle({ fontSize: parseInt(e.target.value) })}
+                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                        onChange={(e) => {
+                                                            resetTimer();
+                                                            updateSubtitleStyle({ fontSize: parseInt(e.target.value) });
+                                                        }}
                                                         className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary hover:bg-white/20 transition-colors"
                                                     />
                                                 </div>
@@ -2912,7 +2978,11 @@ function RoomContent() {
                                                         max="360"
                                                         step="4"
                                                         value={subtitleStyle.bottomOffset}
-                                                        onChange={(e) => updateSubtitleStyle({ bottomOffset: parseInt(e.target.value) })}
+                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                        onChange={(e) => {
+                                                            resetTimer();
+                                                            updateSubtitleStyle({ bottomOffset: parseInt(e.target.value) });
+                                                        }}
                                                         className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary hover:bg-white/20 transition-colors"
                                                     />
                                                 </div>
@@ -2929,7 +2999,11 @@ function RoomContent() {
                                                         max="1"
                                                         step="0.05"
                                                         value={subtitleStyle.bgOpacity}
-                                                        onChange={(e) => updateSubtitleStyle({ bgOpacity: parseFloat(e.target.value) })}
+                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                        onChange={(e) => {
+                                                            resetTimer();
+                                                            updateSubtitleStyle({ bgOpacity: parseFloat(e.target.value) });
+                                                        }}
                                                         className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary hover:bg-white/20 transition-colors"
                                                     />
                                                 </div>
@@ -2948,7 +3022,11 @@ function RoomContent() {
                                                         ].map((c) => (
                                                             <button
                                                                 key={c.color}
-                                                                onClick={() => updateSubtitleStyle({ textColor: c.color })}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    resetTimer();
+                                                                    updateSubtitleStyle({ textColor: c.color });
+                                                                }}
                                                                 className={cn(
                                                                     "w-10 h-10 rounded-full border-2 transition-all hover:scale-110 active:scale-95 flex items-center justify-center",
                                                                     subtitleStyle.textColor === c.color ? "border-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.4)]" : "border-white/5"
