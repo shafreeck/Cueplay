@@ -50,8 +50,10 @@ export function PlaylistItemRenderer({
             {/* eslint-disable-next-line */}
             <div
                 className={cn(
-                    "cue-playlist-item group flex items-center justify-between p-2 rounded-md border transition-all ml-[calc(var(--level)*16px)] outline-none focus:ring-2 focus:ring-primary/50 focus:bg-white/10",
-                    isPlaying ? "bg-primary/20 border-primary/50" : "bg-white/5 border-white/5 hover:bg-white/10 active:bg-white/10"
+                    "cue-playlist-item group flex items-center justify-between p-2.5 rounded-xl transition-all ml-[calc(var(--level)*16px)] outline-none focus:ring-2 focus:ring-primary/50 relative overflow-hidden",
+                    isPlaying 
+                        ? "bg-primary/10 text-white" 
+                        : "bg-white/[0.02] border border-white/5 hover:bg-white/5 active:bg-white/10"
                 )}
                 tabIndex={0}
                 role="button"
@@ -108,11 +110,11 @@ export function PlaylistItemRenderer({
                     {/* Content Info */}
                     <div className="flex flex-col min-w-0 flex-1 ml-1">
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-muted-foreground">
-                                {level === 0 ? `#${index + 1}` : ''}
+                            <span className="text-[10px] font-mono text-muted-foreground/50 w-4">
+                                {level === 0 ? `${index + 1}` : ''}
                             </span>
-                            {isFolder && <Folder className="h-3.5 w-3.5 text-primary" />}
-                            <span className={cn("text-sm font-medium truncate", isMobile && "text-[15px]")} title={item.title || item.fileId}>
+                            {isFolder && <Folder className="h-4 w-4 text-primary/70" />}
+                            <span className={cn("text-sm font-semibold truncate tracking-tight", isMobile && "text-[15px]")} title={item.title || item.fileId}>
                                 {item.title || item.fileId}
                             </span>
                         </div>
@@ -124,13 +126,16 @@ export function PlaylistItemRenderer({
                                 <span className="truncate">Now Playing: {playingChild.title}</span>
                             </div>
                         ) : item.id === playingItemId && (
-                            <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 mt-0.5">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            <div className="text-[10px] text-primary font-bold flex items-center gap-2 mt-1">
+                                <span className={cn(
+                                    "relative flex h-2 w-2",
+                                    isPlaying ? "animate-pulse" : ""
+                                )}>
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                                 </span>
-                                Playing
-                            </span>
+                                <span className="uppercase tracking-widest text-[9px] opacity-80">Playing</span>
+                            </div>
                         )}
 
                         {isFolder && !playingChild && (
@@ -151,10 +156,10 @@ export function PlaylistItemRenderer({
                                 const percentage = Math.min(100, (activeChild.progress / activeChild.duration) * 100);
 
                                 return (
-                                    <div className="mt-2 ml-6 h-1 w-full max-w-[150px] bg-white/10 rounded-full overflow-hidden shrink-0">
+                                    <div className="mt-2 ml-6 h-0.5 w-full max-w-[150px] bg-white/5 rounded-full overflow-hidden shrink-0">
                                         {/* eslint-disable-next-line */}
                                         <div
-                                            className="h-full bg-primary/60 transition-all duration-300 w-[var(--progress)]"
+                                            className="h-full bg-primary/40 transition-all duration-300 w-[var(--progress)]"
                                             style={{ '--progress': `${percentage}%` } as React.CSSProperties}
                                         />
                                     </div>
@@ -164,9 +169,9 @@ export function PlaylistItemRenderer({
 
                         {/* Progress Bar (File) */}
                         {!isFolder && item.progress !== undefined && !!item.duration && (
-                            <div className="mt-1.5 h-1 w-full max-w-[100px] bg-white/10 rounded-full overflow-hidden shrink-0">
+                            <div className="mt-1.5 h-0.5 w-full max-w-[100px] bg-white/5 rounded-full overflow-hidden shrink-0">
                                 {/* eslint-disable-next-line */}
-                                <div className="h-full bg-primary/60 transition-all duration-300 w-[var(--progress)]" style={{ '--progress': `${Math.min(100, (item.progress / item.duration) * 100)}%` } as React.CSSProperties} />
+                                <div className="h-full bg-primary/40 transition-all duration-300 w-[var(--progress)]" style={{ '--progress': `${Math.min(100, (item.progress / item.duration) * 100)}%` } as React.CSSProperties} />
                             </div>
                         )}
                     </div>
@@ -209,8 +214,10 @@ export function PlaylistItemRenderer({
                             <div
                                 key={child.id}
                                 className={cn(
-                                    "cue-playlist-item flex items-center justify-between p-2 rounded-md text-xs group/child transition-all outline-none focus:ring-2 focus:ring-primary/50 focus:bg-white/10",
-                                    isChildPlaying ? 'bg-primary/15 text-primary font-medium' : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'
+                                    "cue-playlist-item flex items-center justify-between p-2.5 rounded-xl text-xs group/child transition-all outline-none focus:ring-2 focus:ring-primary/50 relative overflow-hidden",
+                                    isChildPlaying 
+                                        ? 'bg-primary/10 text-white font-semibold' 
+                                        : 'hover:bg-white/5 text-muted-foreground hover:text-foreground'
                                 )}
                                 tabIndex={0}
                                 role="button"

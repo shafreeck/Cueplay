@@ -2219,7 +2219,7 @@ function RoomContent() {
 
             {/* Header */}
             <header className={cn(
-                "sticky top-0 md:top-8 z-50 px-0 md:px-4 mb-0 md:mb-6 transition-all duration-300 pt-safe md:pt-0 md:mt-8",
+                "sticky top-0 md:top-4 z-50 px-0 md:px-4 mb-0 md:mb-2 transition-all duration-300 pt-safe md:pt-0 md:mt-4",
                 ((isImmersiveMode || isFullscreen) || isLandscapeMobile) ? "-translate-y-24 opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"
             )}>
                 <div data-tauri-drag-region className="container mx-auto h-14 md:h-16 md:rounded-full flex items-center justify-between gap-2 md:gap-4 px-3 md:px-6 bg-black md:bg-black/40 backdrop-blur-2xl border-b md:border border-white/5 shadow-2xl pointer-events-auto select-none">
@@ -2489,7 +2489,7 @@ function RoomContent() {
                 </div>
             </header>
             <main className={cn(
-                "flex-1 grid gap-6 p-4 md:p-6 min-h-0 overflow-hidden relative",
+                "flex-1 md:flex-none grid gap-6 p-4 md:pt-2 md:px-6 md:pb-6 min-h-0 overflow-hidden relative",
                 (isImmersiveMode || isLandscapeMobile) ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : (isSidebarOpen ? "md:grid-cols-4" : "md:grid-cols-1")
             )}>
                 {/* Video Section */}
@@ -2642,6 +2642,7 @@ function RoomContent() {
                                     }}
                                     children={
                                         <>
+                                            <DanmakuOverlay ref={danmakuRef} />
                                             {/* Controller Paused Overlay for Video */}
                                             {isControllerPaused && !isPlaying && (
                                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
@@ -3097,12 +3098,12 @@ function RoomContent() {
 
                 {/* Sidebar / Mobile Content Area */}
                 <aside className={cn(
-                    "flex-1 flex flex-col min-h-0 overflow-hidden md:overflow-visible w-full transition-all duration-300 ease-in-out",
+                    "flex flex-col min-h-0 overflow-hidden md:overflow-visible w-full transition-all duration-300 ease-in-out h-full",
                     // Desktop Logic
                     "md:block md:space-y-6",
                     (!isImmersiveMode && !isFullscreen && !isLandscapeMobile && isSidebarOpen) ? "opacity-100 translate-x-0" : "hidden md:hidden opacity-0 translate-x-10"
                 )}>
-                    <Card className="flex-1 flex flex-col md:h-[calc(100vh-12rem)] shadow-none md:shadow-2xl overflow-hidden bg-transparent md:glass border-0 md:border-white/5 rounded-none md:rounded-xl">
+                    <Card className="flex-1 flex flex-col h-full shadow-none md:shadow-2xl overflow-hidden bg-transparent md:glass border-0 md:border-white/5 rounded-none md:rounded-xl">
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 relative">
                             <CardHeader className="hidden md:block py-4 pl-2 pr-4 border-b border-white/5 bg-transparent">
                                 <div className="flex items-center gap-1">
