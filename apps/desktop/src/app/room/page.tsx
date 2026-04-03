@@ -18,7 +18,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QuarkLoginDialog } from '@/components/quark-login-dialog';
 import { ResourceLibrary } from '@/components/resource-library';
 import { RoomHistory } from '@/utils/history';
-import { Trash2, PlayCircle, Music, Plus, Settings, Copy, Cast, Crown, Eye, EyeOff, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, ChevronLeft, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug, PanelRightClose, PanelRightOpen, Play, Pause, RotateCcw, RotateCw } from 'lucide-react';
+import { Trash2, PlayCircle, Music, Plus, Settings, Copy, Cast, Crown, Eye, EyeOff, MessageSquare, Send, GripVertical, Link2, Unlink, ArrowLeft, FolderSearch, QrCode, ChevronDown, ChevronRight, ChevronLeft, Folder, Loader2, List, Users, MoreVertical, ArrowRight as ArrowRightIcon, Maximize, Minimize, Lock, Check, SlidersHorizontal, Menu, X, Unplug, PanelRightClose, PanelRightOpen, Play, Pause, RotateCcw, RotateCw, Palette, Type } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -114,7 +114,7 @@ function RoomContent() {
     const router = useRouter();
     const roomId = searchParams.get('id');
     const { toast } = useToast();
-    const { t } = useTranslation('common');
+    const { t, i18n } = useTranslation('common');
 
     // Redirect if no ID
     useEffect(() => {
@@ -193,6 +193,36 @@ function RoomContent() {
 
     const [roomCookie, setRoomCookie] = useState(''); // Shared room cookie
     const [hasGlobalCookie, setHasGlobalCookie] = useState(false);
+
+    // Subtitle Custom Styles
+    const [subtitleStyle, setSubtitleStyle] = useState({
+        fontSize: 20,
+        bottomOffset: 20,
+        bgOpacity: 0,
+        textColor: '#ffffff',
+        fontWeight: 'bold',
+        showBorder: false
+    });
+
+    useEffect(() => {
+        const stored = localStorage.getItem('cueplay_subtitle_style');
+        if (stored) {
+            try {
+                setSubtitleStyle(JSON.parse(stored));
+            } catch (e) {
+                console.error("Failed to parse subtitle style", e);
+            }
+        }
+    }, []);
+
+    const updateSubtitleStyle = (newStyle: Partial<typeof subtitleStyle>) => {
+        setSubtitleStyle(prev => {
+            const updated = { ...prev, ...newStyle };
+            localStorage.setItem('cueplay_subtitle_style', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
     const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
         if (typeof window !== 'undefined') {
             let id = localStorage.getItem('cueplay_userid');
@@ -2267,134 +2297,135 @@ function RoomContent() {
                         <div className="h-4 w-px bg-white/10 mx-1 md:mx-2" />
 
                         {isLandscapeMobile ? (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                    setIsDrawerOpen(true);
-                                    setActiveTab('settings');
-                                }}
-                            >
-                                <Settings className="h-5 w-5" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <LanguageToggle />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                        setIsDrawerOpen(true);
+                                        setActiveTab('settings');
+                                    }}
+                                >
+                                    <Settings className="h-5 w-5" />
+                                </Button>
+                            </div>
                         ) : (
-                            <Popover onOpenChange={(open) => {
-                                if (!open && isOwner) {
-                                    updateRoomMetadata(roomTitle, roomDescription);
-                                }
-                            }}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                        <Settings className="h-5 w-5" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80">
-                                    <div className="grid gap-4">
-                                        <div className="space-y-2">
-                                            <h4 className="font-medium leading-none">{t('settings')}</h4>
-                                            <p className="text-sm text-muted-foreground">
-                                                {t('configure_playback')}
-                                            </p>
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <div className="space-y-4">
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="room-title">{t('room_name')}</Label>
-                                                    <Input
-                                                        id="room-title"
-                                                        value={roomTitle}
-                                                        onChange={(e) => {
-                                                            if (isOwner) setRoomTitle(e.target.value);
-                                                        }}
-                                                        placeholder={t('enter_room_name')}
-                                                        className="h-8"
-                                                        disabled={!isOwner}
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="room-desc">{t('room_description')}</Label>
-                                                    <Input
-                                                        id="room-desc"
-                                                        value={roomDescription}
-                                                        onChange={(e) => {
-                                                            if (isOwner) setRoomDescription(e.target.value);
-                                                        }}
-                                                        placeholder={t('enter_room_description')}
-                                                        className="h-8"
-                                                        disabled={!isOwner}
-                                                    />
-                                                </div>
-                                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                                                    <div className="space-y-0.5">
-                                                        <Label className="text-sm font-medium">
-                                                            {t('lock_control')}
-                                                        </Label>
-                                                        <div className="text-[10px] text-muted-foreground">
-                                                            {t('lock_control_desc')}
-                                                        </div>
-                                                    </div>
-                                                    <Switch
-                                                        checked={isLocked}
-                                                        onCheckedChange={(checked) => {
-                                                            if (!isOwner) return;
-                                                            setIsLocked(checked);
-                                                            if (socketRef.current?.readyState === WebSocket.OPEN) {
-                                                                socketRef.current.send(JSON.stringify({
-                                                                    type: 'UPDATE_ROOM',
-                                                                    payload: { isLocked: checked }
-                                                                }));
-                                                            }
-                                                        }}
-                                                        disabled={!isOwner}
-                                                    />
-                                                </div>
-
-                                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                                                    <div className="space-y-0.5">
-                                                        <Label className="text-sm font-medium">
-                                                            {t('smart_preload')}
-                                                        </Label>
-                                                        <div className="text-[10px] text-muted-foreground">
-                                                            {t('smart_preload_desc')}
-                                                        </div>
-                                                    </div>
-                                                    <Switch
-                                                        checked={enablePreload}
-                                                        onCheckedChange={togglePreload}
-                                                    />
-                                                </div>
-
-
-
+                            <div className="flex items-center gap-2">
+                                <LanguageToggle />
+                                <div className="h-4 w-px bg-white/10 mx-1" />
+                                <Popover onOpenChange={(open) => {
+                                    if (!open && isOwner) {
+                                        updateRoomMetadata(roomTitle, roomDescription);
+                                    }
+                                }}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                            <Settings className="h-5 w-5" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80">
+                                        <div className="grid gap-4">
+                                            <div className="space-y-2">
+                                                <h4 className="font-medium leading-none">{t('settings')}</h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {t('configure_playback')}
+                                                </p>
                                             </div>
-                                            <Dialog>
-                                                <DialogTrigger asChild>
-                                                    <Button variant="outline" size="sm" className="w-full mt-2">{t('view_debug_logs')}</Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-2xl h-[500px] flex flex-col">
-                                                    <DialogHeader>
-                                                        <DialogTitle>{t('view_debug_logs')}</DialogTitle>
-                                                    </DialogHeader>
-                                                    <div className="flex-1 overflow-y-auto p-4 bg-zinc-950 font-mono text-xs rounded-md border">
-                                                        {logs.map((log, i) => (
-                                                            <div key={i} className="text-emerald-400 border-b border-white/5 pb-1 mb-1">
-                                                                {log}
-                                                            </div>
-                                                        ))}
+                                            <div className="grid gap-2">
+                                                <div className="space-y-4">
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="room-title">{t('room_name')}</Label>
+                                                        <Input
+                                                            id="room-title"
+                                                            value={roomTitle}
+                                                            onChange={(e) => {
+                                                                if (isOwner) setRoomTitle(e.target.value);
+                                                            }}
+                                                            placeholder={t('enter_room_name')}
+                                                            className="h-8"
+                                                            disabled={!isOwner}
+                                                        />
                                                     </div>
-                                                </DialogContent>
-                                            </Dialog>
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="room-desc">{t('room_description')}</Label>
+                                                        <Input
+                                                            id="room-desc"
+                                                            value={roomDescription}
+                                                            onChange={(e) => {
+                                                                if (isOwner) setRoomDescription(e.target.value);
+                                                            }}
+                                                            placeholder={t('enter_room_description')}
+                                                            className="h-8"
+                                                            disabled={!isOwner}
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                                        <div className="space-y-0.5">
+                                                            <Label className="text-sm font-medium">
+                                                                {t('lock_control')}
+                                                            </Label>
+                                                            <div className="text-[10px] text-muted-foreground">
+                                                                {t('lock_control_desc')}
+                                                            </div>
+                                                        </div>
+                                                        <Switch
+                                                            checked={isLocked}
+                                                            onCheckedChange={(checked) => {
+                                                                if (!isOwner) return;
+                                                                setIsLocked(checked);
+                                                                if (socketRef.current?.readyState === WebSocket.OPEN) {
+                                                                    socketRef.current.send(JSON.stringify({
+                                                                        type: 'UPDATE_ROOM',
+                                                                        payload: { isLocked: checked }
+                                                                    }));
+                                                                }
+                                                            }}
+                                                            disabled={!isOwner}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                                        <div className="space-y-0.5">
+                                                            <Label className="text-sm font-medium">
+                                                                {t('smart_preload')}
+                                                            </Label>
+                                                            <div className="text-[10px] text-muted-foreground">
+                                                                {t('smart_preload_desc')}
+                                                            </div>
+                                                        </div>
+                                                        <Switch
+                                                            checked={enablePreload}
+                                                            onCheckedChange={togglePreload}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button variant="outline" size="sm" className="w-full mt-2">{t('view_debug_logs')}</Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-2xl h-[500px] flex flex-col">
+                                                        <DialogHeader>
+                                                            <DialogTitle>{t('view_debug_logs')}</DialogTitle>
+                                                        </DialogHeader>
+                                                        <div className="flex-1 overflow-y-auto p-4 bg-zinc-950 font-mono text-xs rounded-md border">
+                                                            {logs.map((log, i) => (
+                                                                <div key={i} className="text-emerald-400 border-b border-white/5 pb-1 mb-1">
+                                                                    {log}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
                                         </div>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
                         )}
                     </div>
                 </div>
             </header>
-
-
-
             <main className={cn(
                 "flex-1 grid gap-6 p-4 md:p-6 min-h-0 overflow-hidden relative",
                 (isImmersiveMode || isLandscapeMobile) ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : (isSidebarOpen ? "md:grid-cols-4" : "md:grid-cols-1")
@@ -2661,8 +2692,23 @@ function RoomContent() {
 
 
                         {currentSubtitle && (
-                            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[100] pointer-events-none w-fit max-w-[90%]">
-                                <div className="bg-black/70 text-white px-8 py-3 rounded-2xl text-xl md:text-3xl lg:text-4xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/20 backdrop-blur-xl text-center break-words leading-snug select-none font-medium">
+                            <div
+                                className="absolute left-1/2 -translate-x-1/2 z-[100] pointer-events-none w-fit max-w-[90%] transition-all duration-300 ease-out"
+                                style={{ bottom: `${subtitleStyle.bottomOffset}px` }}
+                            >
+                                <div
+                                    className={cn(
+                                        "text-white px-8 py-3 rounded-2xl text-center break-words leading-snug select-none transition-all duration-300",
+                                        subtitleStyle.bgOpacity > 0 ? "backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)]" : "shadow-none",
+                                        subtitleStyle.showBorder ? "border border-white/20" : "border-none"
+                                    )}
+                                    style={{
+                                        fontSize: `${subtitleStyle.fontSize}px`,
+                                        backgroundColor: `rgba(0, 0, 0, ${subtitleStyle.bgOpacity})`,
+                                        color: subtitleStyle.textColor,
+                                        fontWeight: subtitleStyle.fontWeight
+                                    }}
+                                >
                                     {currentSubtitle.split('\n').map((line, i) => (
                                         <div key={i} className="whitespace-pre-wrap drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">{line}</div>
                                     ))}
@@ -2675,7 +2721,7 @@ function RoomContent() {
                         {/* Always show if controls are needed, Danmaku is always available */}
                         {(true) && (
                             <div className={cn(
-                                "absolute right-6 top-1/2 -translate-y-1/2 z-[30] transition-all duration-300 flex flex-col items-end gap-3",
+                                "absolute right-6 top-1/2 -translate-y-1/2 z-[30] transition-all duration-300 flex flex-col items-center gap-3",
                                 showControls ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
                             )}>
 
@@ -2704,6 +2750,131 @@ function RoomContent() {
                                         ))}
                                     </div>
                                 )}
+
+                                {/* Group 2.5: Subtitle Style Settings */}
+                                <div className="p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-2">
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                className={cn(
+                                                    "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90 flex items-center justify-center outline-none focus:ring-2 focus:ring-primary/50",
+                                                    "text-zinc-500 hover:text-white hover:bg-white/10"
+                                                )}
+                                                onFocus={() => setShowControls(true)}
+                                                title={t('subtitle_settings') || 'Subtitle Style'}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {t('subtitle_style_short') || 'SUB'}
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent side="left" align="center" sideOffset={16} className="w-80 bg-black/85 backdrop-blur-2xl border-white/10 rounded-3xl p-6 shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[110]">
+                                            <div className="space-y-6">
+                                                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                                                    <h4 className="text-sm font-bold text-white uppercase tracking-widest">
+                                                        {t('subtitle_style') || 'Subtitle Style'}
+                                                    </h4>
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-zinc-500 font-medium">{t('font_bold') || 'Bold'}</span>
+                                                            <Switch
+                                                                checked={subtitleStyle.fontWeight === 'bold'}
+                                                                onCheckedChange={(val) => updateSubtitleStyle({ fontWeight: val ? 'bold' : 'normal' })}
+                                                                className="scale-75"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-zinc-500 font-medium">{t('show_border') || 'Border'}</span>
+                                                            <Switch
+                                                                checked={subtitleStyle.showBorder}
+                                                                onCheckedChange={(val) => updateSubtitleStyle({ showBorder: val })}
+                                                                className="scale-75"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Font Size */}
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-center">
+                                                        <Label className="text-xs text-zinc-400">{t('font_size') || 'Size'}</Label>
+                                                        <span className="text-xs font-mono text-primary">{subtitleStyle.fontSize}px</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="16"
+                                                        max="72"
+                                                        step="1"
+                                                        value={subtitleStyle.fontSize}
+                                                        onChange={(e) => updateSubtitleStyle({ fontSize: parseInt(e.target.value) })}
+                                                        className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary hover:bg-white/20 transition-colors"
+                                                    />
+                                                </div>
+
+                                                {/* Bottom Offset */}
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-center">
+                                                        <Label className="text-xs text-zinc-400">{t('position') || 'Position'}</Label>
+                                                        <span className="text-xs font-mono text-primary">{subtitleStyle.bottomOffset}px</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="20"
+                                                        max="360"
+                                                        step="4"
+                                                        value={subtitleStyle.bottomOffset}
+                                                        onChange={(e) => updateSubtitleStyle({ bottomOffset: parseInt(e.target.value) })}
+                                                        className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary hover:bg-white/20 transition-colors"
+                                                    />
+                                                </div>
+
+                                                {/* Background Opacity */}
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-center">
+                                                        <Label className="text-xs text-zinc-400">{t('bg_opacity') || 'Opacity'}</Label>
+                                                        <span className="text-xs font-mono text-primary">{Math.round(subtitleStyle.bgOpacity * 100)}%</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="1"
+                                                        step="0.05"
+                                                        value={subtitleStyle.bgOpacity}
+                                                        onChange={(e) => updateSubtitleStyle({ bgOpacity: parseFloat(e.target.value) })}
+                                                        className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary hover:bg-white/20 transition-colors"
+                                                    />
+                                                </div>
+
+                                                {/* Text Color */}
+                                                <div className="space-y-3">
+                                                    <Label className="text-xs text-zinc-400 block">{t('text_color') || 'Color'}</Label>
+                                                    <div className="flex gap-3 pt-1">
+                                                        {[
+                                                            { label: 'White', color: '#ffffff' },
+                                                            { label: 'Yellow', color: '#facc15' },
+                                                            { label: 'Orange', color: '#fb923c' },
+                                                            { label: 'Green', color: '#4ade80' },
+                                                            { label: 'Cyan', color: '#22d3ee' },
+                                                            { label: 'Lavender', color: '#e9d5ff' }
+                                                        ].map((c) => (
+                                                            <button
+                                                                key={c.color}
+                                                                onClick={() => updateSubtitleStyle({ textColor: c.color })}
+                                                                className={cn(
+                                                                    "w-10 h-10 rounded-full border-2 transition-all hover:scale-110 active:scale-95 flex items-center justify-center",
+                                                                    subtitleStyle.textColor === c.color ? "border-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.4)]" : "border-white/5"
+                                                                )}
+                                                                style={{ backgroundColor: c.color }}
+                                                                title={c.label}
+                                                            >
+                                                                {subtitleStyle.textColor === c.color && <Check className="w-4 h-4 text-black" />}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
 
                                 {/* Group 2: Subtitles (Independent Triggered Menu) */}
                                 {manualTracks.length > 1 && (
@@ -2769,7 +2940,7 @@ function RoomContent() {
                                 <div className="flex flex-col gap-1 p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-2">
                                     <button
                                         className={cn(
-                                            "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90 flex items-center justify-center gap-1 outline-none focus:ring-2 focus:ring-primary/50",
+                                            "w-12 py-1.5 text-[10px] font-bold rounded-xl transition-all duration-200 active:scale-90 flex items-center justify-center outline-none focus:ring-2 focus:ring-primary/50",
                                             isDanmakuEnabled
                                                 ? "bg-white/20 text-white shadow-sm"
                                                 : "text-zinc-500 hover:text-white hover:bg-white/10"
@@ -2781,11 +2952,11 @@ function RoomContent() {
                                         }}
                                         onFocus={() => setShowControls(true)}
                                         title={isDanmakuEnabled ? t('hide_danmaku') : t('show_danmaku')}
-                                    >
-                                        <span className="text-[12px]">{t('danmaku_short')}</span>
-                                    </button>
+                                        >
+                                            {t('danmaku_short')}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
                         )}
 
                         {/* Sidebar Toggle Button (When Closed) */}

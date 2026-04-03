@@ -15,6 +15,7 @@ export interface SeamlessVideoPlayerProps extends React.VideoHTMLAttributes<HTML
     onPlayError?: (err: any) => void;
     children?: React.ReactNode;
     isPlaying: boolean;
+    currentSubtitle?: string;
 }
 
 interface PlayerState {
@@ -28,7 +29,7 @@ export const SeamlessVideoPlayer = forwardRef<HTMLVideoElement, SeamlessVideoPla
     ({ className, src, nextSrc, nextStartTime, isPreloadEnabled = false, onSeamlessStart,
         onTimeUpdate, onEnded, onCanPlay, onLoadedMetadata,
         onError, onWaiting, onStalled, onLoadStart, onPlay, onPause, onDebug, onSubtitleChange,
-        onManualTracksDetected, manualTrackId, isPlaying, children,
+        onManualTracksDetected, manualTrackId, isPlaying, children, currentSubtitle,
         ...props }, ref) => {
         const videoRefA = useRef<HTMLVideoElement>(null);
         const videoRefB = useRef<HTMLVideoElement>(null);
