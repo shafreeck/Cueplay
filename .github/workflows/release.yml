@@ -58,7 +58,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "App ${{ github.ref_name }}"
           releaseBody: "See the assets to download this version and install."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           projectPath: ./apps/desktop
           includeUpdaterJson: true
@@ -133,6 +133,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "App ${{ github.ref_name }}"
-          draft: true
+          draft: false
           files: |
             ${{ steps.sign_app.outputs.signedReleaseFile }}
