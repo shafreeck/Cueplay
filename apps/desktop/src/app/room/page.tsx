@@ -149,6 +149,14 @@ function RoomContent() {
     const [fileId, setFileId] = useState('');
     const [inputValue, setInputValue] = useState('');
     const [currentSubtitle, setCurrentSubtitle] = useState('');
+
+    useEffect(() => {
+        if (currentSubtitle) {
+            console.log(`[UI] Subtitle updated: "${currentSubtitle}"`);
+            // We can also log to the on-screen debug log
+            // addLog(`[Subtitle] ${currentSubtitle}`);
+        }
+    }, [currentSubtitle]);
     const lastSubtitleChangeTime = useRef<number>(0);
     const MAX_SUBTITLE_DURATION = 8; // Maximum subtitle display duration in seconds
     const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
@@ -2388,14 +2396,13 @@ function RoomContent() {
 
 
             <main className={cn(
-                "flex-1 flex flex-col min-h-0 animate-fade-in",
-                "md:container md:mx-auto md:grid md:gap-6 transition-all duration-300 ease-in-out",
-                (isImmersiveMode || isLandscapeMobile) ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : (isSidebarOpen ? "md:p-6 md:grid-cols-4" : "md:p-6 md:grid-cols-1")
+                "flex-1 grid gap-6 p-4 md:p-6 min-h-0 overflow-hidden relative",
+                (isImmersiveMode || isLandscapeMobile) ? "md:grid-cols-1 md:max-w-none md:p-0 items-center justify-center" : (isSidebarOpen ? "md:grid-cols-4" : "md:grid-cols-1")
             )}>
                 {/* Video Section */}
                 <div className={cn(
                     "space-y-4 shrink-0 z-10 w-full transition-all duration-300 ease-in-out",
-                    isImmersiveMode || !isSidebarOpen ? "md:col-span-1 relative group/video" : "md:col-span-3 relative group/video"
+                    isImmersiveMode || !isSidebarOpen ? "md:col-span-1 group/video" : "md:col-span-3 group/video"
                 )}>
                     <div
                         ref={containerRef}
@@ -2539,14 +2546,6 @@ function RoomContent() {
                                     }}
                                     children={
                                         <>
-                                            {/* Subtitles Overlay (Native-like) */}
-                                            {currentSubtitle && (
-                                                <div className="absolute bottom-16 left-0 right-0 text-center pointer-events-none p-4 z-40">
-                                                    <span className="inline-block bg-black/60 text-white px-3 py-1.5 rounded text-lg md:text-xl shadow-md backdrop-blur-sm">
-                                                        {currentSubtitle}
-                                                    </span>
-                                                </div>
-                                            )}
                                             {/* Controller Paused Overlay for Video */}
                                             {isControllerPaused && !isPlaying && (
                                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none">
@@ -2638,6 +2637,8 @@ function RoomContent() {
                                     onDebug={(msg) => addLog(msg)}
                                     onManualTracksDetected={handleManualTracks}
                                     manualTrackId={selectedManualTrackId}
+                                    currentSubtitle={currentSubtitle}
+                                    onSubtitleChange={setCurrentSubtitle}
                                 />
                             </div>
                         ) : (
@@ -2658,21 +2659,19 @@ function RoomContent() {
                             </div>
                         )}
 
+
                         {currentSubtitle && (
-                            <div
-                                className="absolute bottom-20 left-0 right-0 pointer-events-none z-20 flex justify-center items-center"
-                            >
-                                <div
-                                    className="bg-black/50 text-white px-6 py-2 rounded-lg text-lg lg:text-3xl shadow-2xl border border-white/10 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center inline-block max-w-[90%] break-words"
-                                >
+                            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[100] pointer-events-none w-fit max-w-[90%]">
+                                <div className="bg-black/70 text-white px-8 py-3 rounded-2xl text-xl md:text-3xl lg:text-4xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/20 backdrop-blur-xl text-center break-words leading-snug select-none font-medium">
                                     {currentSubtitle.split('\n').map((line, i) => (
-                                        <div key={i} className="text-center">{line}</div>
+                                        <div key={i} className="whitespace-pre-wrap drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">{line}</div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
                         {/* Right Side Control Satellite Pills */}
+
                         {/* Always show if controls are needed, Danmaku is always available */}
                         {(true) && (
                             <div className={cn(
